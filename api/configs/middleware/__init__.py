@@ -187,7 +187,7 @@ class CeleryConfig(DatabaseConfig):
     @computed_field
     @property
     def BROKER_USE_SSL(self) -> bool:
-        return self.CELERY_BROKER_URL.startswith("redis://") if self.CELERY_BROKER_URL else False
+        return self.CELERY_BROKER_URL.startswith("rediss://") if self.CELERY_BROKER_URL else False
 
 
 class MiddlewareConfig(
