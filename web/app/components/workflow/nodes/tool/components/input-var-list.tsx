@@ -48,6 +48,8 @@ const InputVarList: FC<Props> = ({
       return 'Number'
     else if (type === FormTypeEnum.files)
       return 'Files'
+    else if (type === FormTypeEnum.file)
+      return 'File'
     else if (type === FormTypeEnum.select)
       return 'Options'
     else
@@ -129,7 +131,7 @@ const InputVarList: FC<Props> = ({
           const isSelect = type === FormTypeEnum.select
           const isFile = type === FormTypeEnum.file
           const isFileArray = type === FormTypeEnum.files
-          const isString = type !== FormTypeEnum.textNumber && type !== FormTypeEnum.files && type !== FormTypeEnum.select
+          const isString = type !== FormTypeEnum.textNumber && type !== FormTypeEnum.files && type !== FormTypeEnum.select && type !== FormTypeEnum.file
           return (
             <div key={variable} className='space-y-1'>
               <div className='flex items-center h-[18px] space-x-2'>
