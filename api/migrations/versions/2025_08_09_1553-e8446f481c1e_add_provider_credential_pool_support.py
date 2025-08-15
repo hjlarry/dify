@@ -19,7 +19,7 @@ depends_on = None
 
 
 def upgrade():
-    # Create provider_credential table
+    # Create provider_credentials table
     op.create_table('provider_credentials',
     sa.Column('id', models.types.StringUUID(), server_default=sa.text('uuid_generate_v4()'), nullable=False),
     sa.Column('tenant_id', models.types.StringUUID(), nullable=False),
@@ -32,7 +32,7 @@ def upgrade():
     )
 
     # Create index for provider_credentials
-    with op.batch_alter_table('provider_credential', schema=None) as batch_op:
+    with op.batch_alter_table('provider_credentials', schema=None) as batch_op:
         batch_op.create_index('provider_credential_tenant_provider_idx', ['tenant_id', 'provider_name'], unique=False)
 
     # Add credential_id to providers table
@@ -51,7 +51,7 @@ def upgrade():
 
 
 def migrate_existing_providers_data():
-    """migrate providers table data to provider_credential"""
+    """migrate providers table data to provider_credentials"""
 
     # Define table structure for data manipulation
     providers_table = table('providers',
@@ -85,13 +85,13 @@ def migrate_existing_providers_data():
         .where(providers_table.c.encrypted_config.isnot(None))
     ).fetchall()
     
-    # Iterate through each provider and insert into provider_credential
+    # Iterate through each provider and insert into provider_credentials
     for provider in existing_providers:
         credential_id = str(uuid.uuid4())
         if not provider.encrypted_config or provider.encrypted_config.strip() == '':
             continue
 
-        # Insert into provider_credential table
+        # Insert into provider_credentials table
         conn.execute(
             provider_credential_table.insert().values(
                 id=credential_id,
@@ -118,7 +118,7 @@ def downgrade():
     with op.batch_alter_table('providers', schema=None) as batch_op:
         batch_op.add_column(sa.Column('encrypted_config', sa.Text(), nullable=True))
 
-    # Migrate data back from provider_credential to providers
+    # Migrate data back from provider_credentials to providers
     migrate_data_back_to_providers()
 
     # Remove credential_id columns
@@ -128,12 +128,12 @@ def downgrade():
     with op.batch_alter_table('providers', schema=None) as batch_op:
         batch_op.drop_column('credential_id')
 
-    # Drop provider_credential table
+    # Drop provider_credentials table
     op.drop_table('provider_credentials')
 
 
 def migrate_data_back_to_providers():
-    """Migrate data back from provider_credential to providers table for downgrade"""
+    """Migrate data back from provider_credentials to providers table for downgrade"""
     
     # Define table structure for data manipulation
     providers_table = table('providers',
