@@ -31,7 +31,7 @@ const BaseField = ({
   inputClassName,
   formSchema,
   field,
-  disabled,
+  disabled: propsDisabled,
 }: BaseFieldProps) => {
   const renderI18nObject = useRenderI18nObject()
   const {
@@ -41,7 +41,9 @@ const BaseField = ({
     options,
     labelClassName: formLabelClassName,
     show_on = [],
+    disabled: formSchemaDisabled,
   } = formSchema
+  const disabled = propsDisabled || formSchemaDisabled
 
   const memorizedLabel = useMemo(() => {
     if (isValidElement(label))
@@ -198,10 +200,11 @@ const BaseField = ({
                       'system-sm-regular hover:bg-components-option-card-option-hover-bg hover:border-components-option-card-option-hover-border flex h-8 flex-[1] grow cursor-pointer items-center justify-center rounded-lg border border-components-option-card-option-border bg-components-option-card-option-bg p-2 text-text-secondary',
                       'system-sm-regular hover:bg-components-option-card-option-hover-bg hover:border-components-option-card-option-hover-border flex h-8 flex-[1] grow cursor-pointer items-center justify-center rounded-lg border border-components-option-card-option-border bg-components-option-card-option-bg p-2 text-text-secondary',
                       value === option.value && 'border-components-option-card-option-selected-border bg-components-option-card-option-selected-bg text-text-primary shadow-xs',
+                      disabled && 'cursor-not-allowed opacity-50',
                       inputClassName,
                       inputClassName,
                     )}
-                    onClick={() => field.handleChange(option.value)}
+                    onClick={() => !disabled && field.handleChange(option.value)}
                   >
                     {
                       formSchema.showRadioUI && (
