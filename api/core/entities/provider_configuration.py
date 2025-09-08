@@ -1067,7 +1067,7 @@ class ProviderConfiguration(BaseModel):
                     provider_model_credentials_cache = ProviderCredentialsCache(
                         tenant_id=self.tenant_id,
                         identity_id=provider_model_record.id,
-                        cache_type=ProviderCredentialsCacheType.PROVIDER,
+                        cache_type=ProviderCredentialsCacheType.MODEL,
                     )
                     provider_model_credentials_cache.delete()
 
