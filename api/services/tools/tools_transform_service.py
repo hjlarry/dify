@@ -91,6 +91,10 @@ class ToolTransformService:
                     provider.declaration.identity.icon = PluginService.get_plugin_icon_url(
                         tenant_id=tenant_id, filename=provider.declaration.identity.icon
                     )
+                if isinstance(provider.declaration.identity.icon_dark, str) and provider.declaration.identity.icon_dark:
+                    provider.declaration.identity.icon_dark = PluginService.get_plugin_icon_url(
+                        tenant_id=tenant_id, filename=provider.declaration.identity.icon_dark
+                    )
 
     @classmethod
     def builtin_provider_to_user_provider(

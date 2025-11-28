@@ -9,6 +9,7 @@ export const transformDataSourceToTool = (dataSourceItem: DataSourceItem) => {
     author: dataSourceItem.declaration.identity.author,
     description: dataSourceItem.declaration.identity.description,
     icon: dataSourceItem.declaration.identity.icon,
+    icon_dark: dataSourceItem.declaration.identity.icon_dark,
     label: dataSourceItem.declaration.identity.label,
     type: dataSourceItem.declaration.provider_type,
     team_credentials: {},

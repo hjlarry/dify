@@ -304,6 +304,9 @@ class WorkflowResponseConverter:
             response.data.extras["icon"] = provider_entity.declaration.identity.generate_datasource_icon_url(
                 self._application_generate_entity.app_config.tenant_id
             )
+            response.data.extras["icon_dark"] = provider_entity.declaration.identity.generate_datasource_icon_dark_url(
+                self._application_generate_entity.app_config.tenant_id
+            )
         elif event.node_type == NodeType.TRIGGER_PLUGIN:
             response.data.extras["icon"] = TriggerManager.get_trigger_plugin_icon(
                 self._application_generate_entity.app_config.tenant_id,

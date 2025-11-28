@@ -121,6 +121,7 @@ class DatasourceIdentity(BaseModel):
     label: I18nObject = Field(..., description="The label of the datasource")
     provider: str = Field(..., description="The provider of the datasource")
     icon: str | None = None
+    icon_dark: str | None = None
 
 
 class DatasourceEntity(BaseModel):
@@ -140,6 +141,7 @@ class DatasourceProviderIdentity(BaseModel):
     name: str = Field(..., description="The name of the tool")
     description: I18nObject = Field(..., description="The description of the tool")
     icon: str = Field(..., description="The icon of the tool")
+    icon_dark: str | None = Field(default=None, description="The dark icon of the tool")
     label: I18nObject = Field(..., description="The label of the tool")
     tags: list[ToolLabelEnum] | None = Field(
         default=[],
@@ -159,6 +161,20 @@ class DatasourceProviderIdentity(BaseModel):
             / "plugin"
             / "icon"
             % {"tenant_id": tenant_id, "filename": self.icon}
+        )
+    
+    def generate_datasource_icon_dark_url(self, tenant_id: str) -> str:
+        if not self.icon_dark:
+            return ""
+        return str(
+            URL(dify_config.CONSOLE_API_URL or "/")
+            / "console"
+            / "api"
+            / "workspaces"
+            / "current"
+            / "plugin"
+            / "icon"
+            % {"tenant_id": tenant_id, "filename": self.icon_dark}
         )
 
 

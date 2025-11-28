@@ -21,6 +21,8 @@ import Confirm from '@/app/components/base/confirm'
 import { useGetDataSourceOAuthUrl } from '@/service/use-datasource'
 import { openOAuthPopup } from '@/hooks/use-oauth'
 import { CollectionType } from '@/app/components/tools/types'
+import { Theme } from '@/types/app'
+import useTheme from '@/hooks/use-theme'
 
 type CardProps = {
   item: DataSourceAuth
@@ -32,8 +34,10 @@ const Card = ({
 }: CardProps) => {
   const { t } = useTranslation()
   const renderI18nObject = useRenderI18nObject()
+  const { theme } = useTheme()
   const {
     icon,
+    icon_dark,
     label,
     author,
     name,
@@ -116,7 +120,7 @@ const Card = ({
     <div className='rounded-xl bg-background-section-burn'>
       <div className='flex items-center p-3 pb-2'>
         <img
-          src={icon}
+          src={theme === Theme.dark && icon_dark ? icon_dark : icon}
           className='mr-3 flex h-10 w-10 shrink-0 items-center justify-center'
         />
         <div className='grow'>

@@ -99,6 +99,7 @@ export type DataSourceItem = {
       author: string
       description: TypeWithI18N
       icon: string | { background: string; content: string }
+      icon_dark?: string | { background: string; content: string }
       label: TypeWithI18N
       name: string
       tags: string[]

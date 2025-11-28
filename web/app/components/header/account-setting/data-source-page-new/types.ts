@@ -18,6 +18,7 @@ export type DataSourceAuth = {
   plugin_id: string
   plugin_unique_identifier: string
   icon: string
+  icon_dark?: string
   name: string
   label: TypeWithI18N
   description: TypeWithI18N
