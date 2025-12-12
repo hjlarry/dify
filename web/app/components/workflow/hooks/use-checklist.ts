@@ -44,7 +44,7 @@ import type { DataSet } from '@/models/datasets'
 import { fetchDatasets } from '@/service/datasets'
 import { MAX_TREE_DEPTH } from '@/config'
 import useNodesAvailableVarList, { useGetNodesAvailableVarList } from './use-nodes-available-var-list'
-import { getNodeUsedVars, isSpecialVar } from '../nodes/_base/components/variable/utils'
+import { getNodeOutputVars, getNodeUsedVars, isSpecialVar } from '../nodes/_base/components/variable/utils'
 import type { Emoji } from '@/app/components/tools/types'
 import { useModelList } from '@/app/components/header/account-setting/model-provider-page/hooks'
 import { ModelTypeEnum } from '@/app/components/header/account-setting/model-provider-page/declarations'
@@ -93,6 +93,14 @@ export const useChecklist = (nodes: Node[], edges: Edge[]) => {
   const map = useNodesAvailableVarList(nodes)
   const { data: embeddingModelList } = useModelList(ModelTypeEnum.textEmbedding)
   const { data: rerankModelList } = useModelList(ModelTypeEnum.rerank)
+
+  const isLoopChildOutputVar = useCallback((loopNodeId: string, variable: ValueSelector, nodeList: Node[]) => {
+    const targetChild = nodeList.find(n => n.parentId === loopNodeId && n.id === variable[0])
+    if (!targetChild)
+      return false
+    const outputVars = getNodeOutputVars(targetChild, false)
+    return outputVars.some(v => v.join('.') === variable.join('.'))
+  }, [])
 
   const getCheckData = useCallback((data: CommonNodeType<{}>) => {
     let checkData = data
@@ -166,12 +174,13 @@ export const useChecklist = (nodes: Node[], edges: Edge[]) => {
             const isSpecialVars = isSpecialVar(variable[0])
             if (!isSpecialVars) {
               const usedNode = availableVars.find(v => v.nodeId === variable?.[0])
+              const isLoopChildVar = node.data.type === BlockEnum.Loop && isLoopChildOutputVar(node.id, variable, filteredNodes)
               if (usedNode) {
                 const usedVar = usedNode.vars.find(v => v.variable === variable?.[1])
-                if (!usedVar)
+                if (!usedVar && !isLoopChildVar)
                   errorMessage = t('workflow.errorMsg.invalidVariable')
               }
-              else {
+              else if (!isLoopChildVar) {
                 errorMessage = t('workflow.errorMsg.invalidVariable')
               }
             }
@@ -229,7 +238,7 @@ export const useChecklist = (nodes: Node[], edges: Edge[]) => {
     })
 
     return list
-  }, [nodes, nodesExtraData, edges, buildInTools, customTools, workflowTools, language, dataSourceList, getToolIcon, strategyProviders, getCheckData, t, map, shouldCheckStartNode])
+  }, [nodes, nodesExtraData, edges, buildInTools, customTools, workflowTools, language, dataSourceList, getToolIcon, strategyProviders, getCheckData, t, map, shouldCheckStartNode, isLoopChildOutputVar])
 
   return needWarningNodes
 }
@@ -316,6 +325,16 @@ export const useChecklistBeforePublish = () => {
       }
     }
     const map = getNodesAvailableVarList(nodes)
+
+    const isLoopChildOutputVar = (loopNodeId: string, variable: ValueSelector, nodeList: Node[]) => {
+      const targetChild = nodeList.find(n => n.parentId === loopNodeId && n.id === variable[0])
+      if (!targetChild)
+        return false
+
+      const outputVars = getNodeOutputVars(targetChild, false)
+      return outputVars.some(v => v.join('.') === variable.join('.'))
+    }
+
     for (let i = 0; i < filteredNodes.length; i++) {
       const node = filteredNodes[i]
       let moreDataForCheckValid
@@ -355,14 +374,15 @@ export const useChecklistBeforePublish = () => {
         const isSpecialVars = isSpecialVar(variable[0])
         if (!isSpecialVars) {
           const usedNode = availableVars.find(v => v.nodeId === variable?.[0])
+          const isLoopChildVar = node.data.type === BlockEnum.Loop && isLoopChildOutputVar(node.id, variable, filteredNodes)
           if (usedNode) {
             const usedVar = usedNode.vars.find(v => v.variable === variable?.[1])
-            if (!usedVar) {
+            if (!usedVar && !isLoopChildVar) {
               notify({ type: 'error', message: `[${node.data.title}] ${t('workflow.errorMsg.invalidVariable')}` })
               return false
             }
           }
-          else {
+          else if (!isLoopChildVar) {
             notify({ type: 'error', message: `[${node.data.title}] ${t('workflow.errorMsg.invalidVariable')}` })
             return false
           }
