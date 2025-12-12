@@ -116,12 +116,30 @@ const ImagePreview: FC<ImagePreviewProps> = ({
   const imageCopy = useCallback(() => {
     const shareImage = async () => {
       try {
-        const base64Data = url.split(',')[1]
-        const blob = imageBase64ToBlob(base64Data, 'image/png')
+        if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined')
+          throw new Error('Clipboard API unavailable')
+
+        let blob: Blob
+        if (url.startsWith('data:image')) {
+          const base64Data = url.split(',')[1]
+          if (!base64Data)
+            throw new Error('Invalid image data')
+          blob = imageBase64ToBlob(base64Data, 'image/png')
+        }
+        else if (isBase64(url)) {
+          blob = imageBase64ToBlob(url, 'image/png')
+        }
+        else {
+          const response = await fetch(url)
+          if (!response.ok)
+            throw new Error(`Failed to fetch image: ${response.status}`)
+
+          blob = await response.blob()
+        }
 
         await navigator.clipboard.write([
           new ClipboardItem({
-            [blob.type]: blob,
+            [blob.type || 'image/png']: blob,
           }),
         ])
         setIsCopied(true)
@@ -135,7 +153,7 @@ const ImagePreview: FC<ImagePreviewProps> = ({
         console.error('Failed to copy image:', err)
 
         const link = document.createElement('a')
-        link.href = url
+        link.href = isBase64(url) ? `data:image/png;base64,${url}` : url
         link.download = `${title}.png`
         document.body.appendChild(link)
         link.click()
@@ -143,7 +161,7 @@ const ImagePreview: FC<ImagePreviewProps> = ({
 
         Toast.notify({
           type: 'info',
-          message: t('common.operation.imageDownloaded'),
+          message: t('common.operation.downloadSuccess'),
         })
       }
     }
