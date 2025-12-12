@@ -2,10 +2,11 @@ import type { FC } from 'react'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { t } from 'i18next'
 import { createPortal } from 'react-dom'
-import { RiAddBoxLine, RiCloseLine, RiDownloadCloud2Line, RiFileCopyLine, RiZoomInLine, RiZoomOutLine } from '@remixicon/react'
+import { RiAddBoxLine, RiCloseLine, RiDownloadCloud2Line, RiZoomInLine, RiZoomOutLine } from '@remixicon/react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import Tooltip from '@/app/components/base/tooltip'
 import Toast from '@/app/components/base/toast'
+import { Copy, CopyCheck } from '@/app/components/base/icons/src/vender/line/files'
 import { noop } from 'lodash-es'
 
 type ImagePreviewProps = {
@@ -23,6 +24,13 @@ const isBase64 = (str: string): boolean => {
   catch {
     return false
   }
+}
+
+const withAttachmentParam = (originUrl: string): string => {
+  if (!originUrl.startsWith('http'))
+    return originUrl
+
+  return `${originUrl}&as_attachment=true`
 }
 
 const ImagePreview: FC<ImagePreviewProps> = ({
@@ -61,7 +69,7 @@ const ImagePreview: FC<ImagePreviewProps> = ({
     // Open in a new window, considering the case when the page is inside an iframe
     if (url.startsWith('http') || url.startsWith('https')) {
       const a = document.createElement('a')
-      a.href = url
+      a.href = withAttachmentParam(url)
       a.target = '_blank'
       a.download = title
       a.click()
@@ -113,59 +121,60 @@ const ImagePreview: FC<ImagePreviewProps> = ({
     return new Blob(byteArrays, { type })
   }
 
-  const imageCopy = useCallback(() => {
-    const shareImage = async () => {
-      try {
-        if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined')
-          throw new Error('Clipboard API unavailable')
+  const imageCopy = useCallback(async () => {
+    try {
+      if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined')
+        throw new Error('Clipboard API unavailable')
 
-        let blob: Blob
-        if (url.startsWith('data:image')) {
-          const base64Data = url.split(',')[1]
-          if (!base64Data)
-            throw new Error('Invalid image data')
-          blob = imageBase64ToBlob(base64Data, 'image/png')
-        }
-        else if (isBase64(url)) {
-          blob = imageBase64ToBlob(url, 'image/png')
-        }
-        else {
-          const response = await fetch(url)
-          if (!response.ok)
-            throw new Error(`Failed to fetch image: ${response.status}`)
-
-          blob = await response.blob()
-        }
-
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            [blob.type || 'image/png']: blob,
-          }),
-        ])
-        setIsCopied(true)
-
-        Toast.notify({
-          type: 'success',
-          message: t('common.operation.imageCopied'),
-        })
+      let blob: Blob
+      if (url.startsWith('data:image')) {
+        const base64Data = url.split(',')[1]
+        if (!base64Data)
+          throw new Error('Invalid image data')
+        blob = imageBase64ToBlob(base64Data, 'image/png')
       }
-      catch (err) {
-        console.error('Failed to copy image:', err)
-
-        const link = document.createElement('a')
-        link.href = isBase64(url) ? `data:image/png;base64,${url}` : url
-        link.download = `${title}.png`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-
-        Toast.notify({
-          type: 'info',
-          message: t('common.operation.downloadSuccess'),
-        })
+      else if (isBase64(url)) {
+        blob = imageBase64ToBlob(url, 'image/png')
       }
+      else {
+        const response = await fetch(url)
+        if (!response.ok)
+          throw new Error(`Failed to fetch image: ${response.status}`)
+
+        blob = await response.blob()
+      }
+
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          [blob.type || 'image/png']: blob,
+        }),
+      ])
+
+      Toast.notify({
+        type: 'success',
+        message: t('common.operation.imageCopied'),
+      })
+      setIsCopied(true)
+      setTimeout(() => setIsCopied(false), 2000)
+      return true
     }
-    shareImage()
+    catch (err) {
+      console.error('Failed to copy image:', err)
+      setIsCopied(false)
+
+      const link = document.createElement('a')
+      link.href = isBase64(url) ? `data:image/png;base64,${url}` : withAttachmentParam(url)
+      link.download = `${title}.png`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      Toast.notify({
+        type: 'info',
+        message: t('common.operation.downloadSuccess'),
+      })
+      return false
+    }
   }, [title, url])
 
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
@@ -240,12 +249,12 @@ const ImagePreview: FC<ImagePreviewProps> = ({
           transition: isDragging ? 'none' : 'transform 0.2s ease-in-out',
         }}
       />
-      <Tooltip popupContent={t('common.operation.copyImage')}>
+      <Tooltip popupContent={isCopied ? t('common.operation.imageCopied') : t('common.operation.copyImage')}>
         <div className='absolute right-48 top-6 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg'
-          onClick={imageCopy}>
+          onClick={() => { void imageCopy() }}>
           {isCopied
-            ? <RiFileCopyLine className='h-4 w-4 text-green-500' />
-            : <RiFileCopyLine className='h-4 w-4 text-gray-500' />}
+            ? <CopyCheck className='h-4 w-4 text-gray-500' />
+            : <Copy className='h-4 w-4 text-gray-500' />}
         </div>
       </Tooltip>
       <Tooltip popupContent={t('common.operation.zoomOut')}>
