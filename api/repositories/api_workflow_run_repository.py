@@ -303,6 +303,29 @@ class APIWorkflowRunRepository(WorkflowExecutionRepository, Protocol):
         """
         ...
 
+    def mark_runs_unarchived(
+        self,
+        session: Session,
+        run_ids: Sequence[str],
+    ) -> int:
+        """
+        Mark workflow runs as not archived.
+        """
+        ...
+
+    def get_archived_runs_by_time_range(
+        self,
+        session: Session,
+        tenant_ids: Sequence[str] | None,
+        start_date: datetime,
+        end_date: datetime,
+        limit: int | None = None,
+    ) -> Sequence[WorkflowRun]:
+        """
+        Fetch archived workflow runs within a time range.
+        """
+        ...
+
     def get_pause_records_by_run_id(
         self,
         session: Session,

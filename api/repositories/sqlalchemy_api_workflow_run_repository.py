@@ -496,6 +496,43 @@ class DifyAPISQLAlchemyWorkflowRunRepository(APIWorkflowRunRepository):
         )
         return cast(CursorResult, result).rowcount or 0
 
+    def mark_runs_unarchived(
+        self,
+        session: Session,
+        run_ids: Sequence[str],
+    ) -> int:
+        if not run_ids:
+            return 0
+
+        result = session.execute(
+            WorkflowRun.__table__.update()
+            .where(WorkflowRun.id.in_(run_ids))
+            .values(is_archived=False)
+        )
+        return cast(CursorResult, result).rowcount or 0
+
+    def get_archived_runs_by_time_range(
+        self,
+        session: Session,
+        tenant_ids: Sequence[str] | None,
+        start_date: datetime,
+        end_date: datetime,
+        limit: int | None = None,
+    ) -> Sequence[WorkflowRun]:
+        stmt = select(WorkflowRun).where(
+            WorkflowRun.created_at >= start_date,
+            WorkflowRun.created_at < end_date,
+            WorkflowRun.is_archived == True,
+        )
+        if tenant_ids:
+            stmt = stmt.where(WorkflowRun.tenant_id.in_(tenant_ids))
+
+        stmt = stmt.order_by(WorkflowRun.created_at.asc(), WorkflowRun.id.asc())
+        if limit is not None:
+            stmt = stmt.limit(limit)
+
+        return list(session.scalars(stmt).all())
+
     def create_workflow_pause(
         self,
         workflow_run_id: str,

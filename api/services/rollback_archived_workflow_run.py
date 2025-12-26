@@ -13,9 +13,8 @@ from datetime import datetime
 from typing import Any
 
 import click
-from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 from extensions.ext_database import db
 from libs.archive_storage import (
@@ -24,26 +23,9 @@ from libs.archive_storage import (
     build_workflow_run_prefix,
     get_archive_storage,
 )
-from models.trigger import WorkflowTriggerLog
-from models.workflow import (
-    WorkflowNodeExecutionModel,
-    WorkflowNodeExecutionOffload,
-    WorkflowPause,
-    WorkflowPauseReason,
-    WorkflowRun,
-)
+from repositories.api_workflow_run_repository import APIWorkflowRunRepository
 
 logger = logging.getLogger(__name__)
-
-
-# Mapping of table names to SQLAlchemy models
-TABLE_MODELS = {
-    "workflow_node_executions": WorkflowNodeExecutionModel,
-    "workflow_node_execution_offload": WorkflowNodeExecutionOffload,
-    "workflow_pauses": WorkflowPause,
-    "workflow_pause_reasons": WorkflowPauseReason,
-    "workflow_trigger_logs": WorkflowTriggerLog,
-}
 
 
 @dataclass
@@ -75,11 +57,13 @@ class WorkflowRunRollback:
             dry_run: If True, only preview without making changes
         """
         self.dry_run = dry_run
+        self.workflow_run_repo: APIWorkflowRunRepository | None = None
 
     def rollback(
         self,
         tenant_id: str,
         workflow_run_id: str,
+        storage: ArchiveStorage | None = None,
     ) -> RollbackResult:
         """
         Restore a single workflow run's archived data.
@@ -107,50 +91,51 @@ class WorkflowRunRollback:
             )
         )
 
+        if storage is None:
+            try:
+                storage = get_archive_storage()
+            except ArchiveStorageNotConfiguredError as e:
+                result.error = str(e)
+                click.echo(click.style(f"Archive storage not configured: {e}", fg="red"))
+                return result
+
+        repo = self._get_workflow_run_repo()
+        run = repo.get_workflow_run_by_id_without_tenant(workflow_run_id)
+        if not run:
+            result.error = f"Workflow run {workflow_run_id} not found"
+            click.echo(click.style(result.error, fg="red"))
+            return result
+
+        if run.tenant_id != tenant_id:
+            result.error = f"Workflow run {workflow_run_id} does not belong to tenant {tenant_id}"
+            click.echo(click.style(result.error, fg="red"))
+            return result
+
+        if not run.is_archived:
+            result.error = f"Workflow run {workflow_run_id} is not archived"
+            click.echo(click.style(result.error, fg="yellow"))
+            return result
+
+        prefix = build_workflow_run_prefix(
+            tenant_id=run.tenant_id,
+            app_id=run.app_id,
+            created_at=run.created_at,
+            run_id=run.id,
+        )
+        # Load manifest
+        manifest_key = f"{prefix}/manifest.json"
         try:
-            storage = get_archive_storage()
-        except ArchiveStorageNotConfiguredError as e:
-            result.error = str(e)
-            click.echo(click.style(f"Archive storage not configured: {e}", fg="red"))
+            manifest_data = storage.get_object(manifest_key)
+            manifest = json.loads(manifest_data.decode("utf-8"))
+        except FileNotFoundError:
+            result.error = f"Manifest not found: {manifest_key}"
+            click.echo(click.style(result.error, fg="red"))
             return result
 
         session_maker = sessionmaker(bind=db.engine, expire_on_commit=False)
 
         with session_maker() as session:
             try:
-                # Verify the workflow run exists
-                run = session.get(WorkflowRun, workflow_run_id)
-                if not run:
-                    result.error = f"Workflow run {workflow_run_id} not found"
-                    click.echo(click.style(result.error, fg="red"))
-                    return result
-
-                if run.tenant_id != tenant_id:
-                    result.error = f"Workflow run {workflow_run_id} does not belong to tenant {tenant_id}"
-                    click.echo(click.style(result.error, fg="red"))
-                    return result
-
-                if not run.is_archived:
-                    result.error = f"Workflow run {workflow_run_id} is not archived"
-                    click.echo(click.style(result.error, fg="yellow"))
-                    return result
-
-                prefix = build_workflow_run_prefix(
-                    tenant_id=run.tenant_id,
-                    app_id=run.app_id,
-                    created_at=run.created_at,
-                    run_id=run.id,
-                )
-                # Load manifest
-                manifest_key = f"{prefix}/manifest.json"
-                try:
-                    manifest_data = storage.get_object(manifest_key)
-                    manifest = json.loads(manifest_data.decode("utf-8"))
-                except FileNotFoundError:
-                    result.error = f"Manifest not found: {manifest_key}"
-                    click.echo(click.style(result.error, fg="red"))
-                    return result
-
                 # Restore each table
                 tables = manifest.get("tables", {})
                 for table_name, info in tables.items():
@@ -171,25 +156,20 @@ class WorkflowRunRollback:
                         result.restored_counts[table_name] = row_count
                         continue
 
-                    try:
-                        data = storage.get_object(table_key)
-                        records = ArchiveStorage.deserialize_from_jsonl_gz(data)
-                        restored = self._restore_table_records(session, table_name, records)
-                        result.restored_counts[table_name] = restored
-                        click.echo(
-                            click.style(
-                                f"  Restored {restored}/{len(records)} records to {table_name}",
-                                fg="green",
-                            )
+                    data = storage.get_object(table_key)
+                    records = ArchiveStorage.deserialize_from_jsonl_gz(data)
+                    if len(records) != row_count:
+                        raise ValueError(
+                            f"Row count mismatch for {table_key}: expected {row_count}, got {len(records)}"
                         )
-                    except FileNotFoundError:
-                        click.echo(
-                            click.style(
-                                f"  Warning: Table data not found: {table_key}",
-                                fg="yellow",
-                            )
+                    restored = self._restore_table_records(session, table_name, records)
+                    result.restored_counts[table_name] = restored
+                    click.echo(
+                        click.style(
+                            f"  Restored {restored}/{len(records)} records to {table_name}",
+                            fg="green",
                         )
-                        result.restored_counts[table_name] = 0
+                    )
 
                 # Verify row counts match manifest
                 manifest_total = sum(info.get("row_count", 0) for info in tables.values())
@@ -204,7 +184,7 @@ class WorkflowRunRollback:
                     )
 
                     # Mark as not archived
-                    run.is_archived = False
+                    repo.mark_runs_unarchived(session, [run.id])
                     session.commit()
 
                 result.success = True
@@ -225,45 +205,141 @@ class WorkflowRunRollback:
         result.elapsed_time = time.time() - start_time
         return result
 
+    def rollback_batch(
+        self,
+        tenant_ids: list[str] | None,
+        start_date: datetime,
+        end_date: datetime,
+        limit: int | None = None,
+    ) -> list[RollbackResult]:
+        """
+        Rollback multiple workflow runs by time range.
+
+        Args:
+            tenant_ids: Optional tenant IDs
+            start_date: Start date filter
+            end_date: End date filter
+            limit: Maximum number of runs to rollback
+
+        Returns:
+            List of RollbackResult objects
+        """
+        results = []
+        if tenant_ids is not None and not tenant_ids:
+            return results
+        session_maker = sessionmaker(bind=db.engine, expire_on_commit=False)
+
+        with session_maker() as session:
+            repo = self._get_workflow_run_repo()
+            runs = repo.get_archived_runs_by_time_range(
+                session,
+                tenant_ids=tenant_ids,
+                start_date=start_date,
+                end_date=end_date,
+                limit=limit,
+            )
+
+        click.echo(
+            click.style(
+                f"Found {len(runs)} archived workflow runs to rollback",
+                fg="white",
+            )
+        )
+
+        for run in runs:
+            result = self.rollback(tenant_id=run.tenant_id, workflow_run_id=run.id)
+            results.append(result)
+
+        return results
+
+    def rollback_by_run_id(
+        self,
+        tenant_ids: list[str] | None,
+        run_id: str,
+    ) -> RollbackResult:
+        """
+        Rollback a single workflow run by run ID with tenant scope checking.
+        """
+        repo = self._get_workflow_run_repo()
+        run = repo.get_workflow_run_by_id_without_tenant(run_id)
+
+        if not run:
+            click.echo(click.style(f"Workflow run {run_id} not found", fg="red"))
+            return RollbackResult(
+                run_id=run_id,
+                tenant_id="",
+                success=False,
+                restored_counts={},
+                error=f"Workflow run {run_id} not found",
+            )
+
+        if tenant_ids and run.tenant_id not in tenant_ids:
+            click.echo(
+                click.style(
+                    f"Workflow run {run_id} does not belong to tenant scope",
+                    fg="red",
+                )
+            )
+            return RollbackResult(
+                run_id=run_id,
+                tenant_id=run.tenant_id,
+                success=False,
+                restored_counts={},
+                error=f"Workflow run {run_id} does not belong to tenant scope",
+            )
+
+        return self.rollback(tenant_id=run.tenant_id, workflow_run_id=run_id)
+
+    def _get_workflow_run_repo(self) -> APIWorkflowRunRepository:
+        if self.workflow_run_repo is not None:
+            return self.workflow_run_repo
+
+        from repositories.factory import DifyAPIRepositoryFactory
+
+        session_maker = sessionmaker(bind=db.engine, expire_on_commit=False)
+        self.workflow_run_repo = DifyAPIRepositoryFactory.create_api_workflow_run_repository(session_maker)
+        return self.workflow_run_repo
+
     def _restore_table_records(
         self,
-        session: Session,
+        session,
         table_name: str,
         records: list[dict[str, Any]],
     ) -> int:
         """
-        Restore records to a table.
-
-        Uses INSERT ... ON CONFLICT DO NOTHING for idempotency.
-
-        Args:
-            session: Database session
-            table_name: Name of the table
-            records: List of record dictionaries
-
-        Returns:
-            Number of records actually inserted
+        Restore records to a table using INSERT ... ON CONFLICT DO NOTHING.
         """
         if not records:
             return 0
 
-        model = TABLE_MODELS.get(table_name)
+        from models.trigger import WorkflowTriggerLog
+        from models.workflow import (
+            WorkflowNodeExecutionModel,
+            WorkflowNodeExecutionOffload,
+            WorkflowPause,
+            WorkflowPauseReason,
+        )
+
+        table_models = {
+            "workflow_node_executions": WorkflowNodeExecutionModel,
+            "workflow_node_execution_offload": WorkflowNodeExecutionOffload,
+            "workflow_pauses": WorkflowPause,
+            "workflow_pause_reasons": WorkflowPauseReason,
+            "workflow_trigger_logs": WorkflowTriggerLog,
+        }
+
+        model = table_models.get(table_name)
         if not model:
             logger.warning("Unknown table: %s", table_name)
             return 0
 
-        # Convert datetime strings back to datetime objects
-        converted_records = []
-        for record in records:
-            converted = self._convert_datetime_fields(record, model)
-            converted_records.append(converted)
+        converted_records = [self._convert_datetime_fields(record, model) for record in records]
 
-        # Use INSERT ... ON CONFLICT DO NOTHING for idempotency
         stmt = pg_insert(model).values(converted_records)
         stmt = stmt.on_conflict_do_nothing(index_elements=["id"])
 
         result = session.execute(stmt)
-        return result.rowcount
+        return result.rowcount or 0
 
     def _convert_datetime_fields(
         self,
@@ -271,6 +347,8 @@ class WorkflowRunRollback:
         model: type,
     ) -> dict[str, Any]:
         """Convert ISO datetime strings to datetime objects."""
+        from datetime import datetime
+
         from sqlalchemy import DateTime
 
         result = dict(record)
@@ -285,53 +363,3 @@ class WorkflowRunRollback:
                         pass
 
         return result
-
-    def rollback_batch(
-        self,
-        tenant_id: str,
-        start_date: datetime | None = None,
-        end_date: datetime | None = None,
-        limit: int = 100,
-    ) -> list[RollbackResult]:
-        """
-        Rollback multiple workflow runs by time range.
-
-        Args:
-            tenant_id: Tenant ID
-            start_date: Optional start date filter
-            end_date: Optional end date filter
-            limit: Maximum number of runs to rollback
-
-        Returns:
-            List of RollbackResult objects
-        """
-        results = []
-        session_maker = sessionmaker(bind=db.engine, expire_on_commit=False)
-
-        with session_maker() as session:
-            stmt = select(WorkflowRun).where(
-                WorkflowRun.tenant_id == tenant_id,
-                WorkflowRun.is_archived == True,
-            )
-
-            if start_date:
-                stmt = stmt.where(WorkflowRun.created_at >= start_date)
-            if end_date:
-                stmt = stmt.where(WorkflowRun.created_at < end_date)
-
-            stmt = stmt.order_by(WorkflowRun.created_at.asc()).limit(limit)
-
-            runs = session.scalars(stmt).all()
-
-        click.echo(
-            click.style(
-                f"Found {len(runs)} archived workflow runs to rollback",
-                fg="white",
-            )
-        )
-
-        for run in runs:
-            result = self.rollback(tenant_id=run.tenant_id, workflow_run_id=run.id)
-            results.append(result)
-
-        return results
