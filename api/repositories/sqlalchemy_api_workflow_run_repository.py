@@ -326,6 +326,7 @@ class DifyAPISQLAlchemyWorkflowRunRepository(APIWorkflowRunRepository):
         end_before: datetime,
         last_seen: tuple[datetime, str] | None,
         batch_size: int,
+        tenant_ids: Sequence[str] | None = None,
     ) -> Sequence[WorkflowRun]:
         with self._session_maker() as session:
             stmt = (
@@ -347,6 +348,9 @@ class DifyAPISQLAlchemyWorkflowRunRepository(APIWorkflowRunRepository):
 
             if start_after:
                 stmt = stmt.where(WorkflowRun.created_at >= start_after)
+
+            if tenant_ids:
+                stmt = stmt.where(WorkflowRun.tenant_id.in_(tenant_ids))
 
             if last_seen:
                 stmt = stmt.where(

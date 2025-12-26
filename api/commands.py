@@ -1099,13 +1099,17 @@ def seed_expired_workflow_runs(days_ago: int, limit: int, tenant_id: str | None)
     "archive-workflow-runs",
     help="Archive workflow runs for paid plan tenants to S3-compatible storage.",
 )
-@click.option("--tenant-id", default=None, help="Optional tenant ID for grayscale rollout.")
+@click.option(
+    "--tenant-ids",
+    default=None,
+    help="Optional tenant IDs for grayscale rollout (comma-separated).",
+)
 @click.option("--before-days", default=90, show_default=True, help="Archive runs older than N days.")
 @click.option("--batch-size", default=100, show_default=True, help="Batch size for processing.")
 @click.option("--limit", default=None, type=int, help="Maximum number of runs to archive.")
 @click.option("--dry-run", is_flag=True, help="Preview without archiving.")
 def archive_workflow_runs(
-    tenant_id: str | None,
+    tenant_ids: str | None,
     before_days: int,
     batch_size: int,
     limit: int | None,
@@ -1133,10 +1137,14 @@ def archive_workflow_runs(
         )
     )
 
+    parsed_tenant_ids = None
+    if tenant_ids:
+        parsed_tenant_ids = [tid.strip() for tid in tenant_ids.split(",") if tid.strip()]
+
     archiver = WorkflowRunArchiver(
         days=before_days,
         batch_size=batch_size,
-        tenant_id=tenant_id,
+        tenant_ids=parsed_tenant_ids,
         limit=limit,
         dry_run=dry_run,
     )
