@@ -63,6 +63,34 @@ class FakeRepo:
         result["runs"] = len(runs)
         return result
 
+    def delete_archived_run_related_data(
+        self,
+        session,
+        runs: list[FakeRun],
+        delete_node_executions=None,
+        delete_trigger_logs=None,
+    ) -> dict[str, int]:
+        return {
+            "node_executions": 0,
+            "offloads": 0,
+            "trigger_logs": 0,
+            "pauses": 0,
+            "pause_reasons": 0,
+        }
+
+    def get_pause_records_by_run_id(self, session, run_id: str) -> list[dict]:
+        return []
+
+    def get_pause_reason_records_by_run_id(
+        self,
+        session,
+        pause_ids: list[str],
+    ) -> list[dict]:
+        return []
+
+    def mark_runs_archived(self, session, run_ids: list[str]) -> int:
+        return len(run_ids)
+
 
 def plan_info(plan: str, expiration: int) -> SubscriptionPlan:
     return SubscriptionPlan(plan=plan, expiration_date=expiration)
