@@ -1227,7 +1227,7 @@ def rollback_archived_run(
     rollback = WorkflowRunRollback(dry_run=dry_run)
 
     if run_id:
-        results = [rollback.rollback_by_run_id(parsed_tenant_ids, run_id)]
+        results = [rollback.rollback_by_run_id(run_id)]
     else:
         results = rollback.rollback_batch(
             parsed_tenant_ids,

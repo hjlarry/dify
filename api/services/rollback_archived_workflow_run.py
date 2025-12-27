@@ -254,11 +254,10 @@ class WorkflowRunRollback:
 
     def rollback_by_run_id(
         self,
-        tenant_ids: list[str] | None,
         run_id: str,
     ) -> RollbackResult:
         """
-        Rollback a single workflow run by run ID with tenant scope checking.
+        Rollback a single workflow run by run ID.
         """
         repo = self._get_workflow_run_repo()
         run = repo.get_workflow_run_by_id_without_tenant(run_id)
@@ -271,21 +270,6 @@ class WorkflowRunRollback:
                 success=False,
                 restored_counts={},
                 error=f"Workflow run {run_id} not found",
-            )
-
-        if tenant_ids and run.tenant_id not in tenant_ids:
-            click.echo(
-                click.style(
-                    f"Workflow run {run_id} does not belong to tenant scope",
-                    fg="red",
-                )
-            )
-            return RollbackResult(
-                run_id=run_id,
-                tenant_id=run.tenant_id,
-                success=False,
-                restored_counts={},
-                error=f"Workflow run {run_id} does not belong to tenant scope",
             )
 
         return self.rollback(tenant_id=run.tenant_id, workflow_run_id=run_id)
