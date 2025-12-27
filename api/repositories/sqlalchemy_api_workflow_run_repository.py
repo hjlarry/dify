@@ -533,6 +533,14 @@ class DifyAPISQLAlchemyWorkflowRunRepository(APIWorkflowRunRepository):
 
         return list(session.scalars(stmt).all())
 
+    def get_app_logs_by_run_id(
+        self,
+        session: Session,
+        run_id: str,
+    ) -> Sequence[WorkflowAppLog]:
+        stmt = select(WorkflowAppLog).where(WorkflowAppLog.workflow_run_id == run_id)
+        return list(session.scalars(stmt))
+
     def create_workflow_pause(
         self,
         workflow_run_id: str,
