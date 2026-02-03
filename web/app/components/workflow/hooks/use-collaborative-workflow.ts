@@ -1,5 +1,5 @@
 import type { Edge, Node } from '../types'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useStoreApi } from 'reactflow'
 import { collaborationManager } from '../collaboration/core/collaboration-manager'
 
@@ -39,8 +39,36 @@ export const useCollaborativeWorkflow = () => {
   const store = useStoreApi()
   const { setNodes: collabSetNodes, setEdges: collabSetEdges } = collaborationManager
 
+  useEffect(() => {
+    collaborationManager.setReactFlowStore(store)
+    return () => {
+      collaborationManager.setReactFlowStore(null)
+    }
+  }, [store])
+
+  useEffect(() => {
+    const seedIfLeader = () => {
+      if (!collaborationManager.getIsLeader())
+        return
+      const state = store.getState()
+      collaborationManager.seedGraph(
+        state.getNodes().map(sanitizeNodeForBroadcast),
+        state.edges.map(sanitizeEdgeForBroadcast),
+      )
+    }
+
+    seedIfLeader()
+    const unsubscribe = collaborationManager.onLeaderChange((isLeader) => {
+      if (isLeader)
+        seedIfLeader()
+    })
+    return () => unsubscribe()
+  }, [store])
+
   const setNodes = useCallback((newNodes: Node[], shouldBroadcast: boolean = true) => {
     const { getNodes, setNodes: reactFlowSetNodes } = store.getState()
+    if (collaborationManager.shouldBlockLocalEdits())
+      return
     if (shouldBroadcast) {
       const oldNodes = getNodes()
       collabSetNodes(
@@ -53,6 +81,8 @@ export const useCollaborativeWorkflow = () => {
 
   const setEdges = useCallback((newEdges: Edge[], shouldBroadcast: boolean = true) => {
     const { edges, setEdges: reactFlowSetEdges } = store.getState()
+    if (collaborationManager.shouldBlockLocalEdits())
+      return
     if (shouldBroadcast) {
       collabSetEdges(
         edges.map(sanitizeEdgeForBroadcast),

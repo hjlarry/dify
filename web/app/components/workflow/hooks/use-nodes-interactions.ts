@@ -72,6 +72,22 @@ import {
   WorkflowHistoryEvent,
 } from './use-workflow-history'
 
+const sanitizeNodeForBroadcast = (node: Node): Node => {
+  if (!node.data)
+    return node
+
+  if (!Object.prototype.hasOwnProperty.call(node.data, 'selected'))
+    return node
+
+  const sanitizedData = { ...node.data }
+  delete (sanitizedData as Record<string, unknown>).selected
+
+  return {
+    ...node,
+    data: sanitizedData,
+  }
+}
+
 // Entry node deletion restriction has been removed to allow empty workflows
 
 // Entry node (Start/Trigger) wrapper offsets for alignment
@@ -337,6 +353,7 @@ export const useNodesInteractions = () => {
     x: number
     y: number
   })
+  const dragNodesSnapshotRef = useRef<Node[] | null>(null)
   const { nodesMap: nodesMetaDataMap } = useNodesMetaData()
   const configsMap = useHooksStore(s => s.configsMap)
 
@@ -386,12 +403,15 @@ export const useNodesInteractions = () => {
         return
       }
 
+      if (collaborationManager.isConnected())
+        dragNodesSnapshotRef.current = collaborativeWorkflow.getState().nodes.map(sanitizeNodeForBroadcast)
+
       dragNodeStartPosition.current = {
         x: node.position.x,
         y: node.position.y,
       }
     },
-    [workflowStore, getNodesReadOnly],
+    [workflowStore, getNodesReadOnly, collaborativeWorkflow],
   )
 
   const handleNodeDrag = useCallback<NodeDragHandler>(
@@ -406,6 +426,9 @@ export const useNodesInteractions = () => {
         return
 
       e.stopPropagation()
+
+      if (collaborationManager.isConnected() && !dragNodesSnapshotRef.current)
+        dragNodesSnapshotRef.current = collaborativeWorkflow.getState().nodes.map(sanitizeNodeForBroadcast)
 
       const { nodes, setNodes } = collaborativeWorkflow.getState()
 
@@ -468,7 +491,8 @@ export const useNodesInteractions = () => {
           currentNode.position.y = node.position.y
         }
       })
-      setNodes(newNodes)
+      const shouldBroadcast = !collaborationManager.isConnected()
+      setNodes(newNodes, shouldBroadcast)
     },
     [getNodesReadOnly, collaborativeWorkflow, handleNodeIterationChildDrag, handleNodeLoopChildDrag, handleSetHelpline],
   )
@@ -481,8 +505,23 @@ export const useNodesInteractions = () => {
       if (getNodesReadOnly())
         return
 
+      if (!node?.position)
+        return
+
       const { x, y } = dragNodeStartPosition.current
-      if (!(x === node.position.x && y === node.position.y)) {
+      const hasMoved = !(x === node.position.x && y === node.position.y)
+      const isCollabConnected = collaborationManager.isConnected()
+
+      if (isCollabConnected && hasMoved) {
+        const snapshot = dragNodesSnapshotRef.current
+        if (snapshot) {
+          const { nodes } = collaborativeWorkflow.getState()
+          collaborationManager.setNodes(snapshot, nodes.map(sanitizeNodeForBroadcast))
+        }
+      }
+      dragNodesSnapshotRef.current = null
+
+      if (hasMoved) {
         setHelpLineHorizontal()
         setHelpLineVertical()
         handleSyncWorkflowDraft()
@@ -500,6 +539,7 @@ export const useNodesInteractions = () => {
       getNodesReadOnly,
       saveStateToHistory,
       handleSyncWorkflowDraft,
+      collaborativeWorkflow,
     ],
   )
 
@@ -2490,8 +2530,18 @@ export const useNodesInteractions = () => {
     if (getNodesReadOnly() || getWorkflowReadOnly())
       return
 
-    // Use collaborative undo from Loro
-    collaborationManager.undo()
+    const collabConnected = collaborationManager.isConnected()
+    if (collabConnected) {
+      // Use collaborative undo from Loro
+      collaborationManager.undo()
+      return
+    }
+
+    const { pastStates } = workflowHistoryStore.temporal.getState()
+    if (pastStates.length === 0)
+      return
+
+    workflowHistoryStore.temporal.getState().undo()
     const { edges, nodes } = workflowHistoryStore.getState()
     if (edges.length === 0 && nodes.length === 0)
       return
@@ -2510,8 +2560,18 @@ export const useNodesInteractions = () => {
     if (getNodesReadOnly() || getWorkflowReadOnly())
       return
 
-    // Use collaborative redo from Loro
-    collaborationManager.redo()
+    const collabConnected = collaborationManager.isConnected()
+    if (collabConnected) {
+      // Use collaborative redo from Loro
+      collaborationManager.redo()
+      return
+    }
+
+    const { futureStates } = workflowHistoryStore.temporal.getState()
+    if (futureStates.length === 0)
+      return
+
+    workflowHistoryStore.temporal.getState().redo()
     const { edges, nodes } = workflowHistoryStore.getState()
     if (edges.length === 0 && nodes.length === 0)
       return

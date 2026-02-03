@@ -75,6 +75,7 @@ export class CollaborationManager {
   private activeConnections = new Set<string>()
   private isUndoRedoInProgress = false
   private pendingInitialSync = false
+  private hasInitialGraph = false
   private rejoinInProgress = false
   private pendingGraphImportEmit = false
   private graphViewActive: boolean | null = null
@@ -371,6 +372,12 @@ export class CollaborationManager {
     if (this.isUndoRedoInProgress)
       return
 
+    if (this.isLeader && !this.hasInitialGraph && this.getNodes().length === 0 && this.getEdges().length === 0) {
+      const state = this.reactFlowStore?.getState()
+      const edges = Array.isArray(state?.edges) ? state.edges : []
+      this.seedGraph(oldNodes, edges)
+    }
+
     this.syncNodes(oldNodes, newNodes)
     this.doc.commit()
   }
@@ -382,6 +389,12 @@ export class CollaborationManager {
     // Don't track operations during undo/redo to prevent loops
     if (this.isUndoRedoInProgress)
       return
+
+    if (this.isLeader && !this.hasInitialGraph && this.getNodes().length === 0 && this.getEdges().length === 0) {
+      const state = this.reactFlowStore?.getState()
+      const nodes = state?.getNodes ? state.getNodes() : []
+      this.seedGraph(nodes, oldEdges)
+    }
 
     this.syncEdges(oldEdges, newEdges)
     this.doc.commit()
@@ -421,12 +434,13 @@ export class CollaborationManager {
     this.doc = new LoroDoc()
     this.nodesMap = this.doc.getMap('nodes') as LoroMap<Record<string, Value>>
     this.edgesMap = this.doc.getMap('edges') as LoroMap<Record<string, Value>>
+    this.hasInitialGraph = false
 
     // Initialize UndoManager for collaborative undo/redo
     this.undoManager = new UndoManager(this.doc, {
       maxUndoSteps: 100,
       mergeInterval: 500, // Merge operations within 500ms
-      excludeOriginPrefixes: [], // Don't exclude anything - let UndoManager track all local operations
+      excludeOriginPrefixes: ['import'], // Don't track remote/imported operations
       onPush: (_isUndo, _range, _event) => {
         // Store current selection state when an operation is pushed
         const selectedNode = this.reactFlowStore?.getState().getNodes().find((n: Node) => n.data?.selected)
@@ -740,25 +754,29 @@ export class CollaborationManager {
   undo(): boolean {
     if (!this.undoManager)
       return false
+    if (this.shouldBlockLocalEdits())
+      return false
 
     const canUndo = this.undoManager.canUndo()
     if (canUndo) {
       this.isUndoRedoInProgress = true
-      const result = this.undoManager.undo()
+      this.undoManager.undo()
 
       // After undo, manually update React state from CRDT without triggering collaboration
       const reactFlowStore = this.reactFlowStore
-      if (result && reactFlowStore) {
+      if (reactFlowStore) {
         requestAnimationFrame(() => {
           // Get ReactFlow's native setters, not the collaborative ones
           const state = reactFlowStore.getState()
-          const updatedNodes = Array.from(this.nodesMap?.values() || []) as Node[]
-          const updatedEdges = Array.from(this.edgesMap?.values() || []) as Edge[]
+          const updatedNodes = this.mergeLocalNodeState(this.getNodes())
+          const updatedEdges = this.getEdges()
           // Call ReactFlow's native setters directly to avoid triggering collaboration
           state.setNodes(updatedNodes)
           state.setEdges(updatedEdges)
 
           this.isUndoRedoInProgress = false
+
+          this.refreshGraphSynchronously()
 
           // Emit event to update UI button states
           this.eventEmitter.emit('undoRedoStateChange', {
@@ -769,9 +787,10 @@ export class CollaborationManager {
       }
       else {
         this.isUndoRedoInProgress = false
+        this.refreshGraphSynchronously()
       }
 
-      return result
+      return true
     }
 
     return false
@@ -780,25 +799,29 @@ export class CollaborationManager {
   redo(): boolean {
     if (!this.undoManager)
       return false
+    if (this.shouldBlockLocalEdits())
+      return false
 
     const canRedo = this.undoManager.canRedo()
     if (canRedo) {
       this.isUndoRedoInProgress = true
-      const result = this.undoManager.redo()
+      this.undoManager.redo()
 
       // After redo, manually update React state from CRDT without triggering collaboration
       const reactFlowStore = this.reactFlowStore
-      if (result && reactFlowStore) {
+      if (reactFlowStore) {
         requestAnimationFrame(() => {
           // Get ReactFlow's native setters, not the collaborative ones
           const state = reactFlowStore.getState()
-          const updatedNodes = Array.from(this.nodesMap?.values() || []) as Node[]
-          const updatedEdges = Array.from(this.edgesMap?.values() || []) as Edge[]
+          const updatedNodes = this.mergeLocalNodeState(this.getNodes())
+          const updatedEdges = this.getEdges()
           // Call ReactFlow's native setters directly to avoid triggering collaboration
           state.setNodes(updatedNodes)
           state.setEdges(updatedEdges)
 
           this.isUndoRedoInProgress = false
+
+          this.refreshGraphSynchronously()
 
           // Emit event to update UI button states
           this.eventEmitter.emit('undoRedoStateChange', {
@@ -809,9 +832,10 @@ export class CollaborationManager {
       }
       else {
         this.isUndoRedoInProgress = false
+        this.refreshGraphSynchronously()
       }
 
-      return result
+      return true
     }
 
     return false
@@ -829,10 +853,31 @@ export class CollaborationManager {
     return this.undoManager.canRedo()
   }
 
+  shouldBlockLocalEdits(): boolean {
+    if (!this.isConnected())
+      return false
+    if (this.isLeader)
+      return false
+    return !this.hasInitialGraph
+  }
+
   clearUndoStack(): void {
     if (!this.undoManager)
       return
     this.undoManager.clear()
+  }
+
+  seedGraph(nodes: Node[], edges: Edge[]): void {
+    if (!this.doc || !this.nodesMap || !this.edgesMap)
+      return
+    if (this.getNodes().length > 0 || this.getEdges().length > 0)
+      return
+
+    this.syncNodes([], nodes)
+    this.syncEdges([], edges)
+    this.doc.commit()
+    this.hasInitialGraph = true
+    this.undoManager?.clear()
   }
 
   private syncNodes(oldNodes: Node[], newNodes: Node[]): void {
@@ -883,13 +928,23 @@ export class CollaborationManager {
   }
 
   private setupSubscriptions(): void {
-    this.nodesMap?.subscribe((event: LoroSubscribeEvent) => {
-      const reactFlowStore = this.reactFlowStore
-      if (event.by === 'import' && reactFlowStore) {
-        // Don't update React nodes during undo/redo to prevent loops
-        if (this.isUndoRedoInProgress)
-          return
+    this.doc?.subscribe((event: { by?: string }) => {
+      if (event.by !== 'import')
+        return
 
+      this.hasInitialGraph = true
+      this.scheduleGraphImportEmit()
+    })
+
+    this.nodesMap?.subscribe((event: LoroSubscribeEvent) => {
+      if (event.by === 'local')
+        return
+      // Don't update React nodes during undo/redo to prevent loops
+      if (this.isUndoRedoInProgress)
+        return
+
+      const reactFlowStore = this.reactFlowStore
+      if (reactFlowStore) {
         requestAnimationFrame(() => {
           const state = reactFlowStore.getState()
           const previousNodes: Node[] = state.getNodes()
@@ -933,19 +988,21 @@ export class CollaborationManager {
 
           // Call ReactFlow's native setter directly to avoid triggering collaboration
           state.setNodes(updatedNodes)
-
-          this.scheduleGraphImportEmit()
         })
       }
+
+      this.scheduleGraphImportEmit()
     })
 
     this.edgesMap?.subscribe((event: LoroSubscribeEvent) => {
-      const reactFlowStore = this.reactFlowStore
-      if (event.by === 'import' && reactFlowStore) {
-        // Don't update React edges during undo/redo to prevent loops
-        if (this.isUndoRedoInProgress)
-          return
+      if (event.by === 'local')
+        return
+      // Don't update React edges during undo/redo to prevent loops
+      if (this.isUndoRedoInProgress)
+        return
 
+      const reactFlowStore = this.reactFlowStore
+      if (reactFlowStore) {
         requestAnimationFrame(() => {
           // Get ReactFlow's native setters, not the collaborative ones
           const state = reactFlowStore.getState()
@@ -955,10 +1012,10 @@ export class CollaborationManager {
 
           // Call ReactFlow's native setter directly to avoid triggering collaboration
           state.setEdges(updatedEdges)
-
-          this.scheduleGraphImportEmit()
         })
       }
+
+      this.scheduleGraphImportEmit()
     })
   }
 
@@ -1175,6 +1232,7 @@ export class CollaborationManager {
 
     this.emitGraphResyncRequest()
     this.pendingInitialSync = false
+    this.hasInitialGraph = false
   }
 
   private emitGraphResyncRequest(): void {

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { collaborationManager } from '@/app/components/workflow/collaboration/core/collaboration-manager'
 import ViewWorkflowHistory from '@/app/components/workflow/header/view-workflow-history'
 import { useNodesReadOnly } from '@/app/components/workflow/hooks'
+import { useWorkflowHistoryStore } from '@/app/components/workflow/workflow-history-store'
 import { cn } from '@/utils/classnames'
 import Divider from '../../base/divider'
 import TipPopup from '../operator/tip-popup'
@@ -15,12 +16,14 @@ import TipPopup from '../operator/tip-popup'
 export type UndoRedoProps = { handleUndo: () => void, handleRedo: () => void }
 const UndoRedo: FC<UndoRedoProps> = ({ handleUndo, handleRedo }) => {
   const { t } = useTranslation()
-  const [buttonsDisabled, setButtonsDisabled] = useState({ undo: true, redo: true })
+  const { store: workflowHistoryStore } = useWorkflowHistoryStore()
+  const [collabButtonsDisabled, setCollabButtonsDisabled] = useState({ undo: true, redo: true })
+  const [historyButtonsDisabled, setHistoryButtonsDisabled] = useState({ undo: true, redo: true })
 
   useEffect(() => {
     // Update button states based on Loro's UndoManager
     const updateButtonStates = () => {
-      setButtonsDisabled({
+      setCollabButtonsDisabled({
         undo: !collaborationManager.canUndo(),
         redo: !collaborationManager.canRedo(),
       })
@@ -33,7 +36,7 @@ const UndoRedo: FC<UndoRedoProps> = ({ handleUndo, handleRedo }) => {
 
     // Listen for undo/redo state changes
     const unsubscribe = collaborationManager.onUndoRedoStateChange((state) => {
-      setButtonsDisabled({
+      setCollabButtonsDisabled({
         undo: !state.canUndo,
         redo: !state.canRedo,
       })
@@ -41,6 +44,25 @@ const UndoRedo: FC<UndoRedoProps> = ({ handleUndo, handleRedo }) => {
 
     return () => unsubscribe()
   }, [])
+
+  useEffect(() => {
+    const updateHistoryButtonStates = () => {
+      const { pastStates, futureStates } = workflowHistoryStore.temporal.getState()
+      setHistoryButtonsDisabled({
+        undo: pastStates.length === 0,
+        redo: futureStates.length === 0,
+      })
+    }
+
+    updateHistoryButtonStates()
+    const unsubscribe = workflowHistoryStore.temporal.subscribe(updateHistoryButtonStates)
+    return () => unsubscribe()
+  }, [workflowHistoryStore])
+
+  const isCollabConnected = collaborationManager.isConnected()
+  const buttonsDisabled = isCollabConnected
+    ? collabButtonsDisabled
+    : historyButtonsDisabled
 
   const { nodesReadOnly } = useNodesReadOnly()
 
