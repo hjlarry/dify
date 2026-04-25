@@ -15,6 +15,8 @@ import {
 } from '../../types'
 import {
   CANVAS_V2_HIDDEN_KEY,
+  CANVAS_V2_NODE_HEIGHT,
+  CANVAS_V2_NODE_WIDTH,
 } from '../graph-adapter'
 import { WorkflowCanvasV2 } from '../index'
 
@@ -438,6 +440,92 @@ describe('WorkflowCanvasV2', () => {
             data: expect.objectContaining({ selected: false }),
             id: 'answer',
           }),
+        ],
+      }))
+    })
+
+    it('should keep nodes added through React Flow interactions when selecting them', async () => {
+      const initialNodes = [
+        makeNode({ id: 'start', data: { type: BlockEnum.Start, title: 'Start', desc: '' } }),
+      ]
+      const addedNode = makeNode({
+        data: { type: BlockEnum.Answer, title: 'Answer', desc: '' },
+        id: 'answer',
+        position: { x: 260, y: 0 },
+      })
+      const currentNodes = [
+        {
+          ...initialNodes[0]!,
+          data: {
+            ...initialNodes[0]!.data,
+            height: CANVAS_V2_NODE_HEIGHT,
+            width: CANVAS_V2_NODE_WIDTH,
+          },
+          height: CANVAS_V2_NODE_HEIGHT,
+          style: {
+            height: CANVAS_V2_NODE_HEIGHT,
+            width: CANVAS_V2_NODE_WIDTH,
+          },
+          width: CANVAS_V2_NODE_WIDTH,
+        },
+        addedNode,
+      ]
+
+      mockReactFlowGetNodes.mockReturnValue(currentNodes)
+      mockReactFlowGetEdges.mockReturnValue([])
+
+      render(
+        <WorkflowCanvasV2
+          nodes={initialNodes}
+          edges={[]}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        reactFlowProps.onNodesChange?.([
+          {
+            id: 'answer',
+            selected: true,
+            type: 'select',
+          },
+        ])
+      })
+
+      await waitFor(() => {
+        expect(mockSetNodesInWorkflowStore).toHaveBeenLastCalledWith([
+          expect.objectContaining({
+            data: expect.objectContaining({
+              selected: false,
+              type: BlockEnum.Start,
+            }),
+            id: 'start',
+            selected: false,
+          }),
+          expect.objectContaining({
+            data: expect.objectContaining({
+              selected: true,
+              type: BlockEnum.Answer,
+            }),
+            id: 'answer',
+            selected: true,
+          }),
+        ])
+      })
+
+      const lastNodes = mockSetNodesInWorkflowStore.mock.calls.at(-1)?.[0] as Node[]
+      expect(lastNodes).toHaveLength(2)
+      expect(lastNodes[0]!.width).toBeUndefined()
+      expect(lastNodes[0]!.height).toBeUndefined()
+      expect(lastNodes[0]!.style).toBeUndefined()
+      expect((lastNodes[0]!.data as Record<string, unknown>).width).toBeUndefined()
+      expect((lastNodes[0]!.data as Record<string, unknown>).height).toBeUndefined()
+      expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+        nodes: [
+          expect.objectContaining({ id: 'start' }),
+          expect.objectContaining({ id: 'answer' }),
         ],
       }))
     })

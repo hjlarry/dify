@@ -52,6 +52,7 @@ import {
 import { setupScrollToNodeListener } from '../utils/node-navigation'
 import {
   getCanvasV2Graph,
+  getCanvasV2SourceGraph,
 } from './graph-adapter'
 import {
   getCanvasV2LayoutNodes,
@@ -149,6 +150,32 @@ const withConnectedNodeSelection = (edges: Edge[], nodes: Node[]) => {
       } as Edge['data'],
     }
   })
+}
+
+const getFreshGraph = (
+  graph: WorkflowGraph,
+  reactflow: ReturnType<typeof useReactFlow>,
+) => {
+  const currentNodes = reactflow.getNodes() as Node[]
+  if (!currentNodes.length)
+    return graph
+
+  const currentEdges = reactflow.getEdges() as Edge[]
+  const currentGraph = getCanvasV2SourceGraph({
+    nodes: currentNodes,
+    edges: currentEdges,
+  })
+  const graphNodeIds = new Set(graph.nodes.map(node => node.id))
+  const graphEdgeIds = new Set(graph.edges.map(edge => edge.id))
+  const hasNewerNodes = currentGraph.nodes.length !== graph.nodes.length
+    || currentGraph.nodes.some(node => !graphNodeIds.has(node.id))
+  const hasNewerEdges = currentGraph.edges.length !== graph.edges.length
+    || currentGraph.edges.some(edge => !graphEdgeIds.has(edge.id))
+
+  if (!hasNewerNodes && !hasNewerEdges)
+    return graph
+
+  return currentGraph
 }
 
 export type WorkflowCanvasV2Props = {
@@ -268,17 +295,18 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
       return
 
     setGraph((prevGraph) => {
-      const nextNodes = withSelectedNodeData(applyNodeChanges(graphChanges, prevGraph.nodes) as Node[], graphChanges)
+      const baseGraph = getFreshGraph(prevGraph, reactflow)
+      const nextNodes = withSelectedNodeData(applyNodeChanges(graphChanges, baseGraph.nodes) as Node[], graphChanges)
       const nextEdges = graphChanges.some(isSelectNodeChange)
-        ? withConnectedNodeSelection(prevGraph.edges, nextNodes)
-        : prevGraph.edges
+        ? withConnectedNodeSelection(baseGraph.edges, nextNodes)
+        : baseGraph.edges
 
       return {
         nodes: nextNodes,
         edges: nextEdges,
       }
     })
-  }, [controlMode])
+  }, [controlMode, reactflow])
 
   const handleLayout = useCallback(async () => {
     if (nodesReadOnly)

@@ -100,6 +100,37 @@ const withoutCanvasV2NodeMetadata = (node: Node) => {
   } as Node
 }
 
+const withoutCanvasV2NodeFrame = (node: Node) => {
+  const data = {
+    ...node.data,
+  } as Node['data'] & Record<string, unknown>
+  const nextStyle = {
+    ...(node.style ?? {}),
+  } as Record<string, unknown>
+  const nextNode = {
+    ...node,
+    data,
+    style: nextStyle,
+  } as Node
+
+  if (nextNode.width === CANVAS_V2_NODE_WIDTH)
+    delete nextNode.width
+  if (nextNode.height === CANVAS_V2_NODE_HEIGHT)
+    delete nextNode.height
+  if (nextStyle.width === CANVAS_V2_NODE_WIDTH)
+    delete nextStyle.width
+  if (nextStyle.height === CANVAS_V2_NODE_HEIGHT)
+    delete nextStyle.height
+  if (!Object.keys(nextStyle).length)
+    delete nextNode.style
+  if (data.width === CANVAS_V2_NODE_WIDTH)
+    delete data.width
+  if (data.height === CANVAS_V2_NODE_HEIGHT)
+    delete data.height
+
+  return nextNode
+}
+
 const withoutCanvasV2EdgeMetadata = (edge: Edge) => {
   const data = {
     ...edge.data,
@@ -110,6 +141,16 @@ const withoutCanvasV2EdgeMetadata = (edge: Edge) => {
     ...edge,
     data,
   } as Edge
+}
+
+export const getCanvasV2SourceGraph = ({
+  nodes,
+  edges,
+}: CanvasV2Graph): CanvasV2Graph => {
+  return {
+    nodes: nodes.map(node => withoutCanvasV2NodeFrame(withoutCanvasV2NodeMetadata(node))),
+    edges: edges.map(withoutCanvasV2EdgeMetadata),
+  }
 }
 
 const withContainerMetadata = (node: Node, nodes: Node[]) => {
