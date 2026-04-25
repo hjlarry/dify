@@ -371,6 +371,146 @@ describe('WorkflowCanvasV2', () => {
       })
     })
 
+    it('should sync selected nodes into node data for the right panel', async () => {
+      const nodes = [
+        makeNode({ id: 'loop-1', data: { type: BlockEnum.Loop, title: 'Loop', desc: '' } }),
+        makeNode({ id: 'answer', data: { type: BlockEnum.Answer, title: 'Answer', desc: '' } }),
+      ]
+      const edges = [
+        makeEdge({ id: 'loop-answer', source: 'loop-1', target: 'answer' }),
+      ]
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={edges}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        reactFlowProps.onNodesChange?.([
+          {
+            id: 'loop-1',
+            selected: true,
+            type: 'select',
+          },
+        ])
+      })
+
+      await waitFor(() => {
+        expect(mockSetNodesInWorkflowStore).toHaveBeenLastCalledWith([
+          expect.objectContaining({
+            data: expect.objectContaining({
+              selected: true,
+              type: BlockEnum.Loop,
+            }),
+            id: 'loop-1',
+            selected: true,
+          }),
+          expect.objectContaining({
+            data: expect.objectContaining({
+              selected: false,
+              type: BlockEnum.Answer,
+            }),
+            id: 'answer',
+            selected: false,
+          }),
+        ])
+      })
+      expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+        edges: [
+          expect.objectContaining({
+            data: expect.objectContaining({
+              _connectedNodeIsSelected: true,
+            }),
+            id: 'loop-answer',
+          }),
+        ],
+        nodes: [
+          expect.objectContaining({
+            data: expect.objectContaining({ selected: true }),
+            id: 'loop-1',
+          }),
+          expect.objectContaining({
+            data: expect.objectContaining({ selected: false }),
+            id: 'answer',
+          }),
+        ],
+      }))
+    })
+
+    it('should clear selected node data when React Flow clears selection', async () => {
+      const nodes = [
+        makeNode({
+          id: 'loop-1',
+          data: {
+            selected: true,
+            type: BlockEnum.Loop,
+          },
+          selected: true,
+        }),
+        makeNode({ id: 'answer', data: { type: BlockEnum.Answer } }),
+      ]
+      const edges = [
+        makeEdge({
+          data: {
+            _connectedNodeIsSelected: true,
+          },
+          id: 'loop-answer',
+          source: 'loop-1',
+          target: 'answer',
+        }),
+      ]
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={edges}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        reactFlowProps.onNodesChange?.([
+          {
+            id: 'loop-1',
+            selected: false,
+            type: 'select',
+          },
+        ])
+      })
+
+      await waitFor(() => {
+        expect(mockSetNodesInWorkflowStore).toHaveBeenLastCalledWith([
+          expect.objectContaining({
+            data: expect.objectContaining({ selected: false }),
+            id: 'loop-1',
+            selected: false,
+          }),
+          expect.objectContaining({
+            data: expect.objectContaining({ selected: false }),
+            id: 'answer',
+            selected: false,
+          }),
+        ])
+      })
+      expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+        edges: [
+          expect.objectContaining({
+            data: expect.objectContaining({
+              _connectedNodeIsSelected: false,
+            }),
+            id: 'loop-answer',
+          }),
+        ],
+      }))
+    })
+
     it('should ignore React Flow measurement updates for compact nodes', () => {
       const nodes = [
         makeNode({ id: 'node-1' }),

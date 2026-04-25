@@ -96,6 +96,61 @@ const getGraphNodeChanges = (changes: NodeChange[]) => {
   return changes.filter(change => change.type !== 'dimensions')
 }
 
+const isSelectNodeChange = (change: NodeChange): change is Extract<NodeChange, { type: 'select' }> => {
+  return change.type === 'select'
+}
+
+const getSelectableGraphNodeChanges = (changes: NodeChange[], controlMode: unknown) => {
+  if (controlMode !== ControlMode.Comment)
+    return changes
+
+  return changes.filter(change => !isSelectNodeChange(change))
+}
+
+const withSelectedNodeData = (nodes: Node[], changes: NodeChange[]) => {
+  const selectChanges = changes.filter(isSelectNodeChange)
+  if (!selectChanges.length)
+    return nodes
+
+  const selectedChangeIds = new Set(selectChanges.filter(change => change.selected).map(change => change.id))
+
+  return nodes.map((node) => {
+    const selected = selectedChangeIds.size > 0 ? selectedChangeIds.has(node.id) : Boolean(node.selected)
+
+    if (node.data.selected === selected && node.selected === selected)
+      return node
+
+    return {
+      ...node,
+      selected,
+      data: {
+        ...node.data,
+        selected,
+      },
+    }
+  })
+}
+
+const withConnectedNodeSelection = (edges: Edge[], nodes: Node[]) => {
+  const selectedNodeIds = new Set(nodes.filter(node => node.data.selected).map(node => node.id))
+
+  return edges.map((edge) => {
+    const connectedNodeIsSelected = selectedNodeIds.has(edge.source) || selectedNodeIds.has(edge.target)
+    const edgeData = edge.data as Edge['data'] & Record<string, unknown>
+
+    if (edgeData?._connectedNodeIsSelected === connectedNodeIsSelected)
+      return edge
+
+    return {
+      ...edge,
+      data: {
+        ...edge.data,
+        _connectedNodeIsSelected: connectedNodeIsSelected,
+      } as Edge['data'],
+    }
+  })
+}
+
 export type WorkflowCanvasV2Props = {
   nodes: Node[]
   edges: Edge[]
@@ -208,15 +263,22 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
   }, [setMousePosition])
 
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
-    const graphChanges = getGraphNodeChanges(changes)
+    const graphChanges = getSelectableGraphNodeChanges(getGraphNodeChanges(changes), controlMode)
     if (!graphChanges.length)
       return
 
-    setGraph(prevGraph => ({
-      nodes: applyNodeChanges(graphChanges, prevGraph.nodes) as Node[],
-      edges: prevGraph.edges,
-    }))
-  }, [])
+    setGraph((prevGraph) => {
+      const nextNodes = withSelectedNodeData(applyNodeChanges(graphChanges, prevGraph.nodes) as Node[], graphChanges)
+      const nextEdges = graphChanges.some(isSelectNodeChange)
+        ? withConnectedNodeSelection(prevGraph.edges, nextNodes)
+        : prevGraph.edges
+
+      return {
+        nodes: nextNodes,
+        edges: nextEdges,
+      }
+    })
+  }, [controlMode])
 
   const handleLayout = useCallback(async () => {
     if (nodesReadOnly)
