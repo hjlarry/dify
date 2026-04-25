@@ -34,6 +34,9 @@ import {
 import {
   getEdgeColor,
 } from '../../utils'
+import {
+  CANVAS_V2_HIDDEN_KEY,
+} from '../graph-adapter'
 import { getCanvasV2BranchLabel } from './branch-label'
 
 type CanvasV2EdgeData = Edge['data'] & {
@@ -138,6 +141,10 @@ const CanvasV2CustomEdge = ({
   }, [edgeData?._connectedNodeIsHovering, linearGradientId, selected, sourceHandleId])
 
   const edgeOpacity = edgeData?._dimmed ? 0.3 : (edgeData?._waitingRun ? 0.7 : 1)
+  const hidden = (edgeData as CanvasV2EdgeData & Record<string, unknown> | undefined)?.[CANVAS_V2_HIDDEN_KEY] === true
+
+  if (hidden)
+    return null
 
   return (
     <>

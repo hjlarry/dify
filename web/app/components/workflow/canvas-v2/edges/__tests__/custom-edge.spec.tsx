@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { Position } from 'reactflow'
 import { BlockEnum, NodeRunningStatus } from '../../../types'
+import { CANVAS_V2_HIDDEN_KEY } from '../../graph-adapter'
 import CustomEdge from '../custom-edge'
 
 const mockUseAvailableBlocks = vi.hoisted(() => vi.fn())
@@ -232,6 +233,32 @@ describe('CanvasV2 CustomEdge', () => {
         opacity: '0',
         pointerEvents: 'none',
       })
+    })
+
+    it('should not render internal container edges in the main canvas', () => {
+      render(
+        <CustomEdge
+          id="edge-internal"
+          source="source-node"
+          sourceHandleId="source"
+          target="target-node"
+          targetHandleId="target"
+          sourceX={0}
+          sourceY={0}
+          sourcePosition={Position.Right}
+          targetX={100}
+          targetY={100}
+          targetPosition={Position.Left}
+          selected={false}
+          data={{
+            sourceType: BlockEnum.LoopStart,
+            targetType: BlockEnum.Code,
+            [CANVAS_V2_HIDDEN_KEY]: true,
+          } as never}
+        />,
+      )
+
+      expect(screen.queryByTestId('base-edge')).not.toBeInTheDocument()
     })
   })
 })

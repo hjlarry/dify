@@ -4,6 +4,10 @@ import {
   BlockEnum,
   NodeRunningStatus,
 } from '../../../types'
+import {
+  CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY,
+  CANVAS_V2_HIDDEN_KEY,
+} from '../../graph-adapter'
 import CompactNode from '../compact-node'
 
 let mockNodesReadOnly = false
@@ -124,6 +128,25 @@ describe('CompactNode', () => {
       expect(screen.getByTestId('source-handle-case-a')).toBeInTheDocument()
       expect(screen.getByTestId('source-handle-case-b')).toBeInTheDocument()
       expect(screen.getByTestId('source-handle-false')).toBeInTheDocument()
+    })
+
+    it('should show a collapsed child count for container nodes', () => {
+      renderCompactNode({
+        type: BlockEnum.Iteration,
+        title: 'Loop over files',
+        [CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY]: 3,
+      } as Partial<ComponentProps<typeof CompactNode>['data']>)
+
+      expect(screen.getByText('Loop over files')).toBeInTheDocument()
+      expect(screen.getByTestId('workflow-canvas-v2-container-count')).toHaveTextContent('3')
+    })
+
+    it('should not render internal container children in the main canvas', () => {
+      renderCompactNode({
+        [CANVAS_V2_HIDDEN_KEY]: true,
+      } as Partial<ComponentProps<typeof CompactNode>['data']>)
+
+      expect(screen.queryByTestId('workflow-canvas-v2-compact-node')).not.toBeInTheDocument()
     })
   })
 })

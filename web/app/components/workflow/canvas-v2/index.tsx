@@ -2,6 +2,7 @@
 
 import type { FC } from 'react'
 import type {
+  NodeChange,
   Viewport,
 } from 'reactflow'
 import type { CursorPosition, OnlineUser } from '../collaboration/types/collaboration'
@@ -21,6 +22,7 @@ import {
   useState,
 } from 'react'
 import ReactFlow, {
+  applyNodeChanges,
   Background,
   SelectionMode,
   useReactFlow,
@@ -32,6 +34,7 @@ import {
   WORKFLOW_DATA_UPDATE,
 } from '../constants'
 import {
+  useNodesReadOnly,
   useWorkflowReadOnly,
 } from '../hooks'
 import { HooksStoreContextProvider } from '../hooks-store'
@@ -44,6 +47,9 @@ import {
   ControlMode,
 } from '../types'
 import { setupScrollToNodeListener } from '../utils/node-navigation'
+import {
+  getCanvasV2Graph,
+} from './graph-adapter'
 import {
   canvasV2EdgeTypes,
   canvasV2NodeTypes,
@@ -116,6 +122,7 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
   const setWorkflowCanvasWidth = useStore(s => s.setWorkflowCanvasWidth)
   const setWorkflowCanvasHeight = useStore(s => s.setWorkflowCanvasHeight)
   const setMousePosition = useStore(s => s.setMousePosition)
+  const { nodesReadOnly } = useNodesReadOnly()
   const { workflowReadOnly } = useWorkflowReadOnly()
   const controlHeight = useMemo(() => {
     if (!workflowCanvasHeight)
@@ -123,6 +130,7 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
 
     return workflowCanvasHeight - bottomPanelHeight
   }, [bottomPanelHeight, workflowCanvasHeight])
+  const viewGraph = useMemo(() => getCanvasV2Graph(graph), [graph])
 
   useEffect(() => {
     workflowStore.getState().setNodes(graph.nodes)
@@ -153,13 +161,16 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
       return
 
     const { payload } = event
-    setGraph({
+    const nextGraph = {
       nodes: payload.nodes,
       edges: payload.edges,
-    })
+    }
+    const nextViewGraph = getCanvasV2Graph(nextGraph)
+
+    setGraph(nextGraph)
     workflowStore.getState().setNodes(payload.nodes)
-    reactflow.setNodes(payload.nodes)
-    reactflow.setEdges(payload.edges)
+    reactflow.setNodes(nextViewGraph.nodes)
+    reactflow.setEdges(nextViewGraph.edges)
 
     if (payload.viewport)
       reactflow.setViewport(payload.viewport)
@@ -168,8 +179,8 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
   })
 
   useEffect(() => {
-    return setupScrollToNodeListener(graph.nodes, reactflow)
-  }, [graph.nodes, reactflow])
+    return setupScrollToNodeListener(viewGraph.nodes, reactflow)
+  }, [viewGraph.nodes, reactflow])
 
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     const containerClientRect = workflowContainerRef.current?.getBoundingClientRect()
@@ -183,6 +194,13 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
       elementY: event.clientY - containerClientRect.top,
     })
   }, [setMousePosition])
+
+  const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    setGraph(prevGraph => ({
+      nodes: applyNodeChanges(changes, prevGraph.nodes) as Node[],
+      edges: prevGraph.edges,
+    }))
+  }, [])
 
   const panOnDrag = useMemo(() => {
     if (controlMode === ControlMode.Hand)
@@ -211,15 +229,16 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
       <ReactFlow
         nodeTypes={canvasV2NodeTypes}
         edgeTypes={canvasV2EdgeTypes}
-        nodes={graph.nodes}
-        edges={graph.edges}
+        nodes={viewGraph.nodes}
+        edges={viewGraph.edges}
+        onNodesChange={handleNodesChange}
         defaultViewport={viewport}
         multiSelectionKeyCode={null}
         deleteKeyCode={null}
-        nodesDraggable={false}
+        nodesDraggable={!nodesReadOnly && controlMode !== ControlMode.Comment}
         nodesConnectable={false}
-        nodesFocusable={false}
-        edgesFocusable={false}
+        nodesFocusable={!nodesReadOnly}
+        edgesFocusable={!nodesReadOnly}
         panOnScroll={controlMode === ControlMode.Pointer && !workflowReadOnly}
         panOnDrag={panOnDrag}
         zoomOnPinch

@@ -22,6 +22,10 @@ import {
   BlockEnum,
   NodeRunningStatus,
 } from '../../types'
+import {
+  CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY,
+  CANVAS_V2_HIDDEN_KEY,
+} from '../graph-adapter'
 
 type CompactNodeProps = ReactFlowNodeProps<CommonNodeType>
 
@@ -70,6 +74,16 @@ const getDisplayStatus = (data: CommonNodeType) => {
   return data._singleRunningStatus || data._runningStatus
 }
 
+const getCollapsedChildrenCount = (data: CommonNodeType) => {
+  const count = (data as CommonNodeType & Record<string, unknown>)[CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY]
+
+  return typeof count === 'number' && Number.isFinite(count) ? count : undefined
+}
+
+const isCanvasV2Hidden = (data: CommonNodeType) => {
+  return (data as CommonNodeType & Record<string, unknown>)[CANVAS_V2_HIDDEN_KEY] === true
+}
+
 const CompactBranchSourceHandle = ({
   data,
   handleId,
@@ -105,10 +119,14 @@ const CompactNode: FC<CompactNodeProps> = ({
   const { nodesReadOnly } = useNodesReadOnly()
   const toolIcon = useToolIcon(data)
   const branchSourceHandleIds = useMemo(() => getBranchSourceHandleIds(data), [data])
+  if (isCanvasV2Hidden(data))
+    return null
+
   const isBranchNode = BRANCH_NODE_TYPES.has(data.type)
   const displayStatus = getDisplayStatus(data)
   const showSelectedBorder = Boolean(data.selected || data._isBundled || data._isEntering)
   const showStatusBorder = !showSelectedBorder && displayStatus
+  const collapsedChildrenCount = getCollapsedChildrenCount(data)
 
   return (
     <div
@@ -165,6 +183,14 @@ const CompactNode: FC<CompactNodeProps> = ({
       >
         {data.title}
       </div>
+      {collapsedChildrenCount !== undefined && (
+        <div
+          data-testid="workflow-canvas-v2-container-count"
+          className="ml-2 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md bg-workflow-block-parma-bg px-1 system-2xs-semibold-uppercase text-text-tertiary"
+        >
+          {collapsedChildrenCount}
+        </div>
+      )}
       {displayStatus && (
         <NodeStatusIcon
           status={displayStatus}
