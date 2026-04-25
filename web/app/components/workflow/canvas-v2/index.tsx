@@ -3,6 +3,7 @@
 import type { FC } from 'react'
 import type {
   NodeChange,
+  NodeMouseHandler,
   Viewport,
 } from 'reactflow'
 import type { CursorPosition, OnlineUser } from '../collaboration/types/collaboration'
@@ -47,9 +48,11 @@ import {
   useWorkflowStore,
 } from '../store'
 import {
+  BlockEnum,
   ControlMode,
 } from '../types'
 import { setupScrollToNodeListener } from '../utils/node-navigation'
+import ContainerSubgraph from './container-subgraph'
 import {
   getCanvasV2Graph,
   getCanvasV2SourceGraph,
@@ -152,6 +155,34 @@ const withConnectedNodeSelection = (edges: Edge[], nodes: Node[]) => {
   })
 }
 
+const withSelectedGraphNode = (graph: WorkflowGraph, nodeId: string): WorkflowGraph => {
+  const nodes = graph.nodes.map((node) => {
+    const selected = node.id === nodeId
+
+    if (node.data.selected === selected && node.selected === selected)
+      return node
+
+    return {
+      ...node,
+      selected,
+      data: {
+        ...node.data,
+        selected,
+      },
+    } as Node
+  })
+
+  return {
+    nodes,
+    edges: withConnectedNodeSelection(graph.edges, nodes),
+  }
+}
+
+const CONTAINER_NODE_TYPES = new Set<BlockEnum>([
+  BlockEnum.Iteration,
+  BlockEnum.Loop,
+])
+
 const getFreshGraph = (
   graph: WorkflowGraph,
   reactflow: ReturnType<typeof useReactFlow>,
@@ -207,6 +238,7 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
     nodes: originalNodes,
     edges: originalEdges,
   })
+  const [activeContainerId, setActiveContainerId] = useState<string>()
   const controlMode = useStore(s => s.controlMode)
   const showUserCursors = useStore(s => s.showUserCursors)
   const workflowCanvasHeight = useStore(s => s.workflowCanvasHeight)
@@ -308,6 +340,28 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
     })
   }, [controlMode, reactflow])
 
+  const handleSelectGraphNode = useCallback((nodeId: string) => {
+    setGraph((prevGraph) => {
+      return withSelectedGraphNode(getFreshGraph(prevGraph, reactflow), nodeId)
+    })
+  }, [reactflow])
+
+  const handleNodeClick = useCallback<NodeMouseHandler>((_, node) => {
+    if (controlMode === ControlMode.Comment)
+      return
+
+    handleSelectGraphNode(node.id)
+
+    if (!CONTAINER_NODE_TYPES.has(node.data.type))
+      return
+
+    setActiveContainerId(node.id)
+  }, [controlMode, handleSelectGraphNode])
+
+  const handleSubgraphChange = useCallback((nextGraph: WorkflowGraph) => {
+    setGraph(nextGraph)
+  }, [])
+
   const handleLayout = useCallback(async () => {
     if (nodesReadOnly)
       return
@@ -365,6 +419,7 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
         nodes={viewGraph.nodes}
         edges={viewGraph.edges}
         onNodesChange={handleNodesChange}
+        onNodeClick={handleNodeClick}
         defaultViewport={viewport}
         multiSelectionKeyCode={null}
         deleteKeyCode={null}
@@ -396,6 +451,16 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
           />
         )}
       </ReactFlow>
+      {activeContainerId && (
+        <ContainerSubgraph
+          containerId={activeContainerId}
+          nodes={graph.nodes}
+          edges={graph.edges}
+          onClose={() => setActiveContainerId(undefined)}
+          onGraphChange={handleSubgraphChange}
+          onSelectNode={handleSelectGraphNode}
+        />
+      )}
     </div>
   )
 })

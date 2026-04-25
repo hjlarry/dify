@@ -60,6 +60,7 @@
   "blocksAbout.trigger-webhook": "Webhook 触发器接收来自第三方系统的 HTTP 推送以自动触发工作流。",
   "blocksAbout.variable-aggregator": "将多路分支的变量聚合为一个变量，以实现下游节点统一配置。",
   "blocksAbout.variable-assigner": "将多路分支的变量聚合为一个变量，以实现下游节点统一配置。",
+  "canvasV2.containerSubgraph.empty": "暂无内部节点",
   "changeHistory.clearHistory": "清除历史记录",
   "changeHistory.currentState": "当前状态",
   "changeHistory.edgeDelete": "块已断开连接",

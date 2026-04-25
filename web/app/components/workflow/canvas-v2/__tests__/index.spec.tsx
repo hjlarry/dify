@@ -1,8 +1,12 @@
 import type { ReactNode } from 'react'
-import type { NodeChange } from 'reactflow'
+import type {
+  NodeChange,
+  NodeMouseHandler,
+} from 'reactflow'
 import type {
   Edge,
   Node,
+  OnSelectBlock,
 } from '../../types'
 import {
   act,
@@ -33,6 +37,8 @@ const mockHandleSyncWorkflowDraft = vi.hoisted(() => vi.fn())
 const mockSaveStateToHistory = vi.hoisted(() => vi.fn())
 const mockWorkflowStoreSetState = vi.hoisted(() => vi.fn())
 const mockGetCanvasV2LayoutNodes = vi.hoisted(() => vi.fn())
+const mockHandleNodeAdd = vi.hoisted(() => vi.fn())
+const mockAvailableBlocks = vi.hoisted(() => ['code', 'answer'])
 let mockNodesReadOnly = false
 
 type MockReactFlowProps = {
@@ -40,6 +46,7 @@ type MockReactFlowProps = {
   edges?: Array<{ data?: Record<string, unknown>, id: string }>
   nodes?: Array<{ data?: Record<string, unknown>, id: string }>
   nodesDraggable?: boolean
+  onNodeClick?: NodeMouseHandler
   onNodesChange?: (changes: NodeChange[]) => void
 }
 
@@ -90,6 +97,7 @@ vi.mock('reactflow', () => ({
       edges,
       nodes,
       nodesDraggable,
+      onNodeClick,
       onNodesChange,
     } = props
 
@@ -97,6 +105,7 @@ vi.mock('reactflow', () => ({
       edges,
       nodes,
       nodesDraggable,
+      onNodeClick,
       onNodesChange,
     })
     return <div data-testid="react-flow">{children}</div>
@@ -130,6 +139,13 @@ vi.mock('../../collaboration/components/user-cursors', () => ({
 }))
 
 vi.mock('../../hooks', () => ({
+  useAvailableBlocks: () => ({
+    availableNextBlocks: mockAvailableBlocks,
+    availablePrevBlocks: mockAvailableBlocks,
+  }),
+  useNodesInteractions: () => ({
+    handleNodeAdd: mockHandleNodeAdd,
+  }),
   useNodesSyncDraft: () => ({
     handleSyncWorkflowDraft: mockHandleSyncWorkflowDraft,
   }),
@@ -158,6 +174,28 @@ vi.mock('../../operator/control', () => ({
       data-testid="workflow-control"
       onClick={onLayout}
     />
+  ),
+}))
+
+vi.mock('../../block-selector', () => ({
+  default: ({
+    disabled,
+    onSelect,
+    trigger,
+  }: {
+    disabled?: boolean
+    onSelect: OnSelectBlock
+    trigger?: (open: boolean) => ReactNode
+  }) => (
+    <div
+      data-testid="workflow-canvas-v2-container-subgraph-selector"
+      onClick={() => {
+        if (!disabled)
+          onSelect('code' as Parameters<OnSelectBlock>[0])
+      }}
+    >
+      {trigger?.(false)}
+    </div>
   ),
 }))
 
@@ -193,7 +231,7 @@ vi.mock('../node-types', () => ({
 }))
 
 type NodeFactoryInput = Omit<Partial<Node>, 'data' | 'id' | 'position' | 'type'> & Pick<Node, 'id'> & {
-  data?: Partial<Node['data']>
+  data?: Partial<Node['data']> & Record<string, unknown>
   position?: Node['position']
   type?: Node['type']
 }
@@ -336,6 +374,194 @@ describe('WorkflowCanvasV2', () => {
           expect.objectContaining({ id: 'external' }),
         ],
       }))
+    })
+
+    it('should select the container and open its subgraph when clicking a loop node', () => {
+      const nodes = [
+        makeNode({
+          id: 'loop-1',
+          data: {
+            type: BlockEnum.Loop,
+            title: 'Loop',
+            desc: '',
+            start_node_id: 'loop-start',
+            _children: [
+              { nodeId: 'loop-start', nodeType: BlockEnum.LoopStart },
+              { nodeId: 'code-1', nodeType: BlockEnum.Code },
+            ],
+          },
+        }),
+        makeNode({
+          id: 'loop-start',
+          parentId: 'loop-1',
+          data: { type: BlockEnum.LoopStart, title: '', desc: '', isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeNode({
+          id: 'code-1',
+          parentId: 'loop-1',
+          position: { x: 260, y: 0 },
+          data: { type: BlockEnum.Code, title: 'Code child', desc: '', isInLoop: true, loop_id: 'loop-1' },
+        }),
+      ]
+      const edges = [
+        makeEdge({
+          id: 'loop-start-code',
+          source: 'loop-start',
+          target: 'code-1',
+          data: { sourceType: BlockEnum.LoopStart, targetType: BlockEnum.Code, isInLoop: true, loop_id: 'loop-1' },
+        }),
+      ]
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={edges}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        reactFlowProps.onNodeClick?.({} as never, nodes[0]!)
+      })
+
+      expect(screen.getByTestId('workflow-canvas-v2-container-subgraph')).toBeInTheDocument()
+      expect(screen.getByText('Loop')).toBeInTheDocument()
+      expect(screen.getByText('Code child')).toBeInTheDocument()
+      expect(screen.getByTestId('workflow-canvas-v2-container-subgraph-start')).toBeInTheDocument()
+      expect(screen.getAllByTestId('workflow-canvas-v2-container-subgraph-node')).toHaveLength(1)
+      expect(screen.queryByRole('button', { name: /common\.operation\.back/ })).not.toBeInTheDocument()
+      expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+        nodes: expect.arrayContaining([
+          expect.objectContaining({
+            data: expect.objectContaining({
+              selected: true,
+            }),
+            id: 'loop-1',
+            selected: true,
+          }),
+        ]),
+      }))
+
+      act(() => {
+        screen.getByRole('button', { name: 'Code child' }).click()
+      })
+
+      expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+        nodes: expect.arrayContaining([
+          expect.objectContaining({
+            data: expect.objectContaining({
+              selected: false,
+            }),
+            id: 'loop-1',
+            selected: false,
+          }),
+          expect.objectContaining({
+            data: expect.objectContaining({
+              selected: true,
+            }),
+            id: 'code-1',
+            selected: true,
+          }),
+        ]),
+      }))
+
+      act(() => {
+        screen.getByRole('button', { name: 'Loop' }).click()
+      })
+
+      expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+        nodes: expect.arrayContaining([
+          expect.objectContaining({
+            data: expect.objectContaining({
+              selected: true,
+            }),
+            id: 'loop-1',
+            selected: true,
+          }),
+          expect.objectContaining({
+            data: expect.objectContaining({
+              selected: false,
+            }),
+            id: 'code-1',
+            selected: false,
+          }),
+        ]),
+      }))
+
+      act(() => {
+        screen.getByRole('button', { name: /common\.operation\.close/ }).click()
+      })
+
+      expect(screen.queryByTestId('workflow-canvas-v2-container-subgraph')).not.toBeInTheDocument()
+    })
+
+    it('should add a node between connected container children from the subgraph', () => {
+      const nodes = [
+        makeNode({
+          id: 'loop-1',
+          data: {
+            type: BlockEnum.Loop,
+            title: 'Loop',
+            desc: '',
+            start_node_id: 'loop-start',
+            _children: [
+              { nodeId: 'loop-start', nodeType: BlockEnum.LoopStart },
+              { nodeId: 'code-1', nodeType: BlockEnum.Code },
+            ],
+          },
+        }),
+        makeNode({
+          id: 'loop-start',
+          parentId: 'loop-1',
+          data: { type: BlockEnum.LoopStart, title: '', desc: '', isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeNode({
+          id: 'code-1',
+          parentId: 'loop-1',
+          position: { x: 260, y: 0 },
+          data: { type: BlockEnum.Code, title: 'Code child', desc: '', isInLoop: true, loop_id: 'loop-1' },
+        }),
+      ]
+      const edges = [
+        makeEdge({
+          id: 'loop-start-code',
+          source: 'loop-start',
+          sourceHandle: 'source',
+          target: 'code-1',
+          targetHandle: 'target',
+          data: { sourceType: BlockEnum.LoopStart, targetType: BlockEnum.Code, isInLoop: true, loop_id: 'loop-1' },
+        }),
+      ]
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={edges}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        reactFlowProps.onNodeClick?.({} as never, nodes[0]!)
+      })
+
+      screen.getAllByTestId('workflow-canvas-v2-container-subgraph-add')[0]!.click()
+
+      expect(mockHandleNodeAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          nodeType: BlockEnum.Code,
+        }),
+        {
+          nextNodeId: 'code-1',
+          nextNodeTargetHandle: 'target',
+          prevNodeId: 'loop-start',
+          prevNodeSourceHandle: 'source',
+        },
+      )
     })
 
     it('should update the raw graph when visible nodes move', async () => {

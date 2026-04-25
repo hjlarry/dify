@@ -60,6 +60,7 @@
   "blocksAbout.trigger-webhook": "Webhook Trigger receives HTTP pushes from third-party systems to automatically trigger workflows.",
   "blocksAbout.variable-aggregator": "Aggregate multi-branch variables into a single variable for unified configuration of downstream nodes.",
   "blocksAbout.variable-assigner": "Aggregate multi-branch variables into a single variable for unified configuration of downstream nodes.",
+  "canvasV2.containerSubgraph.empty": "No internal nodes",
   "canvasV2.summary.actions": "Actions",
   "canvasV2.summary.agent": "Agent",
   "canvasV2.summary.answer": "Answer",
