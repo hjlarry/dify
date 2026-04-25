@@ -14,6 +14,8 @@ import { useReactFlow } from 'reactflow'
 import { useFeaturesStore } from '@/app/components/base/features/hooks'
 import { FILE_EXTS } from '@/app/components/base/prompt-editor/constants'
 import { WorkflowWithInnerContext } from '@/app/components/workflow'
+import { WorkflowCanvasV2WithInnerContext } from '@/app/components/workflow/canvas-v2'
+import { useNewWorkflowCanvasEnabled } from '@/app/components/workflow/canvas-v2/hooks'
 import { collaborationManager } from '@/app/components/workflow/collaboration/core/collaboration-manager'
 import { useCollaboration } from '@/app/components/workflow/collaboration/hooks/use-collaboration'
 import { useWorkflowUpdate } from '@/app/components/workflow/hooks/use-workflow-interactions'
@@ -46,6 +48,7 @@ const WorkflowMain = ({
   const appId = useStore(s => s.appId)
   const containerRef = useRef<HTMLDivElement>(null)
   const reactFlow = useReactFlow()
+  const newWorkflowCanvasEnabled = useNewWorkflowCanvasEnabled()
 
   const reactFlowStore = useMemo(() => ({
     getState: () => ({
@@ -321,18 +324,35 @@ const WorkflowMain = ({
       ref={containerRef}
       className="relative h-full w-full"
     >
-      <WorkflowWithInnerContext
-        nodes={nodes}
-        edges={edges}
-        viewport={viewport}
-        onWorkflowDataUpdate={handleWorkflowDataUpdate}
-        hooksStore={hooksStore as unknown as Partial<HooksStoreShape>}
-        cursors={filteredCursors}
-        myUserId={myUserId}
-        onlineUsers={onlineUsers}
-      >
-        <WorkflowChildren />
-      </WorkflowWithInnerContext>
+      {newWorkflowCanvasEnabled
+        ? (
+            <WorkflowCanvasV2WithInnerContext
+              nodes={nodes}
+              edges={edges}
+              viewport={viewport}
+              onWorkflowDataUpdate={handleWorkflowDataUpdate}
+              hooksStore={hooksStore as unknown as Partial<HooksStoreShape>}
+              cursors={filteredCursors}
+              myUserId={myUserId}
+              onlineUsers={onlineUsers}
+            >
+              <WorkflowChildren />
+            </WorkflowCanvasV2WithInnerContext>
+          )
+        : (
+            <WorkflowWithInnerContext
+              nodes={nodes}
+              edges={edges}
+              viewport={viewport}
+              onWorkflowDataUpdate={handleWorkflowDataUpdate}
+              hooksStore={hooksStore as unknown as Partial<HooksStoreShape>}
+              cursors={filteredCursors}
+              myUserId={myUserId}
+              onlineUsers={onlineUsers}
+            >
+              <WorkflowChildren />
+            </WorkflowWithInnerContext>
+          )}
     </div>
   )
 }

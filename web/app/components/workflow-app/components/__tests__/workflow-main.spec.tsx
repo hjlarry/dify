@@ -12,6 +12,7 @@ const mockFetchWorkflowDraft = vi.hoisted(() => vi.fn())
 const mockOnVarsAndFeaturesUpdate = vi.hoisted(() => vi.fn())
 const mockOnWorkflowUpdate = vi.hoisted(() => vi.fn())
 const mockOnSyncRequest = vi.hoisted(() => vi.fn())
+const mockUseNewWorkflowCanvasEnabled = vi.hoisted(() => vi.fn(() => false))
 
 const hookFns = {
   doSyncWorkflowDraft: vi.fn(),
@@ -65,6 +66,7 @@ const collaborationListeners = vi.hoisted(() => ({
 }))
 
 let capturedContextProps: Record<string, unknown> | null = null
+let capturedCanvasV2Props: Record<string, unknown> | null = null
 
 type MockWorkflowWithInnerContextProps = Pick<WorkflowProps, 'nodes' | 'edges' | 'viewport' | 'onWorkflowDataUpdate' | 'cursors' | 'myUserId' | 'onlineUsers'> & {
   hooksStore?: Record<string, unknown>
@@ -213,6 +215,40 @@ vi.mock('@/app/components/workflow', () => ({
   },
 }))
 
+vi.mock('@/app/components/workflow/canvas-v2/hooks', () => ({
+  useNewWorkflowCanvasEnabled: () => mockUseNewWorkflowCanvasEnabled(),
+}))
+
+vi.mock('@/app/components/workflow/canvas-v2', () => ({
+  WorkflowCanvasV2WithInnerContext: ({
+    nodes,
+    edges,
+    viewport,
+    onWorkflowDataUpdate,
+    hooksStore,
+    cursors,
+    myUserId,
+    onlineUsers,
+    children,
+  }: MockWorkflowWithInnerContextProps) => {
+    capturedCanvasV2Props = {
+      nodes,
+      edges,
+      viewport,
+      onWorkflowDataUpdate,
+      hooksStore,
+      cursors,
+      myUserId,
+      onlineUsers,
+    }
+    return (
+      <div data-testid="workflow-canvas-v2">
+        {children}
+      </div>
+    )
+  },
+}))
+
 vi.mock('@/app/components/workflow-app/hooks', () => ({
   useAvailableNodesMetaData: () => ({ nodes: [{ id: 'start' }], nodesMap: { start: { id: 'start' } } }),
   useConfigsMap: () => ({ flowId: 'app-1', flowType: 'app-flow', fileSettings: { enabled: true } }),
@@ -268,6 +304,8 @@ describe('WorkflowMain', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     capturedContextProps = null
+    capturedCanvasV2Props = null
+    mockUseNewWorkflowCanvasEnabled.mockReturnValue(false)
     collaborationRuntime.startCursorTracking.mockReset()
     collaborationRuntime.stopCursorTracking.mockReset()
     collaborationRuntime.onlineUsers = []
@@ -296,6 +334,30 @@ describe('WorkflowMain', () => {
     expect(screen.getByTestId('workflow-inner-context')).toBeInTheDocument()
     expect(screen.getByTestId('workflow-children')).toBeInTheDocument()
     expect(capturedContextProps).toMatchObject({
+      nodes,
+      edges,
+      viewport,
+    })
+  })
+
+  it('should render the new workflow canvas when the labs flag is enabled', () => {
+    mockUseNewWorkflowCanvasEnabled.mockReturnValue(true)
+    const nodes = [{ id: 'node-1' }]
+    const edges = [{ id: 'edge-1' }]
+    const viewport = { x: 1, y: 2, zoom: 1.5 }
+
+    render(
+      <WorkflowMain
+        nodes={nodes as never}
+        edges={edges as never}
+        viewport={viewport}
+      />,
+    )
+
+    expect(screen.getByTestId('workflow-canvas-v2')).toBeInTheDocument()
+    expect(screen.queryByTestId('workflow-inner-context')).not.toBeInTheDocument()
+    expect(screen.getByTestId('workflow-children')).toBeInTheDocument()
+    expect(capturedCanvasV2Props).toMatchObject({
       nodes,
       edges,
       viewport,

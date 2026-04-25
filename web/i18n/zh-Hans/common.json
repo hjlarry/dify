@@ -614,7 +614,7 @@
   "settings.dataSource": "数据来源",
   "settings.generalGroup": "通用",
   "settings.integrations": "集成",
-  "settings.labs.newWorkflowCanvas.description": "试用一套重新设计的工作流画布，以更清晰的结构优先界面展示流程。该功能仍处于实验阶段，可在画布工具栏中切换。",
+  "settings.labs.newWorkflowCanvas.description": "试用一套重新设计的工作流画布，以更清晰的结构优先界面展示流程。该实验设置会应用到你打开的每个工作流。",
   "settings.labs.newWorkflowCanvas.title": "新版工作流画布",
   "settings.labs.title": "实验室",
   "settings.language": "语言",
