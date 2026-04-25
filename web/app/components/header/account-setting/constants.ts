@@ -8,6 +8,7 @@ export const ACCOUNT_SETTING_TAB = {
   API_BASED_EXTENSION: 'api-based-extension',
   CUSTOM: 'custom',
   LANGUAGE: 'language',
+  LABS: 'labs',
 } as const
 
 export type AccountSettingTab = typeof ACCOUNT_SETTING_TAB[keyof typeof ACCOUNT_SETTING_TAB]

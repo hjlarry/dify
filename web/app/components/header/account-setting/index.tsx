@@ -18,6 +18,7 @@ import { useProviderContext } from '@/context/provider-context'
 import useBreakpoints, { MediaType } from '@/hooks/use-breakpoints'
 import ApiBasedExtensionPage from './api-based-extension-page'
 import DataSourcePage from './data-source-page-new'
+import LabsPage from './labs-page'
 import LanguagePage from './language-page'
 import MembersPage from './members-page'
 import ModelProviderPage from './model-provider-page'
@@ -127,6 +128,12 @@ export default function AccountSetting({
           icon: <span className={cn('i-ri-translate-2', iconClassName)} />,
           activeIcon: <span className={cn('i-ri-translate-2', iconClassName)} />,
         },
+        {
+          key: ACCOUNT_SETTING_TAB.LABS,
+          name: t('settings.labs.title', { ns: 'common' }),
+          icon: <span className={cn('i-ri-flask-line', iconClassName)} />,
+          activeIcon: <span className={cn('i-ri-flask-fill', iconClassName)} />,
+        },
       ],
     },
   ]
@@ -233,6 +240,7 @@ export default function AccountSetting({
               {activeMenu === ACCOUNT_SETTING_TAB.API_BASED_EXTENSION && <ApiBasedExtensionPage />}
               {activeMenu === ACCOUNT_SETTING_TAB.CUSTOM && <CustomPage />}
               {activeMenu === ACCOUNT_SETTING_TAB.LANGUAGE && <LanguagePage />}
+              {activeMenu === ACCOUNT_SETTING_TAB.LABS && <LabsPage />}
             </div>
           </ScrollArea>
         </div>

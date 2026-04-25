@@ -182,6 +182,7 @@ describe('AccountSetting', () => {
       expect(screen.getByText('common.settings.apiBasedExtension'))!.toBeInTheDocument()
       expect(screen.getByText('custom.custom'))!.toBeInTheDocument()
       expect(screen.getAllByText('common.settings.language').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('common.settings.labs.title').length).toBeGreaterThan(0)
     })
 
     it('should respect the initial tab', () => {
@@ -405,6 +406,11 @@ describe('AccountSetting', () => {
       // Language
       fireEvent.click(screen.getAllByText('common.settings.language')[0]!)
       expect(screen.getAllByText('common.settings.language').length).toBeGreaterThan(1)
+
+      // Labs
+      fireEvent.click(screen.getAllByText('common.settings.labs.title')[0]!)
+      expect(screen.getAllByText('common.settings.labs.title').length).toBeGreaterThan(1)
+      expect(screen.getByText('common.settings.labs.newWorkflowCanvas.title')).toBeInTheDocument()
 
       // Members
       fireEvent.click(screen.getAllByText('common.settings.members')[0]!)

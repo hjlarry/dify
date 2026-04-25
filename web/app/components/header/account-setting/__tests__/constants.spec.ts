@@ -18,6 +18,7 @@ describe('AccountSetting Constants', () => {
     expect(ACCOUNT_SETTING_TAB.API_BASED_EXTENSION).toBe('api-based-extension')
     expect(ACCOUNT_SETTING_TAB.CUSTOM).toBe('custom')
     expect(ACCOUNT_SETTING_TAB.LANGUAGE).toBe('language')
+    expect(ACCOUNT_SETTING_TAB.LABS).toBe('labs')
   })
 
   it('should have correct DEFAULT_ACCOUNT_SETTING_TAB', () => {
@@ -32,6 +33,7 @@ describe('AccountSetting Constants', () => {
     expect(isValidAccountSettingTab('api-based-extension')).toBe(true)
     expect(isValidAccountSettingTab('custom')).toBe(true)
     expect(isValidAccountSettingTab('language')).toBe(true)
+    expect(isValidAccountSettingTab('labs')).toBe(true)
   })
 
   it('isValidAccountSettingTab should return false for invalid tabs', () => {
