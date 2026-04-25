@@ -2,7 +2,7 @@ import type { FC } from 'react'
 import type { NodeProps as ReactFlowNodeProps } from 'reactflow'
 import type { CommonNodeType } from '../../types'
 import { cn } from '@langgenius/dify-ui/cn'
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useState } from 'react'
 import {
   Handle,
   Position,
@@ -26,6 +26,7 @@ import {
   CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY,
   CANVAS_V2_HIDDEN_KEY,
 } from '../graph-adapter'
+import NodeSummaryPreview from './node-summary-preview'
 
 type CompactNodeProps = ReactFlowNodeProps<CommonNodeType>
 
@@ -118,6 +119,7 @@ const CompactNode: FC<CompactNodeProps> = ({
 }) => {
   const { nodesReadOnly } = useNodesReadOnly()
   const toolIcon = useToolIcon(data)
+  const [summaryOpen, setSummaryOpen] = useState(false)
   const branchSourceHandleIds = useMemo(() => getBranchSourceHandleIds(data), [data])
   if (isCanvasV2Hidden(data))
     return null
@@ -141,6 +143,8 @@ const CompactNode: FC<CompactNodeProps> = ({
         data._isBundled && 'shadow-lg!',
       )}
       data-testid="workflow-canvas-v2-compact-node"
+      onMouseEnter={() => setSummaryOpen(true)}
+      onMouseLeave={() => setSummaryOpen(false)}
     >
       {!data._isCandidate && (
         <NodeTargetHandle
@@ -197,6 +201,10 @@ const CompactNode: FC<CompactNodeProps> = ({
           className="ml-2 h-3.5 w-3.5"
         />
       )}
+      <NodeSummaryPreview
+        data={data}
+        open={summaryOpen || Boolean(data.selected)}
+      />
     </div>
   )
 }

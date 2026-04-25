@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import {
   BlockEnum,
   NodeRunningStatus,
@@ -99,6 +99,42 @@ describe('CompactNode', () => {
       expect(screen.getByTestId('target-selector-handle-target')).toBeInTheDocument()
       expect(screen.getByTestId('source-selector-handle-source')).toBeInTheDocument()
       expect(screen.getByTestId('node-control')).toBeInTheDocument()
+    })
+
+    it('should show configuration summaries only after hover without resizing the node', () => {
+      renderCompactNode({
+        model: {
+          completion_params: {},
+          mode: 'chat',
+          name: 'gpt-4o',
+          provider: 'openai',
+        },
+      } as Partial<ComponentProps<typeof CompactNode>['data']>)
+
+      expect(screen.queryByTestId('workflow-canvas-v2-node-summary')).not.toBeInTheDocument()
+
+      const compactNode = screen.getByTestId('workflow-canvas-v2-compact-node')
+      fireEvent.mouseEnter(compactNode)
+
+      expect(compactNode).toHaveClass('h-12', 'w-[200px]')
+      expect(screen.getByTestId('workflow-canvas-v2-node-summary')).toHaveClass('absolute', 'top-full')
+      expect(screen.getByText('Long prompt and configuration summary')).toBeInTheDocument()
+      expect(screen.getByText('openai / gpt-4o')).toBeInTheDocument()
+
+      fireEvent.mouseLeave(compactNode)
+
+      expect(screen.queryByTestId('workflow-canvas-v2-node-summary')).not.toBeInTheDocument()
+    })
+
+    it('should keep configuration summaries visible while selected', () => {
+      renderCompactNode({
+        answer: 'Hello {{name}}',
+        selected: true,
+        type: BlockEnum.Answer,
+      } as Partial<ComponentProps<typeof CompactNode>['data']>)
+
+      expect(screen.getByTestId('workflow-canvas-v2-node-summary')).toBeInTheDocument()
+      expect(screen.getByText('Hello {{name}}')).toBeInTheDocument()
     })
 
     it('should keep status visible and hide node controls while running', () => {
