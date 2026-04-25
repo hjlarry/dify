@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next'
 import {
   BaseEdge,
   EdgeLabelRenderer,
-  getBezierPath,
+  getSmoothStepPath,
   Position,
   useStore as useReactFlowStore,
 } from 'reactflow'
@@ -61,14 +61,14 @@ const CanvasV2CustomEdge = ({
     edgePath,
     labelX,
     labelY,
-  ] = getBezierPath({
+  ] = getSmoothStepPath({
     sourceX: sourceX - 8,
     sourceY,
     sourcePosition: Position.Right,
     targetX: targetX + 8,
     targetY,
     targetPosition: Position.Left,
-    curvature: 0.16,
+    borderRadius: 0,
   })
   const [open, setOpen] = useState(false)
   const [isTriggerHovered, setIsTriggerHovered] = useState(false)

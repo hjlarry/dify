@@ -9,6 +9,7 @@ const mockUseAvailableBlocks = vi.hoisted(() => vi.fn())
 const mockUseNodesInteractions = vi.hoisted(() => vi.fn())
 const mockBlockSelector = vi.hoisted(() => vi.fn())
 const mockGradientRender = vi.hoisted(() => vi.fn())
+const mockGetSmoothStepPath = vi.hoisted(() => vi.fn((_args: unknown) => ['M 0 0 H 24 V 48', 24, 48]))
 
 let sourceNodeData: Record<string, unknown> | undefined
 
@@ -34,7 +35,7 @@ vi.mock('reactflow', () => ({
     />
   ),
   EdgeLabelRenderer: ({ children }: { children?: ReactNode }) => <div data-testid="edge-label">{children}</div>,
-  getBezierPath: () => ['M 0 0', 24, 48],
+  getSmoothStepPath: (args: unknown) => mockGetSmoothStepPath(args),
   Position: {
     Right: 'right',
     Left: 'left',
@@ -140,6 +141,14 @@ describe('CanvasV2 CustomEdge', () => {
       )
 
       expect(screen.getByTestId('base-edge')).toHaveAttribute('data-stroke', 'var(--color-workflow-link-line-normal)')
+      expect(screen.getByTestId('base-edge')).toHaveAttribute('data-path', 'M 0 0 H 24 V 48')
+      expect(mockGetSmoothStepPath).toHaveBeenCalledWith(expect.objectContaining({
+        borderRadius: 0,
+        sourceY: 120,
+        sourcePosition: Position.Right,
+        targetY: 220,
+        targetPosition: Position.Left,
+      }))
       expect(screen.getByText('ELIF')).toBeInTheDocument()
       expect(screen.getByTestId('block-selector')).toHaveTextContent(BlockEnum.LLM)
       expect(screen.getByTestId('block-selector')).toHaveAttribute('data-trigger-class', expect.stringContaining('group-hover/edge-label:opacity-100'))

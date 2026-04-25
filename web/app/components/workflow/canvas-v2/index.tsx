@@ -35,7 +35,10 @@ import {
 } from '../constants'
 import {
   useNodesReadOnly,
+  useNodesSyncDraft,
+  useWorkflowHistory,
   useWorkflowReadOnly,
+  WorkflowHistoryEvent,
 } from '../hooks'
 import { HooksStoreContextProvider } from '../hooks-store'
 import Control from '../operator/control'
@@ -50,6 +53,9 @@ import { setupScrollToNodeListener } from '../utils/node-navigation'
 import {
   getCanvasV2Graph,
 } from './graph-adapter'
+import {
+  getCanvasV2LayoutNodes,
+} from './layout/elk-layout'
 import {
   canvasV2EdgeTypes,
   canvasV2NodeTypes,
@@ -84,6 +90,10 @@ const isWorkflowDataUpdateEvent = (value: unknown): value is WorkflowDataUpdateE
     return false
 
   return Array.isArray(value.payload.nodes) && Array.isArray(value.payload.edges)
+}
+
+const getGraphNodeChanges = (changes: NodeChange[]) => {
+  return changes.filter(change => change.type !== 'dimensions')
 }
 
 export type WorkflowCanvasV2Props = {
@@ -124,6 +134,8 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
   const setMousePosition = useStore(s => s.setMousePosition)
   const { nodesReadOnly } = useNodesReadOnly()
   const { workflowReadOnly } = useWorkflowReadOnly()
+  const { handleSyncWorkflowDraft } = useNodesSyncDraft()
+  const { saveStateToHistory } = useWorkflowHistory()
   const controlHeight = useMemo(() => {
     if (!workflowCanvasHeight)
       return '100%'
@@ -196,11 +208,42 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
   }, [setMousePosition])
 
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    const graphChanges = getGraphNodeChanges(changes)
+    if (!graphChanges.length)
+      return
+
     setGraph(prevGraph => ({
-      nodes: applyNodeChanges(changes, prevGraph.nodes) as Node[],
+      nodes: applyNodeChanges(graphChanges, prevGraph.nodes) as Node[],
       edges: prevGraph.edges,
     }))
   }, [])
+
+  const handleLayout = useCallback(async () => {
+    if (nodesReadOnly)
+      return
+
+    workflowStore.setState({ nodeAnimation: true })
+
+    const currentNodes = reactflow.getNodes() as Node[]
+    const currentEdges = reactflow.getEdges() as Edge[]
+    const currentGraph = {
+      nodes: currentNodes.length ? currentNodes : graph.nodes,
+      edges: currentEdges.length ? currentEdges : graph.edges,
+    }
+    const nextNodes = await getCanvasV2LayoutNodes(currentGraph.nodes, currentGraph.edges)
+    const nextGraph = {
+      nodes: nextNodes,
+      edges: currentGraph.edges,
+    }
+
+    workflowStore.getState().setNodes(nextNodes)
+    setGraph(nextGraph)
+    reactflow.setViewport({ x: 0, y: 0, zoom: 0.7 })
+    saveStateToHistory(WorkflowHistoryEvent.LayoutOrganize)
+    setTimeout(() => {
+      handleSyncWorkflowDraft()
+    })
+  }, [graph, handleSyncWorkflowDraft, nodesReadOnly, reactflow, saveStateToHistory, workflowStore])
 
   const panOnDrag = useMemo(() => {
     if (controlMode === ControlMode.Hand)
@@ -223,7 +266,7 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
         className="pointer-events-none absolute top-0 left-0 z-10 flex w-12 items-center justify-center p-1 pl-2"
         style={{ height: controlHeight }}
       >
-        <Control />
+        <Control onLayout={handleLayout} />
       </div>
       {children}
       <ReactFlow

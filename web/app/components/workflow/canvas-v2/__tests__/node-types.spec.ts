@@ -2,6 +2,8 @@ import {
   CUSTOM_EDGE,
   CUSTOM_NODE,
 } from '../../constants'
+import { CUSTOM_ITERATION_START_NODE } from '../../nodes/iteration-start/constants'
+import { CUSTOM_LOOP_START_NODE } from '../../nodes/loop-start/constants'
 import { CUSTOM_SIMPLE_NODE } from '../../simple-node/constants'
 import CustomEdge from '../edges/custom-edge'
 import {
@@ -9,6 +11,7 @@ import {
   canvasV2NodeTypes,
 } from '../node-types'
 import CompactNode from '../nodes/compact-node'
+import HiddenNode from '../nodes/hidden-node'
 
 describe('canvasV2 graph types', () => {
   // V2 must use its own compact renderer for regular workflow nodes.
@@ -16,6 +19,11 @@ describe('canvasV2 graph types', () => {
     it('should map regular and simple nodes to the compact node renderer', () => {
       expect(canvasV2NodeTypes[CUSTOM_NODE]).toBe(CompactNode)
       expect(canvasV2NodeTypes[CUSTOM_SIMPLE_NODE]).toBe(CompactNode)
+    })
+
+    it('should keep container start nodes in graph without rendering them', () => {
+      expect(canvasV2NodeTypes[CUSTOM_ITERATION_START_NODE]).toBe(HiddenNode)
+      expect(canvasV2NodeTypes[CUSTOM_LOOP_START_NODE]).toBe(HiddenNode)
     })
 
     it('should map custom edges to the V2 edge renderer', () => {

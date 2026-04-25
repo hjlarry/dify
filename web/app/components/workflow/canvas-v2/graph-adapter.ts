@@ -2,8 +2,12 @@ import type {
   Edge,
   Node,
 } from '../types'
+import {
+  CUSTOM_NODE,
+} from '../constants'
 import { CUSTOM_ITERATION_START_NODE } from '../nodes/iteration-start/constants'
 import { CUSTOM_LOOP_START_NODE } from '../nodes/loop-start/constants'
+import { CUSTOM_SIMPLE_NODE } from '../simple-node/constants'
 import {
   BlockEnum,
 } from '../types'
@@ -15,6 +19,8 @@ export type CanvasV2Graph = {
 
 export const CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY = '_collapsedChildrenCount'
 export const CANVAS_V2_HIDDEN_KEY = '_canvasV2Hidden'
+export const CANVAS_V2_NODE_WIDTH = 200
+export const CANVAS_V2_NODE_HEIGHT = 48
 
 const CONTAINER_NODE_TYPES = new Set<BlockEnum>([
   BlockEnum.Iteration,
@@ -29,6 +35,11 @@ const CONTAINER_START_NODE_TYPES = new Set<BlockEnum>([
 const CONTAINER_START_CUSTOM_NODE_TYPES = new Set<string>([
   CUSTOM_ITERATION_START_NODE,
   CUSTOM_LOOP_START_NODE,
+])
+
+const COMPACT_NODE_TYPES = new Set<string>([
+  CUSTOM_NODE,
+  CUSTOM_SIMPLE_NODE,
 ])
 
 const isContainerNode = (node: Node) => {
@@ -56,6 +67,17 @@ const isCanvasV2InternalNode = (node: Node) => {
   return Boolean(node.parentId || node.data.isInIteration || node.data.isInLoop)
 }
 
+const isCanvasV2Hidden = (data?: Record<string, unknown>) => {
+  return data?.[CANVAS_V2_HIDDEN_KEY] === true
+}
+
+const isCanvasV2CompactNode = (node: Node) => {
+  return !node.parentId
+    && !isCanvasV2Hidden(node.data as Record<string, unknown>)
+    && typeof node.type === 'string'
+    && COMPACT_NODE_TYPES.has(node.type)
+}
+
 const isCanvasV2InternalEdge = (edge: Edge, hiddenNodeIds: Set<string>) => {
   return Boolean(
     hiddenNodeIds.has(edge.source)
@@ -63,6 +85,31 @@ const isCanvasV2InternalEdge = (edge: Edge, hiddenNodeIds: Set<string>) => {
     || edge.data?.isInIteration
     || edge.data?.isInLoop,
   )
+}
+
+const withoutCanvasV2NodeMetadata = (node: Node) => {
+  const data = {
+    ...node.data,
+  } as Node['data'] & Record<string, unknown>
+  delete data[CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY]
+  delete data[CANVAS_V2_HIDDEN_KEY]
+
+  return {
+    ...node,
+    data,
+  } as Node
+}
+
+const withoutCanvasV2EdgeMetadata = (edge: Edge) => {
+  const data = {
+    ...edge.data,
+  } as Edge['data'] & Record<string, unknown>
+  delete data[CANVAS_V2_HIDDEN_KEY]
+
+  return {
+    ...edge,
+    data,
+  } as Edge
 }
 
 const withContainerMetadata = (node: Node, nodes: Node[]) => {
@@ -97,29 +144,57 @@ const withNodeVisibility = (node: Node, nodes: Node[], hiddenNodeIds: Set<string
 }
 
 const withEdgeVisibility = (edge: Edge, hiddenNodeIds: Set<string>) => {
-  if (!isCanvasV2InternalEdge(edge, hiddenNodeIds))
-    return edge
+  const nextEdge = withoutCanvasV2EdgeMetadata(edge)
+  if (!isCanvasV2InternalEdge(nextEdge, hiddenNodeIds))
+    return nextEdge
 
   const data = {
-    ...edge.data,
+    ...nextEdge.data,
   } as Edge['data'] & Record<string, unknown>
   data[CANVAS_V2_HIDDEN_KEY] = true
 
   return {
-    ...edge,
+    ...nextEdge,
     data,
   }
+}
+
+const withCompactNodeFrame = (node: Node) => {
+  if (!isCanvasV2CompactNode(node))
+    return node
+
+  const {
+    positionAbsolute: _positionAbsolute,
+    ...nodeWithoutAbsolutePosition
+  } = node
+
+  return {
+    ...nodeWithoutAbsolutePosition,
+    width: CANVAS_V2_NODE_WIDTH,
+    height: CANVAS_V2_NODE_HEIGHT,
+    style: {
+      ...node.style,
+      width: CANVAS_V2_NODE_WIDTH,
+      height: CANVAS_V2_NODE_HEIGHT,
+    },
+    data: {
+      ...node.data,
+      width: CANVAS_V2_NODE_WIDTH,
+      height: CANVAS_V2_NODE_HEIGHT,
+    },
+  } as Node
 }
 
 export const getCanvasV2Graph = ({
   nodes,
   edges,
 }: CanvasV2Graph): CanvasV2Graph => {
-  const hiddenNodeIds = new Set(nodes.filter(isCanvasV2InternalNode).map(node => node.id))
+  const metadataFreeNodes = nodes.map(withoutCanvasV2NodeMetadata)
+  const hiddenNodeIds = new Set(metadataFreeNodes.filter(isCanvasV2InternalNode).map(node => node.id))
 
   return {
-    nodes: nodes
-      .map(node => withNodeVisibility(node, nodes, hiddenNodeIds)),
+    nodes: metadataFreeNodes
+      .map(node => withCompactNodeFrame(withNodeVisibility(node, nodes, hiddenNodeIds))),
     edges: edges.map(edge => withEdgeVisibility(edge, hiddenNodeIds)),
   }
 }

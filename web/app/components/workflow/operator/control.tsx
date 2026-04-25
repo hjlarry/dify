@@ -29,7 +29,13 @@ import { useOperator } from './hooks'
 import MoreActions from './more-actions'
 import TipPopup from './tip-popup'
 
-const Control = () => {
+type ControlProps = {
+  onLayout?: () => void
+}
+
+const Control = ({
+  onLayout,
+}: ControlProps) => {
   const { t } = useTranslation()
   const controlMode = useStore(s => s.controlMode)
   const maximizeCanvas = useStore(s => s.maximizeCanvas)
@@ -39,7 +45,7 @@ const Control = () => {
     handleModeComment,
     isCommentModeAvailable,
   } = useWorkflowMoveMode()
-  const { handleLayout } = useWorkflowOrganize()
+  const { handleLayout: defaultHandleLayout } = useWorkflowOrganize()
   const { handleAddNote } = useOperator()
   const {
     nodesReadOnly,
@@ -115,7 +121,7 @@ const Control = () => {
             'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg hover:bg-state-base-hover hover:text-text-secondary',
             `${nodesReadOnly && 'cursor-not-allowed text-text-disabled hover:bg-transparent hover:text-text-disabled'}`,
           )}
-          onClick={handleLayout}
+          onClick={onLayout ?? defaultHandleLayout}
         >
           <RiFunctionAddLine className="h-4 w-4" />
         </div>

@@ -8,6 +8,8 @@ import {
 import {
   CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY,
   CANVAS_V2_HIDDEN_KEY,
+  CANVAS_V2_NODE_HEIGHT,
+  CANVAS_V2_NODE_WIDTH,
   getCanvasV2Graph,
 } from '../graph-adapter'
 
@@ -71,6 +73,7 @@ describe('getCanvasV2Graph', () => {
       const nodes = [
         makeNode({
           id: 'iteration-1',
+          positionAbsolute: { x: 12, y: 24 },
           data: {
             type: BlockEnum.Iteration,
             title: 'Loop over files',
@@ -145,7 +148,22 @@ describe('getCanvasV2Graph', () => {
       expect((result.edges.find(edge => edge.id === 'internal-by-flag')?.data as Record<string, unknown>)[CANVAS_V2_HIDDEN_KEY]).toBe(true)
       expect((result.edges.find(edge => edge.id === 'internal-by-node')?.data as Record<string, unknown>)[CANVAS_V2_HIDDEN_KEY]).toBe(true)
       expect((result.nodes[0]!.data as Record<string, unknown>)[CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY]).toBe(1)
+      expect(result.nodes[0]).toEqual(expect.objectContaining({
+        width: CANVAS_V2_NODE_WIDTH,
+        height: CANVAS_V2_NODE_HEIGHT,
+        style: expect.objectContaining({
+          width: CANVAS_V2_NODE_WIDTH,
+          height: CANVAS_V2_NODE_HEIGHT,
+        }),
+      }))
+      expect(result.nodes[0]!.data).toEqual(expect.objectContaining({
+        width: CANVAS_V2_NODE_WIDTH,
+        height: CANVAS_V2_NODE_HEIGHT,
+      }))
+      expect(result.nodes[0]!.positionAbsolute).toBeUndefined()
       expect((nodes[0]!.data as Record<string, unknown>)[CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY]).toBeUndefined()
+      expect(nodes[0]!.width).toBeUndefined()
+      expect(nodes[0]!.positionAbsolute).toEqual({ x: 12, y: 24 })
       expect((nodes.find(node => node.id === 'iteration-child')?.data as Record<string, unknown>)[CANVAS_V2_HIDDEN_KEY]).toBeUndefined()
     })
 
@@ -170,6 +188,49 @@ describe('getCanvasV2Graph', () => {
       })
 
       expect((result.nodes[0]!.data as Record<string, unknown>)[CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY]).toBe(2)
+    })
+
+    it('should recompute v2 metadata instead of preserving stale display flags', () => {
+      const result = getCanvasV2Graph({
+        nodes: [
+          makeNode({
+            id: 'start',
+            data: {
+              type: BlockEnum.Start,
+              title: 'Start',
+              desc: '',
+              [CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY]: 3,
+              [CANVAS_V2_HIDDEN_KEY]: true,
+            } as Partial<Node['data']>,
+          }),
+          makeNode({
+            id: 'end',
+            data: {
+              type: BlockEnum.End,
+              title: 'End',
+              desc: '',
+              [CANVAS_V2_HIDDEN_KEY]: true,
+            } as Partial<Node['data']>,
+          }),
+        ],
+        edges: [
+          makeEdge({
+            id: 'start-end',
+            source: 'start',
+            target: 'end',
+            data: {
+              sourceType: BlockEnum.Start,
+              targetType: BlockEnum.End,
+              [CANVAS_V2_HIDDEN_KEY]: true,
+            } as Partial<Edge['data']>,
+          }),
+        ],
+      })
+
+      expect((result.nodes[0]!.data as Record<string, unknown>)[CANVAS_V2_HIDDEN_KEY]).toBeUndefined()
+      expect((result.nodes[0]!.data as Record<string, unknown>)[CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY]).toBeUndefined()
+      expect((result.nodes[1]!.data as Record<string, unknown>)[CANVAS_V2_HIDDEN_KEY]).toBeUndefined()
+      expect((result.edges[0]!.data as Record<string, unknown>)[CANVAS_V2_HIDDEN_KEY]).toBeUndefined()
     })
   })
 })

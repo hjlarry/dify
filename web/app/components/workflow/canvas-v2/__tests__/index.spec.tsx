@@ -23,6 +23,14 @@ const mockSetWorkflowCanvasWidth = vi.hoisted(() => vi.fn())
 const mockSetWorkflowCanvasHeight = vi.hoisted(() => vi.fn())
 const mockSetMousePosition = vi.hoisted(() => vi.fn())
 const mockReactFlowProps = vi.hoisted(() => vi.fn())
+const mockReactFlowSetNodes = vi.hoisted(() => vi.fn())
+const mockReactFlowSetViewport = vi.hoisted(() => vi.fn())
+const mockReactFlowGetNodes = vi.hoisted(() => vi.fn())
+const mockReactFlowGetEdges = vi.hoisted(() => vi.fn())
+const mockHandleSyncWorkflowDraft = vi.hoisted(() => vi.fn())
+const mockSaveStateToHistory = vi.hoisted(() => vi.fn())
+const mockWorkflowStoreSetState = vi.hoisted(() => vi.fn())
+const mockGetCanvasV2LayoutNodes = vi.hoisted(() => vi.fn())
 let mockNodesReadOnly = false
 
 type MockReactFlowProps = {
@@ -35,16 +43,44 @@ type MockReactFlowProps = {
 
 vi.mock('reactflow', () => ({
   applyNodeChanges: (changes: NodeChange[], nodes: Node[]) => {
-    return nodes.map((node) => {
-      const positionChange = changes.find(change => 'id' in change && change.id === node.id && change.type === 'position')
-      if (!positionChange || positionChange.type !== 'position' || !positionChange.position)
-        return node
+    const resetChanges = changes.filter((change): change is Extract<NodeChange, { type: 'reset' }> => change.type === 'reset')
+    if (resetChanges.length)
+      return resetChanges.map(change => change.item as Node)
 
-      return {
-        ...node,
-        position: positionChange.position,
+    const addChanges = changes.filter((change): change is Extract<NodeChange, { type: 'add' }> => change.type === 'add')
+    const initialNodes = addChanges.map(change => change.item as Node)
+
+    return nodes.reduce<Node[]>((result, node) => {
+      const nodeChanges = changes.filter(change => 'id' in change && change.id === node.id)
+      if (!nodeChanges.length) {
+        result.push(node)
+        return result
       }
-    })
+
+      let nextNode = node
+      for (const nodeChange of nodeChanges) {
+        if (nodeChange.type === 'remove')
+          return result
+
+        if (nodeChange.type === 'position') {
+          nextNode = {
+            ...nextNode,
+            ...(nodeChange.position && { position: nodeChange.position }),
+            ...(nodeChange.positionAbsolute && { positionAbsolute: nodeChange.positionAbsolute }),
+          } as Node
+        }
+
+        if (nodeChange.type === 'select') {
+          nextNode = {
+            ...nextNode,
+            selected: nodeChange.selected,
+          } as Node
+        }
+      }
+
+      result.push(nextNode)
+      return result
+    }, initialNodes)
   },
   default: (props: MockReactFlowProps) => {
     const {
@@ -70,7 +106,10 @@ vi.mock('reactflow', () => ({
   useEdgesState: (edges: unknown[]) => [edges, vi.fn(), vi.fn()],
   useNodesState: (nodes: unknown[]) => [nodes, vi.fn(), vi.fn()],
   useReactFlow: () => ({
-    setViewport: vi.fn(),
+    getEdges: mockReactFlowGetEdges,
+    getNodes: mockReactFlowGetNodes,
+    setNodes: mockReactFlowSetNodes,
+    setViewport: mockReactFlowSetViewport,
   }),
 }))
 
@@ -89,16 +128,39 @@ vi.mock('../../collaboration/components/user-cursors', () => ({
 }))
 
 vi.mock('../../hooks', () => ({
+  useNodesSyncDraft: () => ({
+    handleSyncWorkflowDraft: mockHandleSyncWorkflowDraft,
+  }),
   useNodesReadOnly: () => ({
     nodesReadOnly: mockNodesReadOnly,
+  }),
+  useWorkflowHistory: () => ({
+    saveStateToHistory: mockSaveStateToHistory,
   }),
   useWorkflowReadOnly: () => ({
     workflowReadOnly: false,
   }),
+  WorkflowHistoryEvent: {
+    LayoutOrganize: 'LayoutOrganize',
+  },
 }))
 
 vi.mock('../../operator/control', () => ({
-  default: () => <div data-testid="workflow-control" />,
+  default: ({
+    onLayout,
+  }: {
+    onLayout: () => void
+  }) => (
+    <button
+      type="button"
+      data-testid="workflow-control"
+      onClick={onLayout}
+    />
+  ),
+}))
+
+vi.mock('../layout/elk-layout', () => ({
+  getCanvasV2LayoutNodes: (...args: unknown[]) => mockGetCanvasV2LayoutNodes(...args),
 }))
 
 vi.mock('../../store', () => ({
@@ -115,6 +177,7 @@ vi.mock('../../store', () => ({
     getState: () => ({
       setNodes: mockSetNodesInWorkflowStore,
     }),
+    setState: mockWorkflowStoreSetState,
   }),
 }))
 
@@ -184,6 +247,9 @@ describe('WorkflowCanvasV2', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockNodesReadOnly = false
+    mockReactFlowGetNodes.mockReturnValue([])
+    mockReactFlowGetEdges.mockReturnValue([])
+    mockGetCanvasV2LayoutNodes.mockImplementation(async (nodes: Node[]) => nodes)
   })
 
   // Renderer shell keeps legacy operation affordances until v2 replacements exist.
@@ -303,6 +369,156 @@ describe('WorkflowCanvasV2', () => {
           }),
         ])
       })
+    })
+
+    it('should ignore React Flow measurement updates for compact nodes', () => {
+      const nodes = [
+        makeNode({ id: 'node-1' }),
+      ]
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={[]}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+      const workflowStoreCallCount = mockSetNodesInWorkflowStore.mock.calls.length
+
+      act(() => {
+        reactFlowProps.onNodesChange?.([
+          {
+            dimensions: { width: 204, height: 52 },
+            id: 'node-1',
+            type: 'dimensions',
+          },
+        ])
+      })
+
+      expect(mockSetNodesInWorkflowStore).toHaveBeenCalledTimes(workflowStoreCallCount)
+    })
+
+    it('should apply non-measurement node changes to the raw graph', async () => {
+      const nodes = [
+        makeNode({ id: 'node-1' }),
+      ]
+      const nextNode = makeNode({
+        id: 'node-2',
+        data: { type: BlockEnum.Answer },
+        position: { x: 260, y: 80 },
+      })
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={[]}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        reactFlowProps.onNodesChange?.([
+          {
+            item: nextNode,
+            type: 'reset',
+          },
+        ])
+      })
+
+      await waitFor(() => {
+        expect(mockSetNodesInWorkflowStore).toHaveBeenLastCalledWith([
+          expect.objectContaining({
+            id: 'node-2',
+            position: { x: 260, y: 80 },
+          }),
+        ])
+      })
+    })
+
+    it('should write organized nodes to workflow store before saving history', async () => {
+      const nodes = [
+        makeNode({ id: 'start', data: { type: BlockEnum.Start } }),
+        makeNode({ id: 'list', data: { type: BlockEnum.ListFilter } }),
+      ]
+      const edges = [
+        makeEdge({ id: 'start-list', source: 'start', target: 'list' }),
+      ]
+      const nextNodes = [
+        { ...nodes[0]!, position: { x: 0, y: 0 } },
+        { ...nodes[1]!, position: { x: 260, y: 0 } },
+      ]
+      mockGetCanvasV2LayoutNodes.mockResolvedValueOnce(nextNodes)
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={edges}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      await act(async () => {
+        screen.getByTestId('workflow-control').click()
+      })
+
+      expect(mockGetCanvasV2LayoutNodes).toHaveBeenCalledWith(nodes, edges)
+      expect(mockSetNodesInWorkflowStore).toHaveBeenLastCalledWith(nextNodes)
+      const organizedNodesStoreCallIndex = mockSetNodesInWorkflowStore.mock.calls.findIndex(call => call[0] === nextNodes)
+
+      expect(organizedNodesStoreCallIndex).toBeGreaterThanOrEqual(0)
+      expect(mockSetNodesInWorkflowStore.mock.invocationCallOrder[organizedNodesStoreCallIndex]).toBeLessThan(mockSaveStateToHistory.mock.invocationCallOrder[0]!)
+      expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+        nodes: [
+          expect.objectContaining({ id: 'start', position: { x: 0, y: 0 } }),
+          expect.objectContaining({ id: 'list', position: { x: 260, y: 0 } }),
+        ],
+      }))
+    })
+
+    it('should organize the current React Flow graph when it has newer nodes', async () => {
+      const staleNodes = [
+        makeNode({ id: 'start', data: { type: BlockEnum.Start } }),
+      ]
+      const currentNodes = [
+        makeNode({ id: 'start', data: { type: BlockEnum.Start }, position: { x: 0, y: 40 } }),
+        makeNode({ id: 'list', data: { type: BlockEnum.ListFilter }, position: { x: 260, y: 60 } }),
+      ]
+      const currentEdges = [
+        makeEdge({ id: 'start-list', source: 'start', target: 'list' }),
+      ]
+      const nextNodes = [
+        { ...currentNodes[0]!, position: { x: 0, y: 0 } },
+        { ...currentNodes[1]!, position: { x: 260, y: 0 } },
+      ]
+      mockReactFlowGetNodes.mockReturnValue(currentNodes)
+      mockReactFlowGetEdges.mockReturnValue(currentEdges)
+      mockGetCanvasV2LayoutNodes.mockResolvedValueOnce(nextNodes)
+
+      render(
+        <WorkflowCanvasV2
+          nodes={staleNodes}
+          edges={[]}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      await act(async () => {
+        screen.getByTestId('workflow-control').click()
+      })
+
+      expect(mockGetCanvasV2LayoutNodes).toHaveBeenCalledWith(currentNodes, currentEdges)
+      expect(mockSetNodesInWorkflowStore).toHaveBeenLastCalledWith(nextNodes)
+      expect(mockReactFlowSetNodes).not.toHaveBeenCalled()
+      expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+        nodes: [
+          expect.objectContaining({ id: 'start', position: { x: 0, y: 0 } }),
+          expect.objectContaining({ id: 'list', position: { x: 260, y: 0 } }),
+        ],
+      }))
     })
   })
 })
