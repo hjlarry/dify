@@ -41,6 +41,8 @@ const mockGetCanvasV2LayoutNodes = vi.hoisted(() => vi.fn())
 const mockHandleNodeAdd = vi.hoisted(() => vi.fn())
 const mockAvailableBlocks = vi.hoisted(() => ['code', 'answer'])
 const mockSetShowConfirm = vi.hoisted(() => vi.fn())
+const mockSetShowUserCursors = vi.hoisted(() => vi.fn())
+const mockSetShowUserComments = vi.hoisted(() => vi.fn())
 let mockNodesReadOnly = false
 let mockShowConfirm: { title: string, desc?: string, onConfirm: () => void } | undefined
 
@@ -221,6 +223,31 @@ vi.mock('../../operator/control', () => ({
   ),
 }))
 
+vi.mock('../../operator/zoom-in-out', () => ({
+  default: ({
+    isCommentMode,
+    showMiniMap,
+    showMiniMapOption,
+    showUserComments,
+    showUserCursors,
+  }: {
+    isCommentMode?: boolean
+    showMiniMap?: boolean
+    showMiniMapOption?: boolean
+    showUserComments?: boolean
+    showUserCursors?: boolean
+  }) => (
+    <div
+      data-testid="workflow-canvas-v2-zoom-control-inner"
+      data-comment-mode={String(isCommentMode)}
+      data-show-mini-map={String(showMiniMap)}
+      data-show-mini-map-option={String(showMiniMapOption)}
+      data-show-user-comments={String(showUserComments)}
+      data-show-user-cursors={String(showUserCursors)}
+    />
+  ),
+}))
+
 vi.mock('../../block-selector', () => ({
   default: ({
     disabled,
@@ -251,6 +278,9 @@ vi.mock('../../store', () => ({
   useStore: (selector: (state: Record<string, unknown>) => unknown) => selector({
     controlMode: 'pointer',
     showUserCursors: true,
+    setShowUserCursors: mockSetShowUserCursors,
+    showUserComments: true,
+    setShowUserComments: mockSetShowUserComments,
     workflowCanvasHeight: 600,
     bottomPanelHeight: 100,
     setWorkflowCanvasWidth: mockSetWorkflowCanvasWidth,
@@ -356,6 +386,9 @@ describe('WorkflowCanvasV2', () => {
       expect(screen.getByTestId('candidate-node')).toBeInTheDocument()
       expect(screen.getByTestId('workflow-canvas-v2-control')).toBeInTheDocument()
       expect(screen.getByTestId('workflow-control')).toBeInTheDocument()
+      expect(screen.getByTestId('workflow-canvas-v2-zoom-controls')).toBeInTheDocument()
+      expect(screen.getByTestId('workflow-canvas-v2-zoom-control-inner')).toHaveAttribute('data-show-mini-map', 'false')
+      expect(screen.getByTestId('workflow-canvas-v2-zoom-control-inner')).toHaveAttribute('data-show-mini-map-option', 'false')
       expect(screen.getByTestId('workflow-children')).toBeInTheDocument()
       expect(screen.getByTestId('react-flow')).toBeInTheDocument()
       expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({

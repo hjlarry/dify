@@ -58,6 +58,7 @@ import {
 } from '../hooks'
 import { HooksStoreContextProvider } from '../hooks-store'
 import Control from '../operator/control'
+import ZoomInOut from '../operator/zoom-in-out'
 import {
   useStore,
   useWorkflowStore,
@@ -211,6 +212,9 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
   const [activeContainerId, setActiveContainerId] = useState<string>()
   const controlMode = useStore(s => s.controlMode)
   const showUserCursors = useStore(s => s.showUserCursors)
+  const setShowUserCursors = useStore(s => s.setShowUserCursors)
+  const showUserComments = useStore(s => s.showUserComments)
+  const setShowUserComments = useStore(s => s.setShowUserComments)
   const workflowCanvasHeight = useStore(s => s.workflowCanvasHeight)
   const bottomPanelHeight = useStore(s => s.bottomPanelHeight)
   const setWorkflowCanvasWidth = useStore(s => s.setWorkflowCanvasWidth)
@@ -392,6 +396,14 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
     return [1]
   }, [controlMode])
 
+  const handleToggleUserCursors = useCallback(() => {
+    setShowUserCursors(!showUserCursors)
+  }, [setShowUserCursors, showUserCursors])
+
+  const handleToggleUserComments = useCallback(() => {
+    setShowUserComments(!showUserComments)
+  }, [setShowUserComments, showUserComments])
+
   return (
     <div
       id="workflow-container"
@@ -434,6 +446,20 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
           style={{ height: controlHeight }}
         >
           <Control onLayout={handleLayout} />
+        </div>
+        <div
+          data-testid="workflow-canvas-v2-zoom-controls"
+          className="pointer-events-auto absolute right-4 bottom-4 z-20"
+        >
+          <ZoomInOut
+            showMiniMap={false}
+            showMiniMapOption={false}
+            showUserCursors={showUserCursors}
+            onToggleUserCursors={handleToggleUserCursors}
+            showUserComments={showUserComments}
+            onToggleUserComments={handleToggleUserComments}
+            isCommentMode={controlMode === ControlMode.Comment}
+          />
         </div>
         <ReactFlow
           nodeTypes={canvasV2NodeTypes}

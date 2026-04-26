@@ -26,20 +26,21 @@ import {
 import ShortcutsName from '../shortcuts-name'
 import TipPopup from './tip-popup'
 
-enum ZoomType {
-  zoomToFit = 'zoomToFit',
-  zoomTo25 = 'zoomTo25',
-  zoomTo50 = 'zoomTo50',
-  zoomTo75 = 'zoomTo75',
-  zoomTo100 = 'zoomTo100',
-  zoomTo200 = 'zoomTo200',
-  toggleUserComments = 'toggleUserComments',
-  toggleUserCursors = 'toggleUserCursors',
-  toggleMiniMap = 'toggleMiniMap',
-}
+const ZoomType = {
+  zoomToFit: 'zoomToFit',
+  zoomTo25: 'zoomTo25',
+  zoomTo50: 'zoomTo50',
+  zoomTo75: 'zoomTo75',
+  zoomTo100: 'zoomTo100',
+  zoomTo200: 'zoomTo200',
+  toggleUserComments: 'toggleUserComments',
+  toggleUserCursors: 'toggleUserCursors',
+  toggleMiniMap: 'toggleMiniMap',
+} as const
 
 type ZoomInOutProps = {
   showMiniMap?: boolean
+  showMiniMapOption?: boolean
   onToggleMiniMap?: () => void
   showUserCursors?: boolean
   onToggleUserCursors?: () => void
@@ -50,6 +51,7 @@ type ZoomInOutProps = {
 
 const ZoomInOut: FC<ZoomInOutProps> = ({
   showMiniMap = true,
+  showMiniMapOption = true,
   onToggleMiniMap,
   showUserCursors = true,
   onToggleUserCursors,
@@ -103,28 +105,29 @@ const ZoomInOut: FC<ZoomInOutProps> = ({
         text: t('operator.zoomToFit', { ns: 'workflow' }),
       },
     ],
-    isCollaborationEnabled
-      ? [
-          {
-            key: ZoomType.toggleUserComments,
-            text: t('operator.showUserComments', { ns: 'workflow' }),
-          },
-          {
-            key: ZoomType.toggleUserCursors,
-            text: t('operator.showUserCursors', { ns: 'workflow' }),
-          },
-          {
-            key: ZoomType.toggleMiniMap,
-            text: t('operator.showMiniMap', { ns: 'workflow' }),
-          },
-        ]
-      : [
-          {
-            key: ZoomType.toggleMiniMap,
-            text: t('operator.showMiniMap', { ns: 'workflow' }),
-          },
-        ],
-  ]
+    [
+      ...(isCollaborationEnabled
+        ? [
+            {
+              key: ZoomType.toggleUserComments,
+              text: t('operator.showUserComments', { ns: 'workflow' }),
+            },
+            {
+              key: ZoomType.toggleUserCursors,
+              text: t('operator.showUserCursors', { ns: 'workflow' }),
+            },
+          ]
+        : []),
+      ...(showMiniMapOption
+        ? [
+            {
+              key: ZoomType.toggleMiniMap,
+              text: t('operator.showMiniMap', { ns: 'workflow' }),
+            },
+          ]
+        : []),
+    ],
+  ].filter(options => options.length > 0)
 
   const handleZoom = (type: string) => {
     if (workflowReadOnly)

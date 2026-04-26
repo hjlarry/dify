@@ -192,4 +192,14 @@ describe('workflow zoom controls', () => {
     expect(menu.queryByText('workflow.operator.showUserComments')).not.toBeInTheDocument()
     expect(menu.queryByText('workflow.operator.showUserCursors')).not.toBeInTheDocument()
   })
+
+  it('can hide the minimap toggle from the menu', () => {
+    renderZoomInOut(<ZoomInOut showMiniMapOption={false} />)
+
+    const menu = openZoomMenu()
+
+    expect(menu.queryByText('workflow.operator.showMiniMap')).not.toBeInTheDocument()
+    expect(menu.getByText('workflow.operator.showUserComments')).toBeInTheDocument()
+    expect(menu.getByText('workflow.operator.showUserCursors')).toBeInTheDocument()
+  })
 })
