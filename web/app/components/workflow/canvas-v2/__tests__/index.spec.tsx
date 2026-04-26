@@ -633,6 +633,105 @@ describe('WorkflowCanvasV2', () => {
       expect(subgraphNodes[1]).toHaveTextContent('Code second')
     })
 
+    it('should render container subgraph branches without flattening branch targets', () => {
+      const nodes = [
+        makeNode({
+          id: 'loop-1',
+          data: {
+            type: BlockEnum.Loop,
+            title: 'Loop',
+            desc: '',
+            start_node_id: 'loop-start',
+            _children: [
+              { nodeId: 'loop-start', nodeType: BlockEnum.LoopStart },
+              { nodeId: 'route', nodeType: BlockEnum.IfElse },
+              { nodeId: 'code-if', nodeType: BlockEnum.Code },
+              { nodeId: 'code-else', nodeType: BlockEnum.Code },
+            ],
+          },
+        }),
+        makeNode({
+          id: 'loop-start',
+          parentId: 'loop-1',
+          data: { type: BlockEnum.LoopStart, title: '', desc: '', isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeNode({
+          id: 'route',
+          parentId: 'loop-1',
+          position: { x: 260, y: 0 },
+          data: {
+            type: BlockEnum.IfElse,
+            title: 'Route',
+            desc: '',
+            cases: [{ case_id: 'case-a' }],
+            isInLoop: true,
+            loop_id: 'loop-1',
+          },
+        }),
+        makeNode({
+          id: 'code-if',
+          parentId: 'loop-1',
+          position: { x: 520, y: 80 },
+          data: { type: BlockEnum.Code, title: 'Code if', desc: '', isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeNode({
+          id: 'code-else',
+          parentId: 'loop-1',
+          position: { x: 520, y: -80 },
+          data: { type: BlockEnum.Code, title: 'Code else', desc: '', isInLoop: true, loop_id: 'loop-1' },
+        }),
+      ]
+      const edges = [
+        makeEdge({
+          id: 'loop-start-route',
+          source: 'loop-start',
+          target: 'route',
+          data: { sourceType: BlockEnum.LoopStart, targetType: BlockEnum.IfElse, isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeEdge({
+          id: 'route-code-if',
+          source: 'route',
+          sourceHandle: 'case-a',
+          target: 'code-if',
+          data: { sourceType: BlockEnum.IfElse, targetType: BlockEnum.Code, isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeEdge({
+          id: 'route-code-else',
+          source: 'route',
+          sourceHandle: 'false',
+          target: 'code-else',
+          data: { sourceType: BlockEnum.IfElse, targetType: BlockEnum.Code, isInLoop: true, loop_id: 'loop-1' },
+        }),
+      ]
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={edges}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        reactFlowProps.onNodeClick?.({} as never, nodes[0]!)
+      })
+
+      expect(screen.getByTestId('workflow-canvas-v2-container-subgraph-branch-layout')).toBeInTheDocument()
+      const branchRows = screen.getAllByTestId('workflow-canvas-v2-container-subgraph-branch')
+
+      expect(branchRows).toHaveLength(2)
+      expect(branchRows[0]).toHaveTextContent('IF')
+      expect(branchRows[0]).toHaveTextContent('Code if')
+      expect(branchRows[1]).toHaveTextContent('ELSE')
+      expect(branchRows[1]).toHaveTextContent('Code else')
+      expect(screen.getByTestId('workflow-canvas-v2-container-subgraph-branch-spine')).toBeInTheDocument()
+      expect(screen.getAllByTestId('workflow-canvas-v2-container-subgraph-branch-label').map(label => label.textContent)).toEqual(['IF', 'ELSE'])
+      expect(screen.getByRole('button', { name: 'Code if' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Code else' })).toBeInTheDocument()
+    })
+
     it('should update the raw graph when visible nodes move', async () => {
       const nodes = [
         makeNode({ id: 'node-1' }),

@@ -2,7 +2,10 @@ import { ErrorHandleTypeEnum } from '../../../nodes/_base/components/error-handl
 import {
   BlockEnum,
 } from '../../../types'
-import { getCanvasV2BranchLabel } from '../branch-label'
+import {
+  getCanvasV2BranchLabel,
+  getCanvasV2BranchOrder,
+} from '../branch-label'
 
 const failBranchLabel = 'Fail branch'
 
@@ -78,6 +81,58 @@ describe('getCanvasV2BranchLabel', () => {
         sourceHandleId: 'missing',
         failBranchLabel,
       })).toBeUndefined()
+    })
+  })
+})
+
+describe('getCanvasV2BranchOrder', () => {
+  describe('Branch order', () => {
+    it('should order IfElse cases before ELSE', () => {
+      const sourceNodeData = {
+        type: BlockEnum.IfElse,
+        title: 'Route',
+        desc: '',
+        cases: [
+          { case_id: 'case-a' },
+          { case_id: 'case-b' },
+        ],
+      }
+
+      expect([
+        'false',
+        'case-b',
+        'case-a',
+      ].sort((a, b) => getCanvasV2BranchOrder({
+        sourceNodeData: sourceNodeData as never,
+        sourceHandleId: a,
+      }) - getCanvasV2BranchOrder({
+        sourceNodeData: sourceNodeData as never,
+        sourceHandleId: b,
+      }))).toEqual(['case-a', 'case-b', 'false'])
+    })
+
+    it('should order human input timeout after configured actions', () => {
+      const sourceNodeData = {
+        type: BlockEnum.HumanInput,
+        title: 'Review',
+        desc: '',
+        user_actions: [
+          { id: 'approve', title: 'Approve' },
+          { id: 'reject', title: 'Reject' },
+        ],
+      }
+
+      expect([
+        '__timeout',
+        'reject',
+        'approve',
+      ].sort((a, b) => getCanvasV2BranchOrder({
+        sourceNodeData: sourceNodeData as never,
+        sourceHandleId: a,
+      }) - getCanvasV2BranchOrder({
+        sourceNodeData: sourceNodeData as never,
+        sourceHandleId: b,
+      }))).toEqual(['approve', 'reject', '__timeout'])
     })
   })
 })

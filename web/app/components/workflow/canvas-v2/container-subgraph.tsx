@@ -21,6 +21,10 @@ import { useStore } from '../store'
 import {
   BlockEnum,
 } from '../types'
+import {
+  getCanvasV2BranchLabel,
+  getCanvasV2BranchOrder,
+} from './edges/branch-label'
 import { getCanvasV2SourceGraph } from './graph-adapter'
 import {
   CANVAS_V2_NODE_ADD_ICON_CLASS_NAME,
@@ -101,6 +105,30 @@ const sortContainerChildrenByPosition = (children: Node[], startNodeId?: string)
   })
 }
 
+const sortOutgoingEdges = (edges: Edge[], nodeById: Map<string, Node>, sourceNode?: Node) => {
+  return [...edges].sort((a, b) => {
+    const aTarget = nodeById.get(a.target)
+    const bTarget = nodeById.get(b.target)
+    const branchOrder = getCanvasV2BranchOrder({
+      sourceNodeData: sourceNode?.data,
+      sourceHandleId: a.sourceHandle || 'source',
+    }) - getCanvasV2BranchOrder({
+      sourceNodeData: sourceNode?.data,
+      sourceHandleId: b.sourceHandle || 'source',
+    })
+
+    if (branchOrder !== 0)
+      return branchOrder
+
+    if (!aTarget || !bTarget)
+      return (a.sourceHandle || 'source').localeCompare(b.sourceHandle || 'source')
+
+    return aTarget.position.y - bTarget.position.y
+      || aTarget.position.x - bTarget.position.x
+      || (a.sourceHandle || 'source').localeCompare(b.sourceHandle || 'source')
+  })
+}
+
 const getInternalEdges = (containerId: string, children: Node[], edges: Edge[]) => {
   const childIds = new Set(children.map(node => node.id))
   return edges.filter((edge) => {
@@ -146,19 +174,7 @@ const getEdgeSortedContainerChildren = (children: Node[], internalEdges: Edge[],
     visitedNodeIds.add(node.id)
     orderedNodes.push(node)
 
-    const outgoingEdges = [...(edgesBySource.get(node.id) ?? [])].sort((a, b) => {
-      const aTarget = nodeById.get(a.target)
-      const bTarget = nodeById.get(b.target)
-      const sourceHandleOrder = (a.sourceHandle || 'source').localeCompare(b.sourceHandle || 'source')
-
-      if (sourceHandleOrder !== 0)
-        return sourceHandleOrder
-
-      if (!aTarget || !bTarget)
-        return 0
-
-      return aTarget.position.x - bTarget.position.x || aTarget.position.y - bTarget.position.y
-    })
+    const outgoingEdges = sortOutgoingEdges(edgesBySource.get(node.id) ?? [], nodeById, node)
 
     outgoingEdges.forEach((edge) => {
       const targetNode = nodeById.get(edge.target)
@@ -195,6 +211,33 @@ const getSortedContainerChildren = (containerNode: Node, nodes: Node[], edges: E
 
 const findEdgeBetween = (edges: Edge[], sourceNode: Node, targetNode: Node) => {
   return edges.find(edge => edge.source === sourceNode.id && edge.target === targetNode.id)
+}
+
+const getInternalEdgesBySource = (internalEdges: Edge[], nodeById: Map<string, Node>) => {
+  return internalEdges.reduce<Map<string, Edge[]>>((result, edge) => {
+    if (!nodeById.has(edge.source) || !nodeById.has(edge.target))
+      return result
+
+    const sourceEdges = result.get(edge.source) ?? []
+    sourceEdges.push(edge)
+    result.set(edge.source, sourceEdges)
+
+    return result
+  }, new Map())
+}
+
+const hasBranchedInternalEdges = (internalEdges: Edge[], nodeById: Map<string, Node>) => {
+  const edgesBySource = getInternalEdgesBySource(internalEdges, nodeById)
+
+  return Array.from(edgesBySource.values()).some(edges => edges.length > 1)
+}
+
+const getSubgraphRootNode = (children: Node[], containerNode: Node) => {
+  const startNodeId = getContainerStartNodeId(containerNode)
+
+  return (startNodeId ? children.find(node => node.id === startNodeId) : undefined)
+    ?? children.find(isContainerStartNode)
+    ?? children[0]
 }
 
 const AddBlockButton: FC<AddBlockButtonProps> = ({
@@ -330,10 +373,23 @@ const SubgraphTitle = ({
   )
 }
 
-const SubgraphConnection = () => {
+const SubgraphConnection = ({
+  label,
+}: {
+  label?: string
+}) => {
   return (
-    <div className="flex h-12 w-20 shrink-0 items-center">
+    <div className="relative flex h-12 w-20 shrink-0 items-center justify-center">
       <div className="h-0.5 w-full bg-workflow-link-line-normal" />
+      {label && (
+        <div
+          data-testid="workflow-canvas-v2-container-subgraph-branch-label"
+          className="absolute top-0 max-w-[72px] truncate rounded-md border-[0.5px] border-components-panel-border bg-components-panel-bg px-1.5 py-0.5 system-2xs-semibold-uppercase text-text-secondary shadow-xs"
+          title={label}
+        >
+          {label}
+        </div>
+      )}
     </div>
   )
 }
@@ -365,12 +421,14 @@ const SubgraphNodeCard = ({
   node,
   onGraphChange,
   onSelect,
+  showAddButton = true,
 }: {
   edge?: Edge
   nextNode?: Node
   node: Node
   onGraphChange: (graph: { nodes: Node[], edges: Edge[] }) => void
   onSelect: (nodeId: string) => void
+  showAddButton?: boolean
 }) => {
   const { t } = useTranslation()
   const title = getNodeTitle(node, t)
@@ -393,14 +451,16 @@ const SubgraphNodeCard = ({
             <span className="i-ri-home-5-fill size-3 text-text-primary-on-surface" />
           </span>
         </button>
-        <div className="absolute top-1/2 -right-2.5 z-10 -translate-y-1/2">
-          <SubgraphNodeAddButton
-            edge={edge}
-            node={node}
-            nextNode={nextNode}
-            onGraphChange={onGraphChange}
-          />
-        </div>
+        {showAddButton && (
+          <div className="absolute top-1/2 -right-2.5 z-10 -translate-y-1/2">
+            <SubgraphNodeAddButton
+              edge={edge}
+              node={node}
+              nextNode={nextNode}
+              onGraphChange={onGraphChange}
+            />
+          </div>
+        )}
       </div>
     )
   }
@@ -431,14 +491,200 @@ const SubgraphNodeCard = ({
           </div>
         </div>
       </button>
-      <div className="absolute top-1/2 -right-2.5 z-10 -translate-y-1/2">
-        <SubgraphNodeAddButton
-          edge={edge}
+      {showAddButton && (
+        <div className="absolute top-1/2 -right-2.5 z-10 -translate-y-1/2">
+          <SubgraphNodeAddButton
+            edge={edge}
+            node={node}
+            nextNode={nextNode}
+            onGraphChange={onGraphChange}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+type SubgraphBranchNodeProps = {
+  edgesBySource: Map<string, Edge[]>
+  node: Node
+  nodeById: Map<string, Node>
+  onGraphChange: (graph: { nodes: Node[], edges: Edge[] }) => void
+  onSelect: (nodeId: string) => void
+  pathNodeIds?: Set<string>
+}
+
+const SubgraphBranchEdgeConnection = ({
+  edge,
+  showLabel = true,
+  sourceNode,
+}: {
+  edge: Edge
+  showLabel?: boolean
+  sourceNode: Node
+}) => {
+  const { t } = useTranslation()
+  const label = showLabel
+    ? getCanvasV2BranchLabel({
+        sourceNodeData: sourceNode.data,
+        sourceHandleId: edge.sourceHandle || 'source',
+        failBranchLabel: t('nodes.common.errorHandle.failBranch.title', { ns: 'workflow' }),
+      })
+    : undefined
+
+  return <SubgraphConnection label={label} />
+}
+
+const SubgraphBranchNode = ({
+  edgesBySource,
+  node,
+  nodeById,
+  onGraphChange,
+  onSelect,
+  pathNodeIds = new Set(),
+}: SubgraphBranchNodeProps) => {
+  const isCircularPath = pathNodeIds.has(node.id)
+  const outgoingEdges = isCircularPath
+    ? []
+    : sortOutgoingEdges(edgesBySource.get(node.id) ?? [], nodeById, node)
+  const nextPathNodeIds = new Set(pathNodeIds)
+  nextPathNodeIds.add(node.id)
+  const shownBranchHandleIds = new Set<string>()
+
+  if (outgoingEdges.length === 0) {
+    return (
+      <div className="flex items-center">
+        <SubgraphNodeCard
           node={node}
-          nextNode={nextNode}
           onGraphChange={onGraphChange}
+          onSelect={onSelect}
+        />
+        <AddBlockButton
+          sourceNode={node}
+          onGraphChange={onGraphChange}
+          variant="terminal"
         />
       </div>
+    )
+  }
+
+  if (outgoingEdges.length === 1) {
+    const edge = outgoingEdges[0]!
+    const nextNode = nodeById.get(edge.target)
+
+    if (!nextNode) {
+      return (
+        <SubgraphNodeCard
+          node={node}
+          onGraphChange={onGraphChange}
+          onSelect={onSelect}
+        />
+      )
+    }
+
+    return (
+      <div className="flex items-center">
+        <SubgraphNodeCard
+          edge={edge}
+          nextNode={nextNode}
+          node={node}
+          onGraphChange={onGraphChange}
+          onSelect={onSelect}
+        />
+        <SubgraphBranchEdgeConnection
+          edge={edge}
+          sourceNode={node}
+        />
+        <SubgraphBranchNode
+          edgesBySource={edgesBySource}
+          node={nextNode}
+          nodeById={nodeById}
+          onGraphChange={onGraphChange}
+          onSelect={onSelect}
+          pathNodeIds={nextPathNodeIds}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center">
+      <SubgraphNodeCard
+        node={node}
+        onGraphChange={onGraphChange}
+        onSelect={onSelect}
+        showAddButton={false}
+      />
+      <SubgraphConnection />
+      <div className="relative flex flex-col gap-6">
+        <div
+          data-testid="workflow-canvas-v2-container-subgraph-branch-spine"
+          className="absolute top-6 bottom-6 left-0 w-0.5 bg-workflow-link-line-normal"
+        />
+        {outgoingEdges.map((edge) => {
+          const nextNode = nodeById.get(edge.target)
+          if (!nextNode)
+            return null
+
+          const branchHandleId = edge.sourceHandle || 'source'
+          const showLabel = !shownBranchHandleIds.has(branchHandleId)
+          shownBranchHandleIds.add(branchHandleId)
+
+          return (
+            <div
+              key={edge.id}
+              data-testid="workflow-canvas-v2-container-subgraph-branch"
+              className="relative flex items-center"
+            >
+              <SubgraphBranchEdgeConnection
+                edge={edge}
+                showLabel={showLabel}
+                sourceNode={node}
+              />
+              <SubgraphBranchNode
+                edgesBySource={edgesBySource}
+                node={nextNode}
+                nodeById={nodeById}
+                onGraphChange={onGraphChange}
+                onSelect={onSelect}
+                pathNodeIds={nextPathNodeIds}
+              />
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+const SubgraphBranchTree = ({
+  internalEdges,
+  onGraphChange,
+  onSelect,
+  rootNode,
+  subgraphNodes,
+}: {
+  internalEdges: Edge[]
+  onGraphChange: (graph: { nodes: Node[], edges: Edge[] }) => void
+  onSelect: (nodeId: string) => void
+  rootNode: Node
+  subgraphNodes: Node[]
+}) => {
+  const nodeById = useMemo(() => new Map(subgraphNodes.map(node => [node.id, node])), [subgraphNodes])
+  const edgesBySource = useMemo(() => getInternalEdgesBySource(internalEdges, nodeById), [internalEdges, nodeById])
+
+  return (
+    <div
+      data-testid="workflow-canvas-v2-container-subgraph-branch-layout"
+      className="flex min-h-full min-w-max items-center p-8"
+    >
+      <SubgraphBranchNode
+        edgesBySource={edgesBySource}
+        node={rootNode}
+        nodeById={nodeById}
+        onGraphChange={onGraphChange}
+        onSelect={onSelect}
+      />
     </div>
   )
 }
@@ -461,6 +707,16 @@ const ContainerSubgraph: FC<ContainerSubgraphProps> = ({
     return getSortedContainerChildren(containerNode, nodes, edges)
   }, [containerNode, edges, nodes])
   const internalEdges = useMemo(() => getInternalEdges(containerId, children, edges), [children, containerId, edges])
+  const childNodeById = useMemo(() => new Map(children.map(node => [node.id, node])), [children])
+  const rootNode = useMemo(() => {
+    if (!containerNode)
+      return undefined
+
+    return getSubgraphRootNode(children, containerNode)
+  }, [children, containerNode])
+  const shouldRenderBranchLayout = useMemo(() => {
+    return hasBranchedInternalEdges(internalEdges, childNodeById)
+  }, [childNodeById, internalEdges])
 
   if (!containerNode)
     return null
@@ -492,33 +748,45 @@ const ContainerSubgraph: FC<ContainerSubgraphProps> = ({
       <div className="grow overflow-auto bg-workflow-canvas-workflow-bg">
         {children.length > 0
           ? (
-              <div className="flex min-h-full min-w-max items-center p-8">
-                {children.map((node, index) => {
-                  const nextNode = children[index + 1]
-                  const edge = nextNode ? findEdgeBetween(internalEdges, node, nextNode) : undefined
+              shouldRenderBranchLayout && rootNode
+                ? (
+                    <SubgraphBranchTree
+                      internalEdges={internalEdges}
+                      onGraphChange={onGraphChange}
+                      onSelect={onSelectNode}
+                      rootNode={rootNode}
+                      subgraphNodes={children}
+                    />
+                  )
+                : (
+                    <div className="flex min-h-full min-w-max items-center p-8">
+                      {children.map((node, index) => {
+                        const nextNode = children[index + 1]
+                        const edge = nextNode ? findEdgeBetween(internalEdges, node, nextNode) : undefined
 
-                  return (
-                    <div key={node.id} className="flex items-center">
-                      <SubgraphNodeCard
-                        edge={edge}
-                        nextNode={nextNode}
-                        node={node}
-                        onGraphChange={onGraphChange}
-                        onSelect={onSelectNode}
-                      />
-                      {nextNode
-                        ? <SubgraphConnection />
-                        : (
-                            <AddBlockButton
-                              sourceNode={node}
+                        return (
+                          <div key={node.id} className="flex items-center">
+                            <SubgraphNodeCard
+                              edge={edge}
+                              nextNode={nextNode}
+                              node={node}
                               onGraphChange={onGraphChange}
-                              variant="terminal"
+                              onSelect={onSelectNode}
                             />
-                          )}
+                            {nextNode
+                              ? <SubgraphConnection />
+                              : (
+                                  <AddBlockButton
+                                    sourceNode={node}
+                                    onGraphChange={onGraphChange}
+                                    variant="terminal"
+                                  />
+                                )}
+                          </div>
+                        )
+                      })}
                     </div>
                   )
-                })}
-              </div>
             )
           : (
               <div className="flex h-full items-center justify-center system-sm-regular text-text-tertiary">
