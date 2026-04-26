@@ -145,6 +145,81 @@ describe('getCanvasV2LayoutNodes', () => {
       expect(result.find(node => node.id === 'case-b')?.position).toEqual({ x: 260, y: 96 })
     })
 
+    it('should align an odd fan-out source to the middle downstream node', async () => {
+      mockGetLayoutByELK.mockResolvedValue({
+        nodes: new Map([
+          ['start', { x: 0, y: 104, width: CANVAS_V2_NODE_WIDTH, height: CANVAS_V2_NODE_HEIGHT, layer: 0 }],
+          ['llm', { x: 260, y: 0, width: CANVAS_V2_NODE_WIDTH, height: CANVAS_V2_NODE_HEIGHT, layer: 1 }],
+          ['answer', { x: 260, y: 128, width: CANVAS_V2_NODE_WIDTH, height: CANVAS_V2_NODE_HEIGHT, layer: 1 }],
+          ['knowledge', { x: 260, y: 256, width: CANVAS_V2_NODE_WIDTH, height: CANVAS_V2_NODE_HEIGHT, layer: 1 }],
+        ]),
+        bounds: { minX: 0, minY: 0, maxX: 460, maxY: 304 },
+      })
+      const nodes = [
+        makeNode({ id: 'start', type: CUSTOM_SIMPLE_NODE, data: { type: BlockEnum.Start } }),
+        makeNode({ id: 'llm', data: { type: BlockEnum.LLM } }),
+        makeNode({ id: 'answer', data: { type: BlockEnum.Answer } }),
+        makeNode({ id: 'knowledge', data: { type: BlockEnum.KnowledgeRetrieval } }),
+      ]
+      const edges = [
+        makeEdge({ id: 'start-llm', source: 'start', target: 'llm' }),
+        makeEdge({ id: 'start-answer', source: 'start', target: 'answer' }),
+        makeEdge({ id: 'start-knowledge', source: 'start', target: 'knowledge' }),
+      ]
+
+      const result = await getCanvasV2LayoutNodes(nodes, edges)
+
+      expect(result.find(node => node.id === 'start')?.position).toEqual({ x: 0, y: 128 })
+      expect(result.find(node => node.id === 'llm')?.position).toEqual({ x: 260, y: 0 })
+      expect(result.find(node => node.id === 'answer')?.position).toEqual({ x: 260, y: 128 })
+      expect(result.find(node => node.id === 'knowledge')?.position).toEqual({ x: 260, y: 256 })
+    })
+
+    it('should align nodes in the same topological layer on the x axis', async () => {
+      mockGetLayoutByELK.mockResolvedValue({
+        nodes: new Map([
+          ['start', { x: 0, y: 256, width: CANVAS_V2_NODE_WIDTH, height: CANVAS_V2_NODE_HEIGHT, layer: 0 }],
+          ['answer', { x: 260, y: 0, width: CANVAS_V2_NODE_WIDTH, height: CANVAS_V2_NODE_HEIGHT, layer: 1 }],
+          ['answer-2', { x: 300, y: 128, width: CANVAS_V2_NODE_WIDTH, height: CANVAS_V2_NODE_HEIGHT, layer: 1 }],
+          ['code', { x: 280, y: 256, width: CANVAS_V2_NODE_WIDTH, height: CANVAS_V2_NODE_HEIGHT, layer: 1 }],
+          ['human-input', { x: 600, y: 0, width: CANVAS_V2_NODE_WIDTH, height: CANVAS_V2_NODE_HEIGHT, layer: 2 }],
+          ['answer-3', { x: 640, y: 128, width: CANVAS_V2_NODE_WIDTH, height: CANVAS_V2_NODE_HEIGHT, layer: 2 }],
+          ['code-2', { x: 620, y: 256, width: CANVAS_V2_NODE_WIDTH, height: CANVAS_V2_NODE_HEIGHT, layer: 2 }],
+          ['template', { x: 660, y: 384, width: CANVAS_V2_NODE_WIDTH, height: CANVAS_V2_NODE_HEIGHT, layer: 2 }],
+        ]),
+        bounds: { minX: 0, minY: 0, maxX: 860, maxY: 432 },
+      })
+      const nodes = [
+        makeNode({ id: 'start', type: CUSTOM_SIMPLE_NODE, data: { type: BlockEnum.Start } }),
+        makeNode({ id: 'answer', data: { type: BlockEnum.Answer } }),
+        makeNode({ id: 'answer-2', data: { type: BlockEnum.Answer } }),
+        makeNode({ id: 'code', data: { type: BlockEnum.Code } }),
+        makeNode({ id: 'human-input', data: { type: BlockEnum.HumanInput } }),
+        makeNode({ id: 'answer-3', data: { type: BlockEnum.Answer } }),
+        makeNode({ id: 'code-2', data: { type: BlockEnum.Code } }),
+        makeNode({ id: 'template', data: { type: BlockEnum.TemplateTransform } }),
+      ]
+      const edges = [
+        makeEdge({ id: 'start-answer', source: 'start', target: 'answer' }),
+        makeEdge({ id: 'start-answer-2', source: 'start', target: 'answer-2' }),
+        makeEdge({ id: 'start-code', source: 'start', target: 'code' }),
+        makeEdge({ id: 'answer-human-input', source: 'answer', target: 'human-input' }),
+        makeEdge({ id: 'answer-2-answer-3', source: 'answer-2', target: 'answer-3' }),
+        makeEdge({ id: 'answer-2-code-2', source: 'answer-2', target: 'code-2' }),
+        makeEdge({ id: 'answer-2-template', source: 'answer-2', target: 'template' }),
+      ]
+
+      const result = await getCanvasV2LayoutNodes(nodes, edges)
+
+      expect(result.find(node => node.id === 'answer')?.position.x).toBe(260)
+      expect(result.find(node => node.id === 'answer-2')?.position.x).toBe(260)
+      expect(result.find(node => node.id === 'code')?.position.x).toBe(260)
+      expect(result.find(node => node.id === 'human-input')?.position.x).toBe(600)
+      expect(result.find(node => node.id === 'answer-3')?.position.x).toBe(600)
+      expect(result.find(node => node.id === 'code-2')?.position.x).toBe(600)
+      expect(result.find(node => node.id === 'template')?.position.x).toBe(600)
+    })
+
     it('should align a linear component even when other visible nodes exist', async () => {
       mockGetLayoutByELK.mockResolvedValue({
         nodes: new Map([
@@ -237,9 +312,9 @@ describe('getCanvasV2LayoutNodes', () => {
 
       const result = await getCanvasV2LayoutNodes(nodes, edges)
 
-      expect(result.find(node => node.id === 'start')?.position).toEqual({ x: 0, y: 101.7142857142857 })
-      expect(result.find(node => node.id === 'list')?.position).toEqual({ x: 300, y: 101.7142857142857 })
-      expect(result.find(node => node.id === 'answer')?.position).toEqual({ x: 600, y: 101.7142857142857 })
+      expect(result.find(node => node.id === 'start')?.position).toEqual({ x: 0, y: 128 })
+      expect(result.find(node => node.id === 'list')?.position).toEqual({ x: 300, y: 128 })
+      expect(result.find(node => node.id === 'answer')?.position).toEqual({ x: 600, y: 128 })
       expect(result.find(node => node.id === 'if-else')?.position).toEqual({ x: 920, y: 0 })
       expect(result.find(node => node.id === 'iteration')?.position).toEqual({ x: 920, y: 128 })
       expect(result.find(node => node.id === 'code')?.position).toEqual({ x: 1220, y: 128 })

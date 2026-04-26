@@ -103,6 +103,150 @@ const getSourceNodeId = (nodes: Node[], edges: Edge[]) => {
   return nodes.find(node => !targetIds.has(node.id))?.id ?? nodes[0]?.id
 }
 
+const getTopologicalRankByNodeId = (nodes: Node[], edges: Edge[]) => {
+  const uniqueEdges = getUniqueLayoutEdges(nodes, edges)
+  const nodeIds = new Set(nodes.map(node => node.id))
+  const rankByNodeId = new Map<string, number>()
+  const indegreeByNodeId = new Map<string, number>()
+  const outgoingEdgesByNodeId = new Map<string, Edge[]>()
+
+  nodes.forEach((node) => {
+    rankByNodeId.set(node.id, 0)
+    indegreeByNodeId.set(node.id, 0)
+    outgoingEdgesByNodeId.set(node.id, [])
+  })
+
+  uniqueEdges.forEach((edge) => {
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target))
+      return
+
+    indegreeByNodeId.set(edge.target, (indegreeByNodeId.get(edge.target) ?? 0) + 1)
+    outgoingEdgesByNodeId.get(edge.source)!.push(edge)
+  })
+
+  const queue = nodes
+    .filter(node => indegreeByNodeId.get(node.id) === 0)
+    .map(node => node.id)
+  let visitedCount = 0
+
+  while (queue.length) {
+    const nodeId = queue.shift()!
+    visitedCount += 1
+    const sourceRank = rankByNodeId.get(nodeId) ?? 0
+
+    outgoingEdgesByNodeId.get(nodeId)!.forEach((edge) => {
+      rankByNodeId.set(edge.target, Math.max(rankByNodeId.get(edge.target) ?? 0, sourceRank + 1))
+      indegreeByNodeId.set(edge.target, (indegreeByNodeId.get(edge.target) ?? 0) - 1)
+
+      if (indegreeByNodeId.get(edge.target) === 0)
+        queue.push(edge.target)
+    })
+  }
+
+  if (visitedCount !== nodes.length)
+    return undefined
+
+  return rankByNodeId
+}
+
+const getFallbackRankByNodeId = (layout: LayoutResult, nodes: Node[]) => {
+  const rankByNodeId = new Map<string, number>()
+  const sortedColumnXs = [...new Set(nodes
+    .map(node => layout.nodes.get(node.id)?.x)
+    .filter((x): x is number => typeof x === 'number')
+    .sort((a, b) => a - b))]
+
+  nodes.forEach((node) => {
+    const layoutInfo = layout.nodes.get(node.id)
+    if (!layoutInfo)
+      return
+
+    rankByNodeId.set(node.id, sortedColumnXs.indexOf(layoutInfo.x))
+  })
+
+  return rankByNodeId
+}
+
+const getRankByNodeId = (layout: LayoutResult, nodes: Node[], edges: Edge[]) => {
+  return getTopologicalRankByNodeId(nodes, edges) ?? getFallbackRankByNodeId(layout, nodes)
+}
+
+const getColumnXByNodeId = (layout: LayoutResult, nodes: Node[], edges: Edge[]) => {
+  const rankByNodeId = getRankByNodeId(layout, nodes, edges)
+  const minXByRank = new Map<number, number>()
+
+  nodes.forEach((node) => {
+    const rank = rankByNodeId.get(node.id)
+    const layoutInfo = layout.nodes.get(node.id)
+
+    if (rank === undefined || !layoutInfo)
+      return
+
+    minXByRank.set(rank, Math.min(minXByRank.get(rank) ?? layoutInfo.x, layoutInfo.x))
+  })
+
+  const xByRank = new Map<number, number>()
+  const sortedRanks = [...minXByRank.keys()].sort((a, b) => a - b)
+
+  sortedRanks.forEach((rank) => {
+    xByRank.set(rank, minXByRank.get(rank)!)
+  })
+
+  const xByNodeId = new Map<string, number>()
+  nodes.forEach((node) => {
+    const rank = rankByNodeId.get(node.id)
+    if (rank === undefined)
+      return
+
+    const x = xByRank.get(rank)
+    if (x !== undefined)
+      xByNodeId.set(node.id, x)
+  })
+
+  return xByNodeId
+}
+
+const getLayoutCenterY = (layoutInfo: LayoutInfo) => {
+  return layoutInfo.y + layoutInfo.height / 2
+}
+
+const getBranchMedianBaselineYByNodeId = (layout: LayoutResult, nodes: Node[], edges: Edge[]) => {
+  const baselineYByNodeId = new Map<string, number>()
+  const uniqueEdges = getUniqueLayoutEdges(nodes, edges)
+  const outgoingTargetIdsBySourceId = new Map<string, Set<string>>()
+
+  uniqueEdges.forEach((edge) => {
+    const targetIds = outgoingTargetIdsBySourceId.get(edge.source) ?? new Set<string>()
+    targetIds.add(edge.target)
+    outgoingTargetIdsBySourceId.set(edge.source, targetIds)
+  })
+
+  outgoingTargetIdsBySourceId.forEach((targetIds, sourceId) => {
+    if (targetIds.size < 3 || targetIds.size % 2 === 0)
+      return
+
+    const sourceLayout = layout.nodes.get(sourceId)
+    if (!sourceLayout)
+      return
+
+    const targetLayouts = [...targetIds]
+      .map(targetId => layout.nodes.get(targetId))
+      .filter((layoutInfo): layoutInfo is LayoutInfo => !!layoutInfo)
+      .sort((a, b) => a.y - b.y || a.x - b.x)
+
+    if (targetLayouts.length !== targetIds.size)
+      return
+
+    const medianTargetLayout = targetLayouts[Math.floor(targetLayouts.length / 2)]!
+    baselineYByNodeId.set(
+      sourceId,
+      getLayoutCenterY(medianTargetLayout) - sourceLayout.height / 2,
+    )
+  })
+
+  return baselineYByNodeId
+}
+
 const getLinearSegmentEdges = (nodes: Node[], edges: Edge[]) => {
   const uniqueEdges = getUniqueLayoutEdges(nodes, edges)
   const {
@@ -169,7 +313,31 @@ const getAlignmentSegments = (nodes: Node[], edges: Edge[]) => {
   return segments
 }
 
-const getLinearBaselineY = (layout: LayoutResult, nodes: Node[], edges: Edge[]) => {
+const getLinearBaselineY = (
+  layout: LayoutResult,
+  nodes: Node[],
+  edges: Edge[],
+  branchMedianBaselineYByNodeId: Map<string, number>,
+) => {
+  const downstreamBranchAnchor = nodes
+    .map((node) => {
+      const baselineY = branchMedianBaselineYByNodeId.get(node.id)
+      const layoutInfo = layout.nodes.get(node.id)
+
+      if (baselineY === undefined || !layoutInfo)
+        return undefined
+
+      return {
+        baselineY,
+        layoutInfo,
+      }
+    })
+    .filter((anchor): anchor is { baselineY: number, layoutInfo: LayoutInfo } => !!anchor)
+    .sort((a, b) => b.layoutInfo.x - a.layoutInfo.x || b.layoutInfo.y - a.layoutInfo.y)[0]
+
+  if (downstreamBranchAnchor)
+    return downstreamBranchAnchor.baselineY
+
   const sourceNodeId = getSourceNodeId(nodes, edges)
   if (!sourceNodeId)
     return undefined
@@ -177,12 +345,17 @@ const getLinearBaselineY = (layout: LayoutResult, nodes: Node[], edges: Edge[]) 
   return layout.nodes.get(sourceNodeId)?.y
 }
 
-const getLinearBaselineYByNodeId = (layout: LayoutResult, nodes: Node[], edges: Edge[]) => {
+const getLinearBaselineYByNodeId = (
+  layout: LayoutResult,
+  nodes: Node[],
+  edges: Edge[],
+  branchMedianBaselineYByNodeId: Map<string, number>,
+) => {
   const baselineYByNodeId = new Map<string, number>()
   const alignmentSegments = getAlignmentSegments(nodes, edges)
 
   for (const segment of alignmentSegments) {
-    const baselineY = getLinearBaselineY(layout, segment.nodes, segment.edges)
+    const baselineY = getLinearBaselineY(layout, segment.nodes, segment.edges, branchMedianBaselineYByNodeId)
     if (baselineY === undefined)
       continue
 
@@ -220,7 +393,9 @@ export const getCanvasV2LayoutNodes = async (nodes: Node[], edges: Edge[]) => {
     return nodes
 
   const layout = await getLayoutByELK(layoutNodes, layoutEdges)
-  const linearBaselineYByNodeId = getLinearBaselineYByNodeId(layout, layoutNodes, layoutEdges)
+  const columnXByNodeId = getColumnXByNodeId(layout, layoutNodes, layoutEdges)
+  const branchMedianBaselineYByNodeId = getBranchMedianBaselineYByNodeId(layout, layoutNodes, layoutEdges)
+  const linearBaselineYByNodeId = getLinearBaselineYByNodeId(layout, layoutNodes, layoutEdges, branchMedianBaselineYByNodeId)
 
   const nextNodes = nodes.map((node) => {
     if (!isCanvasV2LayoutNode(node))
@@ -231,8 +406,11 @@ export const getCanvasV2LayoutNodes = async (nodes: Node[], edges: Edge[]) => {
       return node
 
     return applyCanvasV2LayoutPosition(node, {
-      x: layoutInfo.x,
-      y: getCanvasV2YPosition(layoutInfo, linearBaselineYByNodeId.get(node.id)),
+      x: columnXByNodeId.get(node.id) ?? layoutInfo.x,
+      y: getCanvasV2YPosition(
+        layoutInfo,
+        linearBaselineYByNodeId.get(node.id) ?? branchMedianBaselineYByNodeId.get(node.id),
+      ),
     })
   })
 
