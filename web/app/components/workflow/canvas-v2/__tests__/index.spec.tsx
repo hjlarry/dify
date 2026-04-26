@@ -1,8 +1,15 @@
-import type { ReactNode } from 'react'
+import type {
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+} from 'react'
 import type {
   EdgeMouseHandler,
   NodeChange,
   NodeMouseHandler,
+  OnConnect,
+  OnConnectEnd,
+  OnConnectStart,
+  OnSelectionChangeFunc,
 } from 'reactflow'
 import type {
   Edge,
@@ -39,6 +46,15 @@ const mockSaveStateToHistory = vi.hoisted(() => vi.fn())
 const mockWorkflowStoreSetState = vi.hoisted(() => vi.fn())
 const mockGetCanvasV2LayoutNodes = vi.hoisted(() => vi.fn())
 const mockHandleNodeAdd = vi.hoisted(() => vi.fn())
+const mockHandleNodeConnect = vi.hoisted(() => vi.fn())
+const mockHandleNodeConnectStart = vi.hoisted(() => vi.fn())
+const mockHandleNodeConnectEnd = vi.hoisted(() => vi.fn())
+const mockHandleNodeEnter = vi.hoisted(() => vi.fn())
+const mockHandleNodeLeave = vi.hoisted(() => vi.fn())
+const mockHandleSelectionStart = vi.hoisted(() => vi.fn())
+const mockHandleSelectionChange = vi.hoisted(() => vi.fn())
+const mockHandleSelectionDrag = vi.hoisted(() => vi.fn())
+const mockIsValidConnection = vi.hoisted(() => vi.fn())
 const mockAvailableBlocks = vi.hoisted(() => ['code', 'answer'])
 const mockSetShowConfirm = vi.hoisted(() => vi.fn())
 const mockSetShowUserCursors = vi.hoisted(() => vi.fn())
@@ -49,14 +65,26 @@ let mockShowConfirm: { title: string, desc?: string, onConfirm: () => void } | u
 
 type MockReactFlowProps = {
   children?: ReactNode
+  connectionLineComponent?: unknown
   edges?: Array<{ data?: Record<string, unknown>, focusable?: boolean, id: string, selected?: boolean }>
   edgesFocusable?: boolean
+  isValidConnection?: unknown
   nodes?: Array<{ data?: Record<string, unknown>, id: string }>
+  nodesConnectable?: boolean
   nodesDraggable?: boolean
+  onConnect?: OnConnect
+  onConnectEnd?: OnConnectEnd
+  onConnectStart?: OnConnectStart
   onEdgeMouseEnter?: EdgeMouseHandler
   onEdgeMouseLeave?: EdgeMouseHandler
   onNodeClick?: NodeMouseHandler
+  onNodeMouseEnter?: NodeMouseHandler
+  onNodeMouseLeave?: NodeMouseHandler
   onNodesChange?: (changes: NodeChange[]) => void
+  onSelectionChange?: OnSelectionChangeFunc
+  onSelectionDrag?: (event: ReactMouseEvent, nodes: Node[]) => void
+  onSelectionStart?: () => void
+  selectionOnDrag?: boolean
 }
 
 vi.mock('reactflow', () => ({
@@ -103,25 +131,49 @@ vi.mock('reactflow', () => ({
   default: (props: MockReactFlowProps) => {
     const {
       children,
+      connectionLineComponent,
       edges,
       edgesFocusable,
+      isValidConnection,
       nodes,
+      nodesConnectable,
       nodesDraggable,
+      onConnect,
+      onConnectEnd,
+      onConnectStart,
       onEdgeMouseEnter,
       onEdgeMouseLeave,
       onNodeClick,
+      onNodeMouseEnter,
+      onNodeMouseLeave,
       onNodesChange,
+      onSelectionChange,
+      onSelectionDrag,
+      onSelectionStart,
+      selectionOnDrag,
     } = props
 
     mockReactFlowProps({
+      connectionLineComponent,
       edges,
       edgesFocusable,
+      isValidConnection,
       nodes,
+      nodesConnectable,
       nodesDraggable,
+      onConnect,
+      onConnectEnd,
+      onConnectStart,
       onEdgeMouseEnter,
       onEdgeMouseLeave,
       onNodeClick,
+      onNodeMouseEnter,
+      onNodeMouseLeave,
       onNodesChange,
+      onSelectionChange,
+      onSelectionDrag,
+      onSelectionStart,
+      selectionOnDrag,
     })
     return <div data-testid="react-flow">{children}</div>
   },
@@ -185,6 +237,10 @@ vi.mock('../../collaboration/components/user-cursors', () => ({
   default: () => <div data-testid="user-cursors" />,
 }))
 
+vi.mock('../../custom-connection-line', () => ({
+  default: () => null,
+}))
+
 vi.mock('../../hooks', () => ({
   useAvailableBlocks: () => ({
     availableNextBlocks: mockAvailableBlocks,
@@ -192,9 +248,22 @@ vi.mock('../../hooks', () => ({
   }),
   useNodesInteractions: () => ({
     handleNodeAdd: mockHandleNodeAdd,
+    handleNodeConnect: mockHandleNodeConnect,
+    handleNodeConnectStart: mockHandleNodeConnectStart,
+    handleNodeConnectEnd: mockHandleNodeConnectEnd,
+    handleNodeEnter: mockHandleNodeEnter,
+    handleNodeLeave: mockHandleNodeLeave,
   }),
   useNodesSyncDraft: () => ({
     handleSyncWorkflowDraft: mockHandleSyncWorkflowDraft,
+  }),
+  useSelectionInteractions: () => ({
+    handleSelectionStart: mockHandleSelectionStart,
+    handleSelectionChange: mockHandleSelectionChange,
+    handleSelectionDrag: mockHandleSelectionDrag,
+  }),
+  useWorkflow: () => ({
+    isValidConnection: mockIsValidConnection,
   }),
   useNodesReadOnly: () => ({
     nodesReadOnly: mockNodesReadOnly,
@@ -401,9 +470,21 @@ describe('WorkflowCanvasV2', () => {
         onGraphChange: expect.any(Function),
       }))
       expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+        connectionLineComponent: expect.any(Function),
         edgesFocusable: false,
+        isValidConnection: mockIsValidConnection,
+        nodesConnectable: true,
         nodesDraggable: true,
+        onConnect: expect.any(Function),
+        onConnectEnd: expect.any(Function),
+        onConnectStart: expect.any(Function),
+        onNodeMouseEnter: expect.any(Function),
+        onNodeMouseLeave: expect.any(Function),
         onNodesChange: expect.any(Function),
+        onSelectionChange: expect.any(Function),
+        onSelectionDrag: expect.any(Function),
+        onSelectionStart: expect.any(Function),
+        selectionOnDrag: true,
       }))
     })
 
@@ -600,6 +681,128 @@ describe('WorkflowCanvasV2', () => {
           }),
         ],
       }))
+    })
+
+    it('should delegate node connection to legacy interactions and sync the v2 graph', async () => {
+      const nodes = [
+        makeNode({ id: 'start', data: { type: BlockEnum.Start, title: 'Start' } }),
+        makeNode({ id: 'code', position: { x: 260, y: 0 } }),
+      ]
+      const nextNodes = nodes.map(node => ({
+        ...node,
+        data: {
+          ...node.data,
+          _connectedSourceHandleIds: node.id === 'start' ? ['source'] : node.data._connectedSourceHandleIds,
+          _connectedTargetHandleIds: node.id === 'code' ? ['target'] : node.data._connectedTargetHandleIds,
+        },
+      }))
+      const nextEdges = [
+        makeEdge({
+          id: 'start-source-code-target',
+          source: 'start',
+          target: 'code',
+          data: { sourceType: BlockEnum.Start, targetType: BlockEnum.Code },
+        }),
+      ]
+
+      mockHandleNodeConnect.mockImplementation(() => {
+        mockReactFlowGetNodes.mockReturnValue(nextNodes)
+        mockReactFlowGetEdges.mockReturnValue(nextEdges)
+      })
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={[]}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        reactFlowProps.onConnect?.({
+          source: 'start',
+          sourceHandle: 'source',
+          target: 'code',
+          targetHandle: 'target',
+        })
+      })
+
+      expect(mockHandleNodeConnect).toHaveBeenCalledWith({
+        source: 'start',
+        sourceHandle: 'source',
+        target: 'code',
+        targetHandle: 'target',
+      })
+      expect(mockSetNodesInWorkflowStore).toHaveBeenLastCalledWith(nextNodes)
+      await waitFor(() => {
+        expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+          edges: [
+            expect.objectContaining({ id: 'start-source-code-target' }),
+          ],
+          nodes: [
+            expect.objectContaining({ id: 'start' }),
+            expect.objectContaining({ id: 'code' }),
+          ],
+        }))
+      })
+    })
+
+    it('should delegate selection changes and sync bundled nodes for multi-select', async () => {
+      const nodes = [
+        makeNode({ id: 'code-1' }),
+        makeNode({ id: 'code-2', position: { x: 260, y: 0 } }),
+      ]
+      const bundledNodes = nodes.map(node => ({
+        ...node,
+        data: {
+          ...node.data,
+          _isBundled: true,
+        },
+      }))
+
+      mockHandleSelectionChange.mockImplementation(() => {
+        mockReactFlowGetNodes.mockReturnValue(bundledNodes)
+        mockReactFlowGetEdges.mockReturnValue([])
+      })
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={[]}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        reactFlowProps.onSelectionChange?.({
+          edges: [],
+          nodes,
+        })
+      })
+
+      expect(mockHandleSelectionChange).toHaveBeenCalledWith({
+        edges: [],
+        nodes,
+      })
+      expect(mockSetNodesInWorkflowStore).toHaveBeenLastCalledWith(bundledNodes)
+      await waitFor(() => {
+        expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+          nodes: [
+            expect.objectContaining({
+              data: expect.objectContaining({ _isBundled: true }),
+              id: 'code-1',
+            }),
+            expect.objectContaining({
+              data: expect.objectContaining({ _isBundled: true }),
+              id: 'code-2',
+            }),
+          ],
+        }))
+      })
     })
 
     it('should select the container and open its subgraph when clicking a loop node', () => {

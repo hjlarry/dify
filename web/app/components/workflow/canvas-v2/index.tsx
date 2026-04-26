@@ -3,11 +3,16 @@
 import type {
   CSSProperties,
   FC,
+  MouseEvent as ReactMouseEvent,
 } from 'react'
 import type {
   EdgeMouseHandler,
   NodeChange,
   NodeMouseHandler,
+  OnConnect,
+  OnConnectEnd,
+  OnConnectStart,
+  OnSelectionChangeFunc,
   Viewport,
 } from 'reactflow'
 import type { CursorPosition, OnlineUser } from '../collaboration/types/collaboration'
@@ -49,9 +54,13 @@ import UserCursors from '../collaboration/components/user-cursors'
 import {
   WORKFLOW_DATA_UPDATE,
 } from '../constants'
+import CustomConnectionLine from '../custom-connection-line'
 import {
+  useNodesInteractions,
   useNodesReadOnly,
   useNodesSyncDraft,
+  useSelectionInteractions,
+  useWorkflow,
   useWorkflowHistory,
   useWorkflowReadOnly,
   WorkflowHistoryEvent,
@@ -229,6 +238,21 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
   const { workflowReadOnly } = useWorkflowReadOnly()
   const { handleSyncWorkflowDraft } = useNodesSyncDraft()
   const { saveStateToHistory } = useWorkflowHistory()
+  const {
+    handleNodeConnect,
+    handleNodeConnectStart,
+    handleNodeConnectEnd,
+    handleNodeEnter,
+    handleNodeLeave,
+  } = useNodesInteractions()
+  const {
+    handleSelectionStart,
+    handleSelectionChange,
+    handleSelectionDrag,
+  } = useSelectionInteractions()
+  const {
+    isValidConnection,
+  } = useWorkflow()
   const canvasRootStyle = useMemo(() => ({
     '--workflow-canvas-v2-topbar-height': `${WORKFLOW_CANVAS_V2_TOPBAR_HEIGHT}px`,
     '--workflow-panel-top-offset': `${WORKFLOW_CANVAS_V2_TOPBAR_HEIGHT}px`,
@@ -372,6 +396,45 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
     setGraph(nextGraph)
   }, [reactflow, workflowStore])
 
+  const handleConnect = useCallback<OnConnect>((connection) => {
+    handleNodeConnect(connection)
+    handleGraphChangeFromReactFlow()
+  }, [handleGraphChangeFromReactFlow, handleNodeConnect])
+
+  const handleConnectStart = useCallback<OnConnectStart>((event, params) => {
+    handleNodeConnectStart(event, params)
+  }, [handleNodeConnectStart])
+
+  const handleConnectEnd = useCallback<OnConnectEnd>((event) => {
+    handleNodeConnectEnd(event)
+    handleGraphChangeFromReactFlow()
+  }, [handleGraphChangeFromReactFlow, handleNodeConnectEnd])
+
+  const handleNodeMouseEnter = useCallback<NodeMouseHandler>((event, node) => {
+    handleNodeEnter(event, node)
+    handleGraphChangeFromReactFlow()
+  }, [handleGraphChangeFromReactFlow, handleNodeEnter])
+
+  const handleNodeMouseLeave = useCallback<NodeMouseHandler>((event, node) => {
+    handleNodeLeave(event, node)
+    handleGraphChangeFromReactFlow()
+  }, [handleGraphChangeFromReactFlow, handleNodeLeave])
+
+  const handleCanvasSelectionStart = useCallback(() => {
+    handleSelectionStart()
+    handleGraphChangeFromReactFlow()
+  }, [handleGraphChangeFromReactFlow, handleSelectionStart])
+
+  const handleCanvasSelectionChange = useCallback<OnSelectionChangeFunc>((params) => {
+    handleSelectionChange(params)
+    handleGraphChangeFromReactFlow()
+  }, [handleGraphChangeFromReactFlow, handleSelectionChange])
+
+  const handleCanvasSelectionDrag = useCallback((event: ReactMouseEvent, nodesWithDrag: Node[]) => {
+    handleSelectionDrag(event, nodesWithDrag)
+    handleGraphChangeFromReactFlow()
+  }, [handleGraphChangeFromReactFlow, handleSelectionDrag])
+
   const handleLayout = useCallback(async () => {
     if (nodesReadOnly)
       return
@@ -483,13 +546,22 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
           edges={viewGraph.edges}
           onNodesChange={handleNodesChange}
           onNodeClick={handleNodeClick}
+          onNodeMouseEnter={handleNodeMouseEnter}
+          onNodeMouseLeave={handleNodeMouseLeave}
+          onConnect={handleConnect}
+          onConnectStart={handleConnectStart}
+          onConnectEnd={handleConnectEnd}
           onEdgeMouseEnter={handleEdgeMouseEnter}
           onEdgeMouseLeave={handleEdgeMouseLeave}
+          onSelectionStart={handleCanvasSelectionStart}
+          onSelectionChange={handleCanvasSelectionChange}
+          onSelectionDrag={handleCanvasSelectionDrag}
+          connectionLineComponent={CustomConnectionLine}
           defaultViewport={viewport}
           multiSelectionKeyCode={null}
           deleteKeyCode={null}
           nodesDraggable={!nodesReadOnly && controlMode !== ControlMode.Comment}
-          nodesConnectable={false}
+          nodesConnectable={!nodesReadOnly}
           nodesFocusable={!nodesReadOnly}
           edgesFocusable={false}
           panOnScroll={controlMode === ControlMode.Pointer && !workflowReadOnly}
@@ -497,9 +569,10 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
           zoomOnPinch
           zoomOnScroll
           zoomOnDoubleClick
+          isValidConnection={isValidConnection}
           selectionKeyCode={null}
           selectionMode={SelectionMode.Partial}
-          selectionOnDrag={false}
+          selectionOnDrag={controlMode === ControlMode.Pointer && !workflowReadOnly}
           minZoom={0.25}
         >
           <Background

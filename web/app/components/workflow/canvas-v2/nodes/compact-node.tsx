@@ -51,7 +51,7 @@ const BRANCH_NODE_TYPES = new Set<BlockEnum>([
   BlockEnum.HumanInput,
 ])
 
-const COMPACT_HANDLE_CLASS_NAME = 'z-1 h-4! w-4! rounded-none! border-none! bg-transparent! opacity-0! outline-hidden!'
+const COMPACT_HANDLE_CLASS_NAME = 'z-1 h-4! w-4! rounded-none! border-none! bg-transparent! outline-hidden!'
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null
@@ -168,7 +168,7 @@ const CompactTargetHandle = ({
       position={Position.Left}
       className={cn(
         COMPACT_HANDLE_CLASS_NAME,
-        'top-1/2! left-0!',
+        'top-1/2! -left-2!',
       )}
       isConnectable={isConnectable}
       onClick={handleHandleClick}
@@ -194,32 +194,15 @@ const CompactTargetHandle = ({
 }
 
 const CompactSourceHandle = ({
-  handleId,
-}: {
-  handleId: string
-}) => {
-  return (
-    <Handle
-      id={handleId}
-      type="source"
-      position={Position.Right}
-      className={cn(
-        COMPACT_HANDLE_CLASS_NAME,
-        'top-1/2! right-0!',
-      )}
-      isConnectable={false}
-    />
-  )
-}
-
-const CompactNodeAddButton = ({
   data,
+  handleId,
   id,
-  sourceHandleId,
+  showAddButton = false,
 }: {
   data: CommonNodeType
+  handleId: string
   id: string
-  sourceHandleId: string
+  showAddButton?: boolean
 }) => {
   const { t } = useTranslation()
   const { nodesReadOnly } = useNodesReadOnly()
@@ -233,6 +216,15 @@ const CompactNodeAddButton = ({
     setOpen(v)
   }, [])
 
+  const handleHandleClick = useCallback((event: MouseEvent) => {
+    if (!showAddButton)
+      return
+
+    event.stopPropagation()
+    if (!disabled)
+      setOpen(v => !v)
+  }, [disabled, showAddButton])
+
   const handleSelect = useCallback<OnSelectBlock>((nodeType, pluginDefaultValue) => {
     handleNodeAdd(
       {
@@ -241,41 +233,57 @@ const CompactNodeAddButton = ({
       },
       {
         prevNodeId: id,
-        prevNodeSourceHandle: sourceHandleId,
+        prevNodeSourceHandle: handleId,
       },
     )
-  }, [handleNodeAdd, id, sourceHandleId])
+  }, [handleNodeAdd, handleId, id])
 
   const renderTrigger = useCallback((triggerOpen: boolean) => {
     return (
       <button
         type="button"
         data-testid="workflow-canvas-v2-node-add"
-        className={getCanvasV2NodeAddTriggerClassName({
-          open: triggerOpen,
-          disabled,
-        })}
+        className={cn(
+          getCanvasV2NodeAddTriggerClassName({
+            open: triggerOpen,
+            disabled,
+          }),
+          'pointer-events-none absolute top-0 left-0',
+          data.selected && 'opacity-100',
+        )}
         aria-label={t('common.addBlock', { ns: 'workflow' })}
       >
         <span className={CANVAS_V2_NODE_ADD_ICON_CLASS_NAME} />
       </button>
     )
-  }, [disabled, t])
+  }, [data.selected, disabled, t])
 
   return (
-    <div className="absolute top-1/2 -right-2 z-10 -translate-y-1/2">
-      <BlockSelector
-        disabled={disabled}
-        open={open}
-        onOpenChange={handleOpenChange}
-        onSelect={handleSelect}
-        availableBlocksTypes={availableNextBlocks}
-        popupClassName="min-w-[256px]!"
-        placement="bottom"
-        trigger={renderTrigger}
-        triggerInnerClassName="inline-flex"
-      />
-    </div>
+    <Handle
+      id={handleId}
+      type="source"
+      position={Position.Right}
+      className={cn(
+        COMPACT_HANDLE_CLASS_NAME,
+        'top-1/2! -right-2!',
+      )}
+      isConnectable={availableNextBlocks.length > 0}
+      onClick={handleHandleClick}
+    >
+      {showAddButton && !nodesReadOnly && availableNextBlocks.length > 0 && (
+        <BlockSelector
+          disabled={disabled}
+          open={open}
+          onOpenChange={handleOpenChange}
+          onSelect={handleSelect}
+          availableBlocksTypes={availableNextBlocks}
+          asChild
+          popupClassName="min-w-[256px]!"
+          placement="bottom"
+          trigger={renderTrigger}
+        />
+      )}
+    </Handle>
   )
 }
 
@@ -318,22 +326,20 @@ const CompactNode: FC<CompactNodeProps> = ({
       )}
       {!isBranchNode && !data._isCandidate && (
         <CompactSourceHandle
+          data={data}
           handleId="source"
+          id={id}
+          showAddButton
         />
       )}
       {isBranchNode && !data._isCandidate && branchSourceHandleIds.map(handleId => (
         <CompactSourceHandle
           key={handleId}
+          data={data}
           handleId={handleId}
+          id={id}
         />
       ))}
-      {!isBranchNode && !data._isCandidate && (
-        <CompactNodeAddButton
-          data={data}
-          id={id}
-          sourceHandleId="source"
-        />
-      )}
       {!displayStatus && !nodesReadOnly && !data._isCandidate && (
         <NodeControl
           id={id}

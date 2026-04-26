@@ -25,15 +25,18 @@ vi.mock('reactflow', () => ({
     children,
     className,
     id,
+    isConnectable,
     type,
   }: {
     children?: ReactNode
     className?: string
     id: string
+    isConnectable?: boolean
     type: string
   }) => (
     <div
       className={className}
+      data-connectable={String(isConnectable)}
       data-testid={`${type}-handle-${id}`}
     >
       {children}
@@ -126,15 +129,18 @@ describe('CompactNode', () => {
       expect(screen.getByTestId('block-icon-llm')).toBeInTheDocument()
       expect(screen.getByText('Generate answer')).toBeInTheDocument()
       expect(screen.queryByText('Long prompt and configuration summary')).not.toBeInTheDocument()
-      expect(screen.getByTestId('target-handle-target')).toHaveClass('opacity-0!')
       expect(screen.getByTestId('source-handle-source')).toBeInTheDocument()
-      expect(screen.getByTestId('source-handle-source')).toHaveClass('opacity-0!')
-      expect(screen.getByTestId('target-handle-target')).toHaveClass('top-1/2!', 'left-0!')
-      expect(screen.getByTestId('source-handle-source')).toHaveClass('top-1/2!', 'right-0!')
+      expect(screen.getByTestId('source-handle-source')).toHaveAttribute('data-connectable', 'true')
+      expect(screen.getByTestId('target-handle-target')).toHaveClass('top-1/2!', '-left-2!')
+      expect(screen.getByTestId('source-handle-source')).toHaveClass('top-1/2!', '-right-2!')
+      expect(screen.getByTestId('target-handle-target')).not.toHaveClass('opacity-0!')
+      expect(screen.getByTestId('source-handle-source')).not.toHaveClass('opacity-0!')
       expect(screen.getByTestId('source-handle-source')).not.toHaveClass('-translate-y-1/2!')
       expect(screen.getByTestId('source-handle-source')).not.toHaveClass('after:bg-workflow-link-line-handle')
       expect(screen.getByTestId('workflow-canvas-v2-target-add-selector')).toBeInTheDocument()
+      expect(screen.getByTestId('source-handle-source')).toContainElement(screen.getByTestId('workflow-canvas-v2-node-add-selector'))
       expect(screen.getByTestId('workflow-canvas-v2-node-add')).toHaveClass('size-4')
+      expect(screen.getByTestId('workflow-canvas-v2-node-add')).toHaveClass('pointer-events-none')
       expect(screen.getByTestId('node-control')).toBeInTheDocument()
     })
 
