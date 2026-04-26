@@ -514,6 +514,56 @@ type SubgraphBranchNodeProps = {
   pathNodeIds?: Set<string>
 }
 
+type SharedBranchMerge = {
+  branchEndEdgesBySourceId: Map<string, Edge>
+  node: Node
+}
+
+const getSharedBranchMerge = ({
+  edgesBySource,
+  nodeById,
+  outgoingEdges,
+}: {
+  edgesBySource: Map<string, Edge[]>
+  nodeById: Map<string, Node>
+  outgoingEdges: Edge[]
+}): SharedBranchMerge | undefined => {
+  if (outgoingEdges.length < 2)
+    return undefined
+
+  const branchEndEdgesBySourceId = new Map<string, Edge>()
+  let mergeNodeId: string | undefined
+
+  for (const edge of outgoingEdges) {
+    const branchNode = nodeById.get(edge.target)
+    if (!branchNode)
+      return undefined
+
+    const branchOutgoingEdges = sortOutgoingEdges(edgesBySource.get(branchNode.id) ?? [], nodeById, branchNode)
+    if (branchOutgoingEdges.length !== 1)
+      return undefined
+
+    const branchEndEdge = branchOutgoingEdges[0]!
+    if (!mergeNodeId) {
+      mergeNodeId = branchEndEdge.target
+    }
+    else if (mergeNodeId !== branchEndEdge.target) {
+      return undefined
+    }
+
+    branchEndEdgesBySourceId.set(branchNode.id, branchEndEdge)
+  }
+
+  const mergeNode = mergeNodeId ? nodeById.get(mergeNodeId) : undefined
+  if (!mergeNode)
+    return undefined
+
+  return {
+    branchEndEdgesBySourceId,
+    node: mergeNode,
+  }
+}
+
 const SubgraphBranchEdgeConnection = ({
   edge,
   showLabel = true,
@@ -550,6 +600,12 @@ const SubgraphBranchNode = ({
   const nextPathNodeIds = new Set(pathNodeIds)
   nextPathNodeIds.add(node.id)
   const shownBranchHandleIds = new Set<string>()
+  const sharedMerge = getSharedBranchMerge({
+    edgesBySource,
+    nodeById,
+    outgoingEdges,
+  })
+  const mergePathNodeIds = new Set(nextPathNodeIds)
 
   if (outgoingEdges.length === 0) {
     return (
@@ -629,6 +685,9 @@ const SubgraphBranchNode = ({
           const branchHandleId = edge.sourceHandle || 'source'
           const showLabel = !shownBranchHandleIds.has(branchHandleId)
           shownBranchHandleIds.add(branchHandleId)
+          const branchEndEdge = sharedMerge?.branchEndEdgesBySourceId.get(nextNode.id)
+          if (branchEndEdge)
+            mergePathNodeIds.add(nextNode.id)
 
           return (
             <div
@@ -641,18 +700,46 @@ const SubgraphBranchNode = ({
                 showLabel={showLabel}
                 sourceNode={node}
               />
-              <SubgraphBranchNode
-                edgesBySource={edgesBySource}
-                node={nextNode}
-                nodeById={nodeById}
-                onGraphChange={onGraphChange}
-                onSelect={onSelect}
-                pathNodeIds={nextPathNodeIds}
-              />
+              {branchEndEdge && sharedMerge
+                ? (
+                    <SubgraphNodeCard
+                      edge={branchEndEdge}
+                      nextNode={sharedMerge.node}
+                      node={nextNode}
+                      onGraphChange={onGraphChange}
+                      onSelect={onSelect}
+                    />
+                  )
+                : (
+                    <SubgraphBranchNode
+                      edgesBySource={edgesBySource}
+                      node={nextNode}
+                      nodeById={nodeById}
+                      onGraphChange={onGraphChange}
+                      onSelect={onSelect}
+                      pathNodeIds={nextPathNodeIds}
+                    />
+                  )}
             </div>
           )
         })}
       </div>
+      {sharedMerge && (
+        <div
+          data-testid="workflow-canvas-v2-container-subgraph-merge"
+          className="flex items-center"
+        >
+          <SubgraphConnection />
+          <SubgraphBranchNode
+            edgesBySource={edgesBySource}
+            node={sharedMerge.node}
+            nodeById={nodeById}
+            onGraphChange={onGraphChange}
+            onSelect={onSelect}
+            pathNodeIds={mergePathNodeIds}
+          />
+        </div>
+      )}
     </div>
   )
 }

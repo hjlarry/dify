@@ -732,6 +732,114 @@ describe('WorkflowCanvasV2', () => {
       expect(screen.getByRole('button', { name: 'Code else' })).toBeInTheDocument()
     })
 
+    it('should render shared merge nodes once after container subgraph branches', () => {
+      const nodes = [
+        makeNode({
+          id: 'loop-1',
+          data: {
+            type: BlockEnum.Loop,
+            title: 'Loop',
+            desc: '',
+            start_node_id: 'loop-start',
+            _children: [
+              { nodeId: 'loop-start', nodeType: BlockEnum.LoopStart },
+              { nodeId: 'route', nodeType: BlockEnum.IfElse },
+              { nodeId: 'code-if', nodeType: BlockEnum.Code },
+              { nodeId: 'code-else', nodeType: BlockEnum.Code },
+              { nodeId: 'join', nodeType: BlockEnum.TemplateTransform },
+            ],
+          },
+        }),
+        makeNode({
+          id: 'loop-start',
+          parentId: 'loop-1',
+          data: { type: BlockEnum.LoopStart, title: '', desc: '', isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeNode({
+          id: 'route',
+          parentId: 'loop-1',
+          position: { x: 260, y: 0 },
+          data: {
+            type: BlockEnum.IfElse,
+            title: 'Route',
+            desc: '',
+            cases: [{ case_id: 'case-a' }],
+            isInLoop: true,
+            loop_id: 'loop-1',
+          },
+        }),
+        makeNode({
+          id: 'code-if',
+          parentId: 'loop-1',
+          position: { x: 520, y: -80 },
+          data: { type: BlockEnum.Code, title: 'Code if', desc: '', isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeNode({
+          id: 'code-else',
+          parentId: 'loop-1',
+          position: { x: 520, y: 80 },
+          data: { type: BlockEnum.Code, title: 'Code else', desc: '', isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeNode({
+          id: 'join',
+          parentId: 'loop-1',
+          position: { x: 780, y: 0 },
+          data: { type: BlockEnum.TemplateTransform, title: 'Join', desc: '', isInLoop: true, loop_id: 'loop-1' },
+        }),
+      ]
+      const edges = [
+        makeEdge({
+          id: 'loop-start-route',
+          source: 'loop-start',
+          target: 'route',
+          data: { sourceType: BlockEnum.LoopStart, targetType: BlockEnum.IfElse, isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeEdge({
+          id: 'route-code-if',
+          source: 'route',
+          sourceHandle: 'case-a',
+          target: 'code-if',
+          data: { sourceType: BlockEnum.IfElse, targetType: BlockEnum.Code, isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeEdge({
+          id: 'route-code-else',
+          source: 'route',
+          sourceHandle: 'false',
+          target: 'code-else',
+          data: { sourceType: BlockEnum.IfElse, targetType: BlockEnum.Code, isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeEdge({
+          id: 'code-if-join',
+          source: 'code-if',
+          target: 'join',
+          data: { sourceType: BlockEnum.Code, targetType: BlockEnum.TemplateTransform, isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeEdge({
+          id: 'code-else-join',
+          source: 'code-else',
+          target: 'join',
+          data: { sourceType: BlockEnum.Code, targetType: BlockEnum.TemplateTransform, isInLoop: true, loop_id: 'loop-1' },
+        }),
+      ]
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={edges}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        reactFlowProps.onNodeClick?.({} as never, nodes[0]!)
+      })
+
+      expect(screen.getByTestId('workflow-canvas-v2-container-subgraph-merge')).toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: 'Join' })).toHaveLength(1)
+    })
+
     it('should update the raw graph when visible nodes move', async () => {
       const nodes = [
         makeNode({ id: 'node-1' }),
