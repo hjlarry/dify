@@ -5,6 +5,7 @@ import * as React from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useStore as useAppStore } from '@/app/components/app/store'
+import { useNewWorkflowCanvasEnabled } from '@/app/components/workflow/canvas-v2/hooks'
 import { useEventEmitterContextContext } from '@/context/event-emitter'
 import useBreakpoints, { MediaType } from '@/hooks/use-breakpoints'
 import { usePathname } from '@/next/navigation'
@@ -24,6 +25,27 @@ const isShortcutFromInputArea = (target: EventTarget | null) => {
   return target.tagName === 'INPUT'
     || target.tagName === 'TEXTAREA'
     || target.isContentEditable
+}
+
+type WorkflowCanvasMaximizeEvent = {
+  type?: string
+  payload?: boolean
+}
+
+const readWorkflowCanvasMaximize = () => {
+  try {
+    return localStorage.getItem('workflow-canvas-maximize') === 'true'
+  }
+  catch {
+    return false
+  }
+}
+
+const isWorkflowCanvasMaximizeEvent = (value: unknown): value is WorkflowCanvasMaximizeEvent => {
+  return typeof value === 'object'
+    && value !== null
+    && 'type' in value
+    && value.type === 'workflow-canvas-maximize'
 }
 
 type IAppDetailNavProps = {
@@ -62,13 +84,13 @@ const AppDetailNav = ({
   const pathname = usePathname()
   const inWorkflowCanvas = pathname.endsWith('/workflow')
   const isPipelineCanvas = pathname.endsWith('/pipeline')
-  const workflowCanvasMaximize = localStorage.getItem('workflow-canvas-maximize') === 'true'
-  const [hideHeader, setHideHeader] = useState(workflowCanvasMaximize)
+  const [hideHeader, setHideHeader] = useState(readWorkflowCanvasMaximize)
+  const newWorkflowCanvasEnabled = useNewWorkflowCanvasEnabled()
   const { eventEmitter } = useEventEmitterContextContext()
 
-  eventEmitter?.useSubscription((v: any) => {
-    if (v?.type === 'workflow-canvas-maximize')
-      setHideHeader(v.payload)
+  eventEmitter?.useSubscription((v: unknown) => {
+    if (isWorkflowCanvasMaximizeEvent(v))
+      setHideHeader(!!v.payload)
   })
 
   useEffect(() => {
@@ -85,6 +107,9 @@ const AppDetailNav = ({
     e.preventDefault()
     handleToggle()
   }, { exactMatch: true, useCapture: true })
+
+  if (iconType === 'app' && inWorkflowCanvas && newWorkflowCanvasEnabled)
+    return null
 
   if (inWorkflowCanvas && hideHeader) {
     return (
@@ -148,10 +173,10 @@ const AppDetailNav = ({
           expand ? 'px-3 py-2' : 'p-3',
         )}
       >
-        {navigation.map((item, index) => {
+        {navigation.map((item) => {
           return (
             <NavLink
-              key={index}
+              key={item.href}
               mode={appSidebarExpand}
               iconMap={{ selected: item.selectedIcon, normal: item.icon }}
               name={item.name}

@@ -31,6 +31,9 @@ import { useStore } from '@/app/components/workflow/store'
 import { useFormatTimeFromNow } from '@/hooks/use-format-time-from-now'
 import useTheme from '@/hooks/use-theme'
 import useTimestamp from '@/hooks/use-timestamp'
+import Link from '@/next/link'
+import { useRouter } from '@/next/navigation'
+import { AppModeEnum } from '@/types/app'
 
 const CanvasStatus = memo(() => {
   const { t } = useTranslation()
@@ -72,6 +75,116 @@ const CanvasStatus = memo(() => {
 })
 
 CanvasStatus.displayName = 'CanvasStatus'
+
+const WorkflowCanvasV2Breadcrumb = memo(() => {
+  const { t } = useTranslation()
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const appDetail = useAppStore(state => state.appDetail)
+
+  const appId = appDetail?.id
+  const appName = appDetail?.name || t('menus.appDetail', { ns: 'common' })
+  const canvasLabel = t('canvasV2.topbar.canvas', { ns: 'workflow' })
+
+  const pageItems = useMemo(() => {
+    if (!appId)
+      return []
+
+    return [
+      {
+        id: 'canvas',
+        label: canvasLabel,
+        href: `/app/${appId}/workflow`,
+        iconClassName: 'i-ri-flow-chart',
+        active: true,
+      },
+      {
+        id: 'overview',
+        label: t('appMenus.overview', { ns: 'common' }),
+        href: `/app/${appId}/overview`,
+        iconClassName: 'i-ri-dashboard-2-line',
+        active: false,
+      },
+      {
+        id: 'logs',
+        label: appDetail?.mode !== AppModeEnum.WORKFLOW
+          ? t('appMenus.logAndAnn', { ns: 'common' })
+          : t('appMenus.logs', { ns: 'common' }),
+        href: `/app/${appId}/logs`,
+        iconClassName: 'i-ri-file-list-3-line',
+        active: false,
+      },
+      {
+        id: 'api-access',
+        label: t('appMenus.apiAccess', { ns: 'common' }),
+        href: `/app/${appId}/develop`,
+        iconClassName: 'i-ri-terminal-box-line',
+        active: false,
+      },
+    ]
+  }, [appDetail?.mode, appId, canvasLabel, t])
+
+  const handleNavigate = useCallback((href: string) => {
+    setOpen(false)
+    router.push(href)
+  }, [router])
+
+  return (
+    <div className="flex min-w-0 items-center gap-1 system-sm-semibold">
+      <Link
+        href="/apps"
+        className="flex shrink-0 items-center gap-1 rounded-md px-1 text-text-tertiary hover:bg-state-base-hover hover:text-text-secondary"
+      >
+        <span
+          aria-hidden
+          data-testid="workflow-canvas-v2-studio-icon"
+          className="i-ri-robot-2-line h-4 w-4"
+        />
+        {t('menus.apps', { ns: 'common' })}
+      </Link>
+      <span className="shrink-0 text-text-quaternary">/</span>
+      <span
+        className="max-w-[220px] truncate px-1 text-text-secondary"
+        title={appName}
+      >
+        {appName}
+      </span>
+      <span className="shrink-0 text-text-quaternary">/</span>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger
+          data-testid="workflow-canvas-v2-page-menu-trigger"
+          className={cn(
+            'flex h-7 shrink-0 items-center gap-0.5 rounded-lg px-1.5 text-text-primary hover:bg-state-base-hover',
+            open && 'bg-state-base-hover',
+          )}
+        >
+          <span>{canvasLabel}</span>
+          <span aria-hidden className="i-ri-arrow-down-s-line h-4 w-4 text-text-tertiary" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          placement="bottom-start"
+          sideOffset={8}
+          popupClassName="min-w-[220px]"
+        >
+          {pageItems.map(item => (
+            <DropdownMenuItem
+              key={item.id}
+              disabled={item.active}
+              className={cn('gap-x-2 px-2', item.active && 'text-text-accent-light-mode-only')}
+              onClick={() => handleNavigate(item.href)}
+            >
+              <span aria-hidden className={cn('h-4 w-4 text-text-tertiary', item.iconClassName)} />
+              <span className="system-md-regular text-text-secondary">{item.label}</span>
+              {item.active && <span aria-hidden className="ml-auto i-ri-check-line h-4 w-4 text-text-accent-light-mode-only" />}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
+})
+
+WorkflowCanvasV2Breadcrumb.displayName = 'WorkflowCanvasV2Breadcrumb'
 
 const WorkflowCanvasV2MoreMenu = memo(() => {
   const { t } = useTranslation()
@@ -143,6 +256,7 @@ const WorkflowCanvasV2MoreMenu = memo(() => {
           render={(
             <Button
               aria-label={t('operation.more', { ns: 'common' })}
+              data-testid="workflow-canvas-v2-more-menu-trigger"
               className={cn(
                 'rounded-lg border border-transparent p-2',
                 theme === 'dark' && 'border-black/5 bg-white/10 backdrop-blur-xs',
@@ -191,7 +305,6 @@ const WorkflowCanvasV2MoreMenu = memo(() => {
 WorkflowCanvasV2MoreMenu.displayName = 'WorkflowCanvasV2MoreMenu'
 
 const WorkflowCanvasV2Topbar = () => {
-  const { t } = useTranslation()
   const isChatMode = useIsChatMode()
   const {
     appDetail,
@@ -219,19 +332,13 @@ const WorkflowCanvasV2Topbar = () => {
     }
   }, [appDetail, handleClearLogAndMessageModal, isChatMode])
 
-  const appName = appDetail?.name || t('menus.appDetail', { ns: 'common' })
-
   return (
     <div
       data-testid="workflow-canvas-v2-topbar"
       className="absolute top-0 right-0 left-0 z-30 flex h-[72px] items-center justify-between border-b border-divider-subtle bg-background-default px-7"
     >
       <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-1 system-sm-semibold text-text-primary">
-          <span className="max-w-[260px] truncate">{appName}</span>
-          <span className="shrink-0 text-text-tertiary">/</span>
-          <span className="shrink-0">{t('appMenus.promptEng', { ns: 'common' })}</span>
-        </div>
+        <WorkflowCanvasV2Breadcrumb />
         <CanvasStatus />
       </div>
 

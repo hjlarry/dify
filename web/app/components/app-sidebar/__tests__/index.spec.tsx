@@ -56,6 +56,12 @@ vi.mock('@/app/components/workflow/utils', () => ({
   getKeyboardKeyCodeBySystem: () => 'ctrl',
 }))
 
+const mockUseNewWorkflowCanvasEnabled = vi.fn(() => false)
+
+vi.mock('@/app/components/workflow/canvas-v2/hooks', () => ({
+  useNewWorkflowCanvasEnabled: () => mockUseNewWorkflowCanvasEnabled(),
+}))
+
 vi.mock('../app-info', () => ({
   default: ({ expand }: { expand: boolean }) => (
     <div data-testid="app-info" data-expand={expand} />
@@ -104,9 +110,11 @@ const navigation = [
 describe('AppDetailNav', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
     mockAppSidebarExpand = 'expand'
     mockPathname = '/app/123/overview'
     mockIsHovering = true
+    mockUseNewWorkflowCanvasEnabled.mockReturnValue(false)
   })
 
   describe('Normal sidebar mode', () => {
@@ -168,6 +176,17 @@ describe('AppDetailNav', () => {
   })
 
   describe('Workflow canvas mode', () => {
+    it('should hide the app sidebar when workflow canvas v2 is enabled', () => {
+      mockPathname = '/app/123/workflow'
+      mockUseNewWorkflowCanvasEnabled.mockReturnValue(true)
+
+      const { container } = render(<AppDetailNav navigation={navigation} />)
+
+      expect(container.firstElementChild).toBeNull()
+      expect(screen.queryByTestId('app-sidebar-dropdown')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('app-info')).not.toBeInTheDocument()
+    })
+
     it('should render AppSidebarDropdown when in workflow canvas with hidden header', () => {
       mockPathname = '/app/123/workflow'
       localStorage.setItem('workflow-canvas-maximize', 'true')

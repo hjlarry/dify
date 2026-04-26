@@ -16,6 +16,7 @@ const mockOnExport = vi.hoisted(() => vi.fn())
 const mockAppInfoExportCheck = vi.hoisted(() => vi.fn())
 const mockHandleConfirmExport = vi.hoisted(() => vi.fn())
 const mockOnConfirmDelete = vi.hoisted(() => vi.fn())
+const mockRouterPush = vi.hoisted(() => vi.fn())
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -28,6 +29,7 @@ vi.mock('@/app/components/app/store', () => ({
     appDetail: {
       id: 'app-1',
       name: 'Canvas App',
+      mode: 'workflow',
     },
     setCurrentLogItem: mockSetCurrentLogItem,
     setShowMessageLogModal: mockSetShowMessageLogModal,
@@ -39,6 +41,7 @@ vi.mock('@/app/components/app-sidebar/app-info/use-app-info-actions', () => ({
     appDetail: {
       id: 'app-1',
       name: 'Canvas App',
+      mode: 'workflow',
     },
     activeModal: null,
     openModal: mockOpenModal,
@@ -77,17 +80,21 @@ vi.mock('@langgenius/dify-ui/dropdown-menu', () => {
     DropdownMenuTrigger: ({
       children,
       onClick,
+      render,
+      ...props
     }: {
       children: React.ReactNode
       onClick?: React.MouseEventHandler<HTMLElement>
-    }) => {
+      render?: React.ReactElement<Partial<Record<'data-testid', string>>>
+    } & Partial<Record<'data-testid', string>>) => {
       const { isOpen, setOpen } = useDropdownMenuContext()
       const handleClick = (e: React.MouseEvent<HTMLElement>) => {
         onClick?.(e)
         setOpen(!isOpen)
       }
+      const testId = props['data-testid'] || render?.props['data-testid'] || 'dropdown-trigger'
 
-      return <button data-testid="more-menu-trigger" onClick={handleClick}>{children}</button>
+      return <button data-testid={testId} onClick={handleClick}>{children}</button>
     },
     DropdownMenuContent: ({ children }: { children: React.ReactNode }) => {
       const { isOpen } = useDropdownMenuContext()
@@ -113,6 +120,12 @@ vi.mock('@langgenius/dify-ui/dropdown-menu', () => {
     },
   }
 })
+
+vi.mock('@/next/navigation', () => ({
+  useRouter: () => ({
+    push: mockRouterPush,
+  }),
+}))
 
 vi.mock('@/app/components/header/account-dropdown', () => ({
   default: () => <div data-testid="account-dropdown" />,
@@ -193,7 +206,7 @@ describe('WorkflowCanvasV2Topbar', () => {
     expect(screen.getByTestId('env-button')).toBeInTheDocument()
     expect(screen.getByTestId('global-variable-button')).toBeInTheDocument()
     expect(screen.getByTestId('features-trigger')).toBeInTheDocument()
-    expect(screen.getByTestId('more-menu-trigger')).toBeInTheDocument()
+    expect(screen.getByTestId('workflow-canvas-v2-more-menu-trigger')).toBeInTheDocument()
     expect(screen.getByTestId('workflow-canvas-v2-account-controls')).toBeInTheDocument()
     expect(screen.getByTestId('account-dropdown')).toBeInTheDocument()
     expect(screen.getByTestId('app-info-modals')).toBeInTheDocument()
@@ -202,12 +215,33 @@ describe('WorkflowCanvasV2Topbar', () => {
     expect(screen.queryByRole('button', { name: 'userProfile.settings' })).not.toBeInTheDocument()
   })
 
+  it('should render breadcrumb navigation and switch pages from the canvas menu', async () => {
+    const user = userEvent.setup()
+
+    render(<WorkflowCanvasV2Topbar />)
+
+    expect(screen.getByRole('link', { name: 'menus.apps' })).toHaveAttribute('href', '/apps')
+    expect(screen.getByTestId('workflow-canvas-v2-studio-icon')).toBeInTheDocument()
+    expect(screen.getByText('Canvas App')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Canvas App' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('workflow-canvas-v2-page-menu-trigger')).toHaveTextContent('canvasV2.topbar.canvas')
+
+    await user.click(screen.getByTestId('workflow-canvas-v2-page-menu-trigger'))
+    expect(screen.getAllByText('canvasV2.topbar.canvas')).toHaveLength(2)
+    expect(screen.getByText('appMenus.overview')).toBeInTheDocument()
+    expect(screen.getByText('appMenus.logs')).toBeInTheDocument()
+    expect(screen.getByText('appMenus.apiAccess')).toBeInTheDocument()
+
+    await user.click(screen.getByText('appMenus.overview'))
+    expect(mockRouterPush).toHaveBeenCalledWith('/app/app-1/overview')
+  })
+
   it('should route more menu actions to existing app and DSL handlers', async () => {
     const user = userEvent.setup()
 
     render(<WorkflowCanvasV2Topbar />)
 
-    await user.click(screen.getByTestId('more-menu-trigger'))
+    await user.click(screen.getByTestId('workflow-canvas-v2-more-menu-trigger'))
 
     expect(screen.getByText('editApp')).toBeInTheDocument()
     expect(screen.getByText('duplicate')).toBeInTheDocument()
@@ -217,15 +251,15 @@ describe('WorkflowCanvasV2Topbar', () => {
     await user.click(screen.getByText('editApp'))
     expect(mockOpenModal).toHaveBeenCalledWith('edit')
 
-    await user.click(screen.getByTestId('more-menu-trigger'))
+    await user.click(screen.getByTestId('workflow-canvas-v2-more-menu-trigger'))
     await user.click(screen.getByText('duplicate'))
     expect(mockOpenModal).toHaveBeenCalledWith('duplicate')
 
-    await user.click(screen.getByTestId('more-menu-trigger'))
+    await user.click(screen.getByTestId('workflow-canvas-v2-more-menu-trigger'))
     await user.click(screen.getByText('common.importDSL'))
     expect(mockSetShowImportDSLModal).toHaveBeenCalledWith(true)
 
-    await user.click(screen.getByTestId('more-menu-trigger'))
+    await user.click(screen.getByTestId('workflow-canvas-v2-more-menu-trigger'))
     await user.click(screen.getByText('export'))
     expect(mockWorkflowExportCheck).toHaveBeenCalledTimes(1)
   })
