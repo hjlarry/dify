@@ -10,10 +10,16 @@ export type SharedBranchMerge = {
   node: Node
 }
 
+type WorkflowT = (key: string, options?: { ns: string }) => string
+
 const CONTAINER_START_NODE_TYPES = new Set<BlockEnum>([
   BlockEnum.IterationStart,
   BlockEnum.LoopStart,
 ])
+
+export const getContainerSubgraphNodeTitle = (node: Node, t: WorkflowT) => {
+  return node.data.title || t(`blocks.${node.data.type}`, { ns: 'workflow' })
+}
 
 export const getContainerStartNodeId = (containerNode: Node) => {
   return 'start_node_id' in containerNode.data && typeof containerNode.data.start_node_id === 'string'
