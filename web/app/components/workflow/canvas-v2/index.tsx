@@ -17,6 +17,15 @@ import type {
 } from '../types'
 import type { WorkflowGraph } from './canvas-state'
 import {
+  AlertDialog,
+  AlertDialogActions,
+  AlertDialogCancelButton,
+  AlertDialogConfirmButton,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+} from '@langgenius/dify-ui/alert-dialog'
+import {
   memo,
   useCallback,
   useEffect,
@@ -24,6 +33,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useTranslation } from 'react-i18next'
 import ReactFlow, {
   applyNodeChanges,
   Background,
@@ -155,6 +165,13 @@ const getFreshGraph = (
   return currentGraph
 }
 
+const getCurrentSourceGraph = (reactflow: ReturnType<typeof useReactFlow>): WorkflowGraph => {
+  return getCanvasV2SourceGraph({
+    nodes: reactflow.getNodes() as Node[],
+    edges: reactflow.getEdges() as Edge[],
+  })
+}
+
 export type WorkflowCanvasV2Props = {
   nodes: Node[]
   edges: Edge[]
@@ -176,6 +193,7 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
   myUserId,
   onlineUsers,
 }) => {
+  const { t } = useTranslation()
   const workflowContainerRef = useRef<HTMLDivElement>(null)
   const workflowStore = useWorkflowStore()
   const reactflow = useReactFlow()
@@ -192,6 +210,8 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
   const setWorkflowCanvasWidth = useStore(s => s.setWorkflowCanvasWidth)
   const setWorkflowCanvasHeight = useStore(s => s.setWorkflowCanvasHeight)
   const setMousePosition = useStore(s => s.setMousePosition)
+  const showConfirm = useStore(s => s.showConfirm)
+  const setShowConfirm = useStore(s => s.setShowConfirm)
   const { nodesReadOnly } = useNodesReadOnly()
   const { workflowReadOnly } = useWorkflowReadOnly()
   const { handleSyncWorkflowDraft } = useNodesSyncDraft()
@@ -320,6 +340,11 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
     setGraph(nextGraph)
   }, [])
 
+  const handleConfirm = useCallback(() => {
+    showConfirm?.onConfirm()
+    setGraph(getCurrentSourceGraph(reactflow))
+  }, [reactflow, showConfirm])
+
   const handleLayout = useCallback(async () => {
     if (nodesReadOnly)
       return
@@ -363,6 +388,26 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
       onMouseMove={handleMouseMove}
     >
       <CandidateNode />
+      <AlertDialog open={!!showConfirm} onOpenChange={open => !open && setShowConfirm(undefined)}>
+        <AlertDialogContent>
+          <div className="flex flex-col gap-2 px-6 pt-6 pb-4">
+            <AlertDialogTitle className="w-full truncate title-2xl-semi-bold text-text-primary">
+              {showConfirm?.title}
+            </AlertDialogTitle>
+            {showConfirm?.desc && (
+              <AlertDialogDescription className="w-full system-md-regular wrap-break-word whitespace-pre-wrap text-text-tertiary">
+                {showConfirm.desc}
+              </AlertDialogDescription>
+            )}
+          </div>
+          <AlertDialogActions>
+            <AlertDialogCancelButton>{t('operation.cancel', { ns: 'common' })}</AlertDialogCancelButton>
+            <AlertDialogConfirmButton onClick={handleConfirm}>
+              {t('operation.confirm', { ns: 'common' })}
+            </AlertDialogConfirmButton>
+          </AlertDialogActions>
+        </AlertDialogContent>
+      </AlertDialog>
       <div
         data-testid="workflow-canvas-v2-control"
         className="pointer-events-none absolute top-0 left-0 z-10 flex w-12 items-center justify-center p-1 pl-2"

@@ -40,7 +40,9 @@ const mockWorkflowStoreSetState = vi.hoisted(() => vi.fn())
 const mockGetCanvasV2LayoutNodes = vi.hoisted(() => vi.fn())
 const mockHandleNodeAdd = vi.hoisted(() => vi.fn())
 const mockAvailableBlocks = vi.hoisted(() => ['code', 'answer'])
+const mockSetShowConfirm = vi.hoisted(() => vi.fn())
 let mockNodesReadOnly = false
+let mockShowConfirm: { title: string, desc?: string, onConfirm: () => void } | undefined
 
 type MockReactFlowProps = {
   children?: ReactNode
@@ -134,6 +136,38 @@ vi.mock('reactflow', () => ({
   }),
 }))
 
+vi.mock('@langgenius/dify-ui/alert-dialog', () => ({
+  AlertDialog: ({
+    children,
+    open,
+  }: {
+    children?: ReactNode
+    open?: boolean
+  }) => open ? <div data-testid="workflow-canvas-v2-confirm">{children}</div> : null,
+  AlertDialogActions: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  AlertDialogCancelButton: ({ children }: { children?: ReactNode }) => (
+    <button type="button">{children}</button>
+  ),
+  AlertDialogConfirmButton: ({
+    children,
+    onClick,
+  }: {
+    children?: ReactNode
+    onClick?: () => void
+  }) => (
+    <button
+      type="button"
+      data-testid="workflow-canvas-v2-confirm-submit"
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  ),
+  AlertDialogContent: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  AlertDialogDescription: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  AlertDialogTitle: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+}))
+
 vi.mock('@/context/event-emitter', () => ({
   useEventEmitterContextContext: () => ({
     eventEmitter: undefined,
@@ -222,6 +256,8 @@ vi.mock('../../store', () => ({
     setWorkflowCanvasWidth: mockSetWorkflowCanvasWidth,
     setWorkflowCanvasHeight: mockSetWorkflowCanvasHeight,
     setMousePosition: mockSetMousePosition,
+    setShowConfirm: mockSetShowConfirm,
+    showConfirm: mockShowConfirm,
   }),
   useWorkflowStore: () => ({
     getState: () => ({
@@ -297,6 +333,7 @@ describe('WorkflowCanvasV2', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockNodesReadOnly = false
+    mockShowConfirm = undefined
     mockReactFlowGetNodes.mockReturnValue([])
     mockReactFlowGetEdges.mockReturnValue([])
     mockGetCanvasV2LayoutNodes.mockImplementation(async (nodes: Node[]) => nodes)
@@ -326,6 +363,52 @@ describe('WorkflowCanvasV2', () => {
         nodesDraggable: true,
         onNodesChange: expect.any(Function),
       }))
+    })
+
+    it('should render workflow confirmation and sync the graph after confirming', async () => {
+      const loopNode = makeNode({
+        id: 'loop-1',
+        data: { type: BlockEnum.Loop, title: 'Loop', desc: '' },
+      })
+      const afterNode = makeNode({
+        id: 'after',
+        data: { type: BlockEnum.Answer, title: 'After', desc: '' },
+        position: { x: 260, y: 0 },
+      })
+      const confirm = vi.fn(() => {
+        mockReactFlowGetNodes.mockReturnValue([afterNode])
+        mockReactFlowGetEdges.mockReturnValue([])
+      })
+      mockShowConfirm = {
+        title: 'Delete loop',
+        desc: 'Delete children',
+        onConfirm: confirm,
+      }
+
+      render(
+        <WorkflowCanvasV2
+          nodes={[loopNode, afterNode]}
+          edges={[makeEdge({ id: 'loop-after', source: 'loop-1', target: 'after' })]}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      expect(screen.getByTestId('workflow-canvas-v2-confirm')).toBeInTheDocument()
+      expect(screen.getByText('Delete loop')).toBeInTheDocument()
+
+      act(() => {
+        screen.getByTestId('workflow-canvas-v2-confirm-submit').click()
+      })
+
+      expect(confirm).toHaveBeenCalledTimes(1)
+      await waitFor(() => {
+        expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+          edges: [],
+          nodes: [
+            expect.objectContaining({ id: 'after' }),
+          ],
+        }))
+      })
     })
 
     it('should render the collapsed view graph and keep raw nodes in workflow store', () => {
