@@ -14,6 +14,7 @@ import type {
   EnvironmentVariable,
   Node,
 } from '../types'
+import type { WorkflowGraph } from './canvas-state'
 import {
   memo,
   useCallback,
@@ -52,6 +53,14 @@ import {
   ControlMode,
 } from '../types'
 import { setupScrollToNodeListener } from '../utils/node-navigation'
+import {
+  getGraphNodeChanges,
+  getSelectableGraphNodeChanges,
+  isSelectNodeChange,
+  withConnectedNodeSelection,
+  withSelectedGraphNode,
+  withSelectedNodeData,
+} from './canvas-state'
 import ContainerSubgraph from './container-subgraph'
 import {
   getCanvasV2Graph,
@@ -75,11 +84,6 @@ type WorkflowDataUpdatePayload = {
   environment_variables?: EnvironmentVariable[]
 }
 
-type WorkflowGraph = {
-  nodes: Node[]
-  edges: Edge[]
-}
-
 type WorkflowDataUpdateEvent = {
   type: typeof WORKFLOW_DATA_UPDATE
   payload: WorkflowDataUpdatePayload
@@ -94,88 +98,6 @@ const isWorkflowDataUpdateEvent = (value: unknown): value is WorkflowDataUpdateE
     return false
 
   return Array.isArray(value.payload.nodes) && Array.isArray(value.payload.edges)
-}
-
-const getGraphNodeChanges = (changes: NodeChange[]) => {
-  return changes.filter(change => change.type !== 'dimensions')
-}
-
-const isSelectNodeChange = (change: NodeChange): change is Extract<NodeChange, { type: 'select' }> => {
-  return change.type === 'select'
-}
-
-const getSelectableGraphNodeChanges = (changes: NodeChange[], controlMode: unknown) => {
-  if (controlMode !== ControlMode.Comment)
-    return changes
-
-  return changes.filter(change => !isSelectNodeChange(change))
-}
-
-const withSelectedNodeData = (nodes: Node[], changes: NodeChange[]) => {
-  const selectChanges = changes.filter(isSelectNodeChange)
-  if (!selectChanges.length)
-    return nodes
-
-  const selectedChangeIds = new Set(selectChanges.filter(change => change.selected).map(change => change.id))
-
-  return nodes.map((node) => {
-    const selected = selectedChangeIds.size > 0 ? selectedChangeIds.has(node.id) : Boolean(node.selected)
-
-    if (node.data.selected === selected && node.selected === selected)
-      return node
-
-    return {
-      ...node,
-      selected,
-      data: {
-        ...node.data,
-        selected,
-      },
-    }
-  })
-}
-
-const withConnectedNodeSelection = (edges: Edge[], nodes: Node[]) => {
-  const selectedNodeIds = new Set(nodes.filter(node => node.data.selected).map(node => node.id))
-
-  return edges.map((edge) => {
-    const connectedNodeIsSelected = selectedNodeIds.has(edge.source) || selectedNodeIds.has(edge.target)
-    const edgeData = edge.data as Edge['data'] & Record<string, unknown>
-
-    if (edgeData?._connectedNodeIsSelected === connectedNodeIsSelected)
-      return edge
-
-    return {
-      ...edge,
-      data: {
-        ...edge.data,
-        _connectedNodeIsSelected: connectedNodeIsSelected,
-      } as Edge['data'],
-    }
-  })
-}
-
-const withSelectedGraphNode = (graph: WorkflowGraph, nodeId: string): WorkflowGraph => {
-  const nodes = graph.nodes.map((node) => {
-    const selected = node.id === nodeId
-
-    if (node.data.selected === selected && node.selected === selected)
-      return node
-
-    return {
-      ...node,
-      selected,
-      data: {
-        ...node.data,
-        selected,
-      },
-    } as Node
-  })
-
-  return {
-    nodes,
-    edges: withConnectedNodeSelection(graph.edges, nodes),
-  }
 }
 
 const CONTAINER_NODE_TYPES = new Set<BlockEnum>([
