@@ -427,6 +427,7 @@ describe('WorkflowCanvasV2', () => {
       })
 
       expect(screen.getByTestId('workflow-canvas-v2-container-subgraph')).toBeInTheDocument()
+      expect(screen.getByTestId('workflow-canvas-v2-container-subgraph-linear-layout')).toBeInTheDocument()
       expect(screen.getByText('Loop')).toBeInTheDocument()
       expect(screen.getByText('Code child')).toBeInTheDocument()
       expect(screen.getByTestId('workflow-canvas-v2-container-subgraph-start')).toBeInTheDocument()
@@ -719,6 +720,7 @@ describe('WorkflowCanvasV2', () => {
       })
 
       expect(screen.getByTestId('workflow-canvas-v2-container-subgraph-branch-layout')).toBeInTheDocument()
+      expect(screen.queryByTestId('workflow-canvas-v2-container-subgraph-linear-layout')).not.toBeInTheDocument()
       const branchRows = screen.getAllByTestId('workflow-canvas-v2-container-subgraph-branch')
 
       expect(branchRows).toHaveLength(2)

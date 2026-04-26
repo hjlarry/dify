@@ -10,14 +10,11 @@ import { useTranslation } from 'react-i18next'
 import { useStore } from '../store'
 import { BlockEnum } from '../types'
 import { SubgraphBranchTree } from './container-subgraph-branch-tree'
+import { SubgraphLinearFlow } from './container-subgraph-linear-flow'
 import {
-  AddBlockButton,
-  SubgraphConnection,
-  SubgraphNodeCard,
   SubgraphTitle,
 } from './container-subgraph-node'
 import {
-  findEdgeBetween,
   getContainerSubgraphNodeTitle,
   getInternalEdges,
   getSortedContainerChildren,
@@ -112,33 +109,12 @@ const ContainerSubgraph: FC<ContainerSubgraphProps> = ({
                     />
                   )
                 : (
-                    <div className="flex min-h-full min-w-max items-center p-8">
-                      {children.map((node, index) => {
-                        const nextNode = children[index + 1]
-                        const edge = nextNode ? findEdgeBetween(internalEdges, node, nextNode) : undefined
-
-                        return (
-                          <div key={node.id} className="flex items-center">
-                            <SubgraphNodeCard
-                              edge={edge}
-                              nextNode={nextNode}
-                              node={node}
-                              onGraphChange={onGraphChange}
-                              onSelect={onSelectNode}
-                            />
-                            {nextNode
-                              ? <SubgraphConnection />
-                              : (
-                                  <AddBlockButton
-                                    sourceNode={node}
-                                    onGraphChange={onGraphChange}
-                                    variant="terminal"
-                                  />
-                                )}
-                          </div>
-                        )
-                      })}
-                    </div>
+                    <SubgraphLinearFlow
+                      internalEdges={internalEdges}
+                      onGraphChange={onGraphChange}
+                      onSelect={onSelectNode}
+                      subgraphNodes={children}
+                    />
                   )
             )
           : (
