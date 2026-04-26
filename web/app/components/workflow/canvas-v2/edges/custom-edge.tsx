@@ -56,7 +56,6 @@ const CanvasV2CustomEdge = ({
   sourceY,
   targetX,
   targetY,
-  selected,
 }: EdgeProps) => {
   const { t } = useTranslation()
   const [
@@ -91,6 +90,7 @@ const CanvasV2CustomEdge = ({
     _targetRunningStatus,
   } = edgeData || {}
   const isLabelVisible = !!branchLabel
+  const isInsertTriggerVisible = !!(edgeData?._hovering || isTriggerHovered || open)
 
   const linearGradientId = useMemo(() => {
     if (
@@ -129,9 +129,6 @@ const CanvasV2CustomEdge = ({
   }, [handleNodeAdd, source, sourceHandleId, target, targetHandleId])
 
   const stroke = useMemo(() => {
-    if (selected)
-      return getEdgeColor(NodeRunningStatus.Running)
-
     if (linearGradientId)
       return `url(#${linearGradientId})`
 
@@ -139,7 +136,7 @@ const CanvasV2CustomEdge = ({
       return getEdgeColor(NodeRunningStatus.Running, sourceHandleId === ErrorHandleTypeEnum.failBranch)
 
     return getEdgeColor()
-  }, [edgeData?._connectedNodeIsHovering, linearGradientId, selected, sourceHandleId])
+  }, [edgeData?._connectedNodeIsHovering, linearGradientId, sourceHandleId])
 
   const edgeOpacity = edgeData?._dimmed ? 0.3 : (edgeData?._waitingRun ? 0.7 : 1)
   const hidden = (edgeData as CanvasV2EdgeData & Record<string, unknown> | undefined)?.[CANVAS_V2_HIDDEN_KEY] === true
@@ -172,44 +169,44 @@ const CanvasV2CustomEdge = ({
           strokeDasharray: edgeData?._isTemp ? '8 8' : undefined,
         }}
       />
-      {isLabelVisible && (
-        <EdgeLabelRenderer>
-          <div
-            className={cn(
-              // eslint-disable-next-line tailwindcss/no-unknown-classes
-              'group/edge-label nopan nodrag flex items-center gap-1 transition-opacity duration-150',
-              (edgeData?.isInIteration || edgeData?.isInLoop) && 'z-11',
-            )}
-            style={{
-              position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
-              pointerEvents: 'all',
-              opacity: edgeOpacity,
-            }}
-            onMouseEnter={() => setIsTriggerHovered(true)}
-            onMouseLeave={() => setIsTriggerHovered(false)}
-          >
+      <EdgeLabelRenderer>
+        <div
+          className={cn(
+            // eslint-disable-next-line tailwindcss/no-unknown-classes
+            'group/edge-label nopan nodrag flex items-center gap-1 transition-opacity duration-150',
+            (edgeData?.isInIteration || edgeData?.isInLoop) && 'z-11',
+          )}
+          style={{
+            position: 'absolute',
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            pointerEvents: isLabelVisible || isInsertTriggerVisible ? 'all' : 'none',
+            opacity: isLabelVisible || isInsertTriggerVisible ? edgeOpacity : 0,
+          }}
+          onMouseEnter={() => setIsTriggerHovered(true)}
+          onMouseLeave={() => setIsTriggerHovered(false)}
+        >
+          {isLabelVisible && (
             <div
               className="max-w-[160px] truncate rounded-md border-[0.5px] border-components-panel-border bg-components-panel-bg px-1.5 py-0.5 system-2xs-semibold-uppercase text-text-secondary shadow-xs"
               title={branchLabel}
             >
               {branchLabel}
             </div>
-            <BlockSelector
-              open={open}
-              onOpenChange={handleOpenChange}
-              asChild
-              onSelect={handleInsert}
-              availableBlocksTypes={intersection(availablePrevBlocks, availableNextBlocks)}
-              triggerClassName={triggerOpen => cn(
-                'transition-all hover:scale-150',
-                !triggerOpen && !isTriggerHovered && 'opacity-0',
-                !triggerOpen && 'group-hover/edge-label:opacity-100',
-              )}
-            />
-          </div>
-        </EdgeLabelRenderer>
-      )}
+          )}
+          <BlockSelector
+            open={open}
+            onOpenChange={handleOpenChange}
+            asChild
+            onSelect={handleInsert}
+            availableBlocksTypes={intersection(availablePrevBlocks, availableNextBlocks)}
+            triggerClassName={triggerOpen => cn(
+              'transition-all hover:scale-150',
+              isLabelVisible && !triggerOpen && !isInsertTriggerVisible && 'opacity-0',
+              isLabelVisible && !triggerOpen && 'group-hover/edge-label:opacity-100',
+            )}
+          />
+        </div>
+      </EdgeLabelRenderer>
     </>
   )
 }

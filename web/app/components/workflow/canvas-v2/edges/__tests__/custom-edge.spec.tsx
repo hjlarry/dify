@@ -211,7 +211,7 @@ describe('CanvasV2 CustomEdge', () => {
       expect(screen.getByText('Refund request')).toBeInTheDocument()
     })
 
-    it('should not render node insertion controls on unlabeled edges', () => {
+    it('should render middle insertion controls on unlabeled hovered edges', () => {
       sourceNodeData = {
         type: BlockEnum.Start,
         title: 'Start',
@@ -235,12 +235,59 @@ describe('CanvasV2 CustomEdge', () => {
           data={{
             sourceType: BlockEnum.Start,
             targetType: BlockEnum.Code,
+            _hovering: true,
           } as never}
         />,
       )
 
       expect(screen.queryByText('IF')).not.toBeInTheDocument()
-      expect(screen.queryByTestId('block-selector')).not.toBeInTheDocument()
+      expect(screen.getByTestId('block-selector')).toHaveTextContent(BlockEnum.LLM)
+
+      fireEvent.click(screen.getByTestId('block-selector'))
+
+      expect(mockHandleNodeAdd).toHaveBeenCalledWith(
+        {
+          nodeType: 'llm',
+          pluginDefaultValue: { provider: 'openai' },
+        },
+        {
+          prevNodeId: 'source-node',
+          prevNodeSourceHandle: 'source',
+          nextNodeId: 'target-node',
+          nextNodeTargetHandle: 'target',
+        },
+      )
+    })
+
+    it('should not turn blue when React Flow marks the edge as selected', () => {
+      sourceNodeData = {
+        type: BlockEnum.Start,
+        title: 'Start',
+        desc: '',
+      }
+
+      render(
+        <CustomEdge
+          id="edge-selected"
+          source="source-node"
+          sourceHandleId="source"
+          target="target-node"
+          targetHandleId="target"
+          sourceX={0}
+          sourceY={0}
+          sourcePosition={Position.Right}
+          targetX={100}
+          targetY={100}
+          targetPosition={Position.Left}
+          selected
+          data={{
+            sourceType: BlockEnum.Start,
+            targetType: BlockEnum.Code,
+          } as never}
+        />,
+      )
+
+      expect(screen.getByTestId('base-edge')).toHaveAttribute('data-stroke', 'var(--color-workflow-link-line-normal)')
     })
 
     it('should not render internal container edges in the main canvas', () => {

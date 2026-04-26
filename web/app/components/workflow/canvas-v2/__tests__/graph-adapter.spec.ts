@@ -11,6 +11,7 @@ import {
   CANVAS_V2_NODE_HEIGHT,
   CANVAS_V2_NODE_WIDTH,
   getCanvasV2Graph,
+  getCanvasV2SourceGraph,
 } from '../graph-adapter'
 
 type NodeFactoryInput = Omit<Partial<Node>, 'data' | 'id' | 'position' | 'type'> & Pick<Node, 'id'> & {
@@ -231,6 +232,35 @@ describe('getCanvasV2Graph', () => {
       expect((result.nodes[0]!.data as Record<string, unknown>)[CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY]).toBeUndefined()
       expect((result.nodes[1]!.data as Record<string, unknown>)[CANVAS_V2_HIDDEN_KEY]).toBeUndefined()
       expect((result.edges[0]!.data as Record<string, unknown>)[CANVAS_V2_HIDDEN_KEY]).toBeUndefined()
+    })
+
+    it('should render edges as non-focusable and keep edge selection out of the source graph', () => {
+      const selectedEdge = makeEdge({
+        id: 'start-end',
+        source: 'start',
+        target: 'end',
+        focusable: true,
+        selected: true,
+      })
+
+      const viewGraph = getCanvasV2Graph({
+        nodes: [
+          makeNode({ id: 'start', data: { type: BlockEnum.Start } }),
+          makeNode({ id: 'end', data: { type: BlockEnum.End } }),
+        ],
+        edges: [selectedEdge],
+      })
+      const sourceGraph = getCanvasV2SourceGraph({
+        nodes: viewGraph.nodes,
+        edges: viewGraph.edges,
+      })
+
+      expect(viewGraph.edges[0]).toEqual(expect.objectContaining({
+        focusable: false,
+        selected: false,
+      }))
+      expect(sourceGraph.edges[0]!.focusable).toBeUndefined()
+      expect(sourceGraph.edges[0]!.selected).toBeUndefined()
     })
   })
 })

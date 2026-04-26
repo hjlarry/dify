@@ -5,11 +5,9 @@ import type {
 import type { NodeProps as ReactFlowNodeProps } from 'reactflow'
 import type {
   CommonNodeType,
-  Edge,
   OnSelectBlock,
 } from '../../types'
 import { cn } from '@langgenius/dify-ui/cn'
-import { intersection } from 'es-toolkit/array'
 import {
   memo,
   useCallback,
@@ -20,7 +18,6 @@ import { useTranslation } from 'react-i18next'
 import {
   Handle,
   Position,
-  useStore as useReactFlowStore,
 } from 'reactflow'
 import BlockIcon from '../../block-icon'
 import BlockSelector from '../../block-selector'
@@ -123,10 +120,6 @@ const getCollapsedChildrenCount = (data: CommonNodeType) => {
 
 const isCanvasV2Hidden = (data: CommonNodeType) => {
   return (data as CommonNodeType & Record<string, unknown>)[CANVAS_V2_HIDDEN_KEY] === true
-}
-
-const isCanvasV2HiddenEdge = (edge: Edge) => {
-  return (edge.data as Edge['data'] & Record<string, unknown> | undefined)?.[CANVAS_V2_HIDDEN_KEY] === true
 }
 
 const CompactTargetHandle = ({
@@ -233,51 +226,25 @@ const CompactNodeAddButton = ({
   const { handleNodeAdd } = useNodesInteractions()
   const [open, setOpen] = useState(false)
   const isInsideContainer = Boolean(data.isInIteration || data.isInLoop)
-  const outgoingTarget = useReactFlowStore(useCallback((state) => {
-    const visibleOutgoingEdges = (state.edges as Edge[]).filter(edge => (
-      edge.source === id
-      && (edge.sourceHandle || 'source') === sourceHandleId
-      && !isCanvasV2HiddenEdge(edge)
-    ))
-
-    if (visibleOutgoingEdges.length !== 1)
-      return undefined
-
-    const edge = visibleOutgoingEdges[0]!
-    const targetNodeData = state.nodeInternals.get(edge.target)?.data as CommonNodeType | undefined
-
-    return {
-      edge,
-      targetType: targetNodeData?.type,
-    }
-  }, [id, sourceHandleId]))
   const { availableNextBlocks } = useAvailableBlocks(data.type, isInsideContainer)
-  const { availablePrevBlocks } = useAvailableBlocks(outgoingTarget?.targetType ?? BlockEnum.End, isInsideContainer)
-  const availableBlocksTypes = outgoingTarget?.targetType
-    ? intersection(availableNextBlocks, availablePrevBlocks)
-    : availableNextBlocks
-  const disabled = nodesReadOnly || availableBlocksTypes.length === 0
+  const disabled = nodesReadOnly || availableNextBlocks.length === 0
 
   const handleOpenChange = useCallback((v: boolean) => {
     setOpen(v)
   }, [])
 
   const handleSelect = useCallback<OnSelectBlock>((nodeType, pluginDefaultValue) => {
-    const edge = outgoingTarget?.edge
-
     handleNodeAdd(
       {
         nodeType,
         pluginDefaultValue,
       },
       {
-        nextNodeId: edge?.target,
-        nextNodeTargetHandle: edge?.targetHandle || 'target',
         prevNodeId: id,
-        prevNodeSourceHandle: edge?.sourceHandle || sourceHandleId,
+        prevNodeSourceHandle: sourceHandleId,
       },
     )
-  }, [handleNodeAdd, id, outgoingTarget?.edge, sourceHandleId])
+  }, [handleNodeAdd, id, sourceHandleId])
 
   const renderTrigger = useCallback((triggerOpen: boolean) => {
     return (
@@ -302,7 +269,7 @@ const CompactNodeAddButton = ({
         open={open}
         onOpenChange={handleOpenChange}
         onSelect={handleSelect}
-        availableBlocksTypes={availableBlocksTypes}
+        availableBlocksTypes={availableNextBlocks}
         popupClassName="min-w-[256px]!"
         placement="bottom"
         trigger={renderTrigger}

@@ -2,6 +2,7 @@
 
 import type { FC } from 'react'
 import type {
+  EdgeMouseHandler,
   NodeChange,
   NodeMouseHandler,
   Viewport,
@@ -104,6 +105,29 @@ const CONTAINER_NODE_TYPES = new Set<BlockEnum>([
   BlockEnum.Iteration,
   BlockEnum.Loop,
 ])
+
+const withHoveredGraphEdge = (graph: WorkflowGraph, edgeId: string, hovering: boolean): WorkflowGraph => {
+  const sourceGraph = getCanvasV2SourceGraph(graph)
+
+  return {
+    nodes: sourceGraph.nodes,
+    edges: sourceGraph.edges.map((edge) => {
+      if (edge.id !== edgeId)
+        return edge
+
+      if (edge.data?._hovering === hovering)
+        return edge
+
+      return {
+        ...edge,
+        data: {
+          ...edge.data,
+          _hovering: hovering,
+        } as Edge['data'],
+      }
+    }),
+  }
+}
 
 const getFreshGraph = (
   graph: WorkflowGraph,
@@ -280,6 +304,18 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
     setActiveContainerId(node.id)
   }, [controlMode, handleSelectGraphNode])
 
+  const handleEdgeMouseEnter = useCallback<EdgeMouseHandler>((_, edge) => {
+    setGraph((prevGraph) => {
+      return withHoveredGraphEdge(getFreshGraph(prevGraph, reactflow), edge.id, true)
+    })
+  }, [reactflow])
+
+  const handleEdgeMouseLeave = useCallback<EdgeMouseHandler>((_, edge) => {
+    setGraph((prevGraph) => {
+      return withHoveredGraphEdge(getFreshGraph(prevGraph, reactflow), edge.id, false)
+    })
+  }, [reactflow])
+
   const handleSubgraphChange = useCallback((nextGraph: WorkflowGraph) => {
     setGraph(nextGraph)
   }, [])
@@ -342,13 +378,15 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
         edges={viewGraph.edges}
         onNodesChange={handleNodesChange}
         onNodeClick={handleNodeClick}
+        onEdgeMouseEnter={handleEdgeMouseEnter}
+        onEdgeMouseLeave={handleEdgeMouseLeave}
         defaultViewport={viewport}
         multiSelectionKeyCode={null}
         deleteKeyCode={null}
         nodesDraggable={!nodesReadOnly && controlMode !== ControlMode.Comment}
         nodesConnectable={false}
         nodesFocusable={!nodesReadOnly}
-        edgesFocusable={!nodesReadOnly}
+        edgesFocusable={false}
         panOnScroll={controlMode === ControlMode.Pointer && !workflowReadOnly}
         panOnDrag={panOnDrag}
         zoomOnPinch

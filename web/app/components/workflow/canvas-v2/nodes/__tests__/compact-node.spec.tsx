@@ -3,8 +3,6 @@ import type {
   ReactNode,
 } from 'react'
 import type {
-  CommonNodeType,
-  Edge,
   OnSelectBlock,
 } from '../../../types'
 import { fireEvent, render, screen } from '@testing-library/react'
@@ -19,8 +17,6 @@ import {
 import CompactNode from '../compact-node'
 
 let mockNodesReadOnly = false
-let mockReactFlowEdges: Edge[] = []
-let mockReactFlowNodeInternals = new Map<string, { data: CommonNodeType }>()
 const mockHandleNodeAdd = vi.fn()
 const mockAvailableBlocks = [BlockEnum.Code, BlockEnum.LLM, BlockEnum.Answer]
 
@@ -47,13 +43,6 @@ vi.mock('reactflow', () => ({
     Left: 'left',
     Right: 'right',
   },
-  useStore: (selector: (state: {
-    edges: Edge[]
-    nodeInternals: Map<string, { data: CommonNodeType }>
-  }) => unknown) => selector({
-    edges: mockReactFlowEdges,
-    nodeInternals: mockReactFlowNodeInternals,
-  }),
 }))
 
 vi.mock('../../../block-icon', () => ({
@@ -126,8 +115,6 @@ describe('CompactNode', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockNodesReadOnly = false
-    mockReactFlowEdges = []
-    mockReactFlowNodeInternals = new Map()
   })
 
   // Compact canvas nodes expose structure, not configuration summaries.
@@ -151,33 +138,7 @@ describe('CompactNode', () => {
       expect(screen.getByTestId('node-control')).toBeInTheDocument()
     })
 
-    it('should insert from the node-side add button when the compact node has one next node', () => {
-      mockReactFlowEdges = [
-        {
-          id: 'edge-1',
-          source: 'node-1',
-          sourceHandle: 'source',
-          target: 'node-2',
-          targetHandle: 'target',
-          data: {
-            sourceType: BlockEnum.LLM,
-            targetType: BlockEnum.Answer,
-          },
-        } as Edge,
-      ]
-      mockReactFlowNodeInternals = new Map([
-        [
-          'node-2',
-          {
-            data: {
-              title: 'Answer',
-              desc: '',
-              type: BlockEnum.Answer,
-            } as CommonNodeType,
-          },
-        ],
-      ])
-
+    it('should add a parallel node from the node-side add button', () => {
       renderCompactNode()
 
       fireEvent.click(screen.getByTestId('workflow-canvas-v2-node-add-selector'))
@@ -188,8 +149,6 @@ describe('CompactNode', () => {
           pluginDefaultValue: undefined,
         },
         {
-          nextNodeId: 'node-2',
-          nextNodeTargetHandle: 'target',
           prevNodeId: 'node-1',
           prevNodeSourceHandle: 'source',
         },

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type {
+  EdgeMouseHandler,
   NodeChange,
   NodeMouseHandler,
 } from 'reactflow'
@@ -43,9 +44,12 @@ let mockNodesReadOnly = false
 
 type MockReactFlowProps = {
   children?: ReactNode
-  edges?: Array<{ data?: Record<string, unknown>, id: string }>
+  edges?: Array<{ data?: Record<string, unknown>, focusable?: boolean, id: string, selected?: boolean }>
+  edgesFocusable?: boolean
   nodes?: Array<{ data?: Record<string, unknown>, id: string }>
   nodesDraggable?: boolean
+  onEdgeMouseEnter?: EdgeMouseHandler
+  onEdgeMouseLeave?: EdgeMouseHandler
   onNodeClick?: NodeMouseHandler
   onNodesChange?: (changes: NodeChange[]) => void
 }
@@ -95,16 +99,22 @@ vi.mock('reactflow', () => ({
     const {
       children,
       edges,
+      edgesFocusable,
       nodes,
       nodesDraggable,
+      onEdgeMouseEnter,
+      onEdgeMouseLeave,
       onNodeClick,
       onNodesChange,
     } = props
 
     mockReactFlowProps({
       edges,
+      edgesFocusable,
       nodes,
       nodesDraggable,
+      onEdgeMouseEnter,
+      onEdgeMouseLeave,
       onNodeClick,
       onNodesChange,
     })
@@ -312,6 +322,7 @@ describe('WorkflowCanvasV2', () => {
       expect(screen.getByTestId('workflow-children')).toBeInTheDocument()
       expect(screen.getByTestId('react-flow')).toBeInTheDocument()
       expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+        edgesFocusable: false,
         nodesDraggable: true,
         onNodesChange: expect.any(Function),
       }))
@@ -372,6 +383,96 @@ describe('WorkflowCanvasV2', () => {
             id: 'internal',
           }),
           expect.objectContaining({ id: 'external' }),
+        ],
+      }))
+    })
+
+    it('should track edge hover state for middle insertion controls', () => {
+      const nodes = [
+        makeNode({ id: 'start', data: { type: BlockEnum.Start } }),
+        makeNode({ id: 'code' }),
+      ]
+      const edge = makeEdge({
+        id: 'start-code',
+        source: 'start',
+        target: 'code',
+        data: { sourceType: BlockEnum.Start, targetType: BlockEnum.Code },
+        focusable: true,
+        selected: true,
+      })
+      const currentNodes = [
+        {
+          ...nodes[0]!,
+          data: {
+            ...nodes[0]!.data,
+            height: CANVAS_V2_NODE_HEIGHT,
+            width: CANVAS_V2_NODE_WIDTH,
+          },
+          height: CANVAS_V2_NODE_HEIGHT,
+          style: {
+            height: CANVAS_V2_NODE_HEIGHT,
+            width: CANVAS_V2_NODE_WIDTH,
+          },
+          width: CANVAS_V2_NODE_WIDTH,
+        },
+        {
+          ...nodes[1]!,
+          data: {
+            ...nodes[1]!.data,
+            height: CANVAS_V2_NODE_HEIGHT,
+            width: CANVAS_V2_NODE_WIDTH,
+          },
+          height: CANVAS_V2_NODE_HEIGHT,
+          style: {
+            height: CANVAS_V2_NODE_HEIGHT,
+            width: CANVAS_V2_NODE_WIDTH,
+          },
+          width: CANVAS_V2_NODE_WIDTH,
+        },
+      ]
+
+      mockReactFlowGetNodes.mockReturnValue(currentNodes)
+      mockReactFlowGetEdges.mockReturnValue([edge])
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={[edge]}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        reactFlowProps.onEdgeMouseEnter?.({} as never, edge)
+      })
+
+      expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+        edges: [
+          expect.objectContaining({
+            data: expect.objectContaining({ _hovering: true }),
+            id: 'start-code',
+            focusable: false,
+            selected: false,
+          }),
+        ],
+      }))
+
+      const hoveredReactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        hoveredReactFlowProps.onEdgeMouseLeave?.({} as never, edge)
+      })
+
+      expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+        edges: [
+          expect.objectContaining({
+            data: expect.objectContaining({ _hovering: false }),
+            id: 'start-code',
+            focusable: false,
+            selected: false,
+          }),
         ],
       }))
     })

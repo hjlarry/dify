@@ -135,11 +135,25 @@ const withoutCanvasV2EdgeMetadata = (edge: Edge) => {
   const data = {
     ...edge.data,
   } as Edge['data'] & Record<string, unknown>
+  const {
+    selected: _selected,
+    focusable: _focusable,
+    ...edgeWithoutSelection
+  } = edge
+
   delete data[CANVAS_V2_HIDDEN_KEY]
 
   return {
-    ...edge,
+    ...edgeWithoutSelection,
     data,
+  } as Edge
+}
+
+const withCanvasV2EdgeInteractionState = (edge: Edge) => {
+  return {
+    ...edge,
+    focusable: false,
+    selected: false,
   } as Edge
 }
 
@@ -185,7 +199,7 @@ const withNodeVisibility = (node: Node, nodes: Node[], hiddenNodeIds: Set<string
 }
 
 const withEdgeVisibility = (edge: Edge, hiddenNodeIds: Set<string>) => {
-  const nextEdge = withoutCanvasV2EdgeMetadata(edge)
+  const nextEdge = withCanvasV2EdgeInteractionState(withoutCanvasV2EdgeMetadata(edge))
   if (!isCanvasV2InternalEdge(nextEdge, hiddenNodeIds))
     return nextEdge
 
