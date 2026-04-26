@@ -564,6 +564,75 @@ describe('WorkflowCanvasV2', () => {
       )
     })
 
+    it('should order container subgraph nodes by internal edges when positions are stale', () => {
+      const nodes = [
+        makeNode({
+          id: 'loop-1',
+          data: {
+            type: BlockEnum.Loop,
+            title: 'Loop',
+            desc: '',
+            start_node_id: 'loop-start',
+            _children: [
+              { nodeId: 'loop-start', nodeType: BlockEnum.LoopStart },
+              { nodeId: 'code-first', nodeType: BlockEnum.Code },
+              { nodeId: 'code-second', nodeType: BlockEnum.Code },
+            ],
+          },
+        }),
+        makeNode({
+          id: 'loop-start',
+          parentId: 'loop-1',
+          data: { type: BlockEnum.LoopStart, title: '', desc: '', isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeNode({
+          id: 'code-first',
+          parentId: 'loop-1',
+          position: { x: 520, y: 0 },
+          data: { type: BlockEnum.Code, title: 'Code first', desc: '', isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeNode({
+          id: 'code-second',
+          parentId: 'loop-1',
+          position: { x: 260, y: 0 },
+          data: { type: BlockEnum.Code, title: 'Code second', desc: '', isInLoop: true, loop_id: 'loop-1' },
+        }),
+      ]
+      const edges = [
+        makeEdge({
+          id: 'loop-start-code-first',
+          source: 'loop-start',
+          target: 'code-first',
+          data: { sourceType: BlockEnum.LoopStart, targetType: BlockEnum.Code, isInLoop: true, loop_id: 'loop-1' },
+        }),
+        makeEdge({
+          id: 'code-first-code-second',
+          source: 'code-first',
+          target: 'code-second',
+          data: { sourceType: BlockEnum.Code, targetType: BlockEnum.Code, isInLoop: true, loop_id: 'loop-1' },
+        }),
+      ]
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={edges}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        reactFlowProps.onNodeClick?.({} as never, nodes[0]!)
+      })
+
+      const subgraphNodes = screen.getAllByTestId('workflow-canvas-v2-container-subgraph-node')
+
+      expect(subgraphNodes[0]).toHaveTextContent('Code first')
+      expect(subgraphNodes[1]).toHaveTextContent('Code second')
+    })
+
     it('should update the raw graph when visible nodes move', async () => {
       const nodes = [
         makeNode({ id: 'node-1' }),

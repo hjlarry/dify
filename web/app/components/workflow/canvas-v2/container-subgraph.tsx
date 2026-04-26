@@ -81,12 +81,14 @@ const getContainerChildren = (containerNode: Node, nodes: Node[]) => {
   return [startNode, ...children]
 }
 
-const getSortedContainerChildren = (containerNode: Node, nodes: Node[]) => {
-  const startNodeId = 'start_node_id' in containerNode.data && typeof containerNode.data.start_node_id === 'string'
+const getContainerStartNodeId = (containerNode: Node) => {
+  return 'start_node_id' in containerNode.data && typeof containerNode.data.start_node_id === 'string'
     ? containerNode.data.start_node_id
     : undefined
+}
 
-  return [...getContainerChildren(containerNode, nodes)].sort((a, b) => {
+const sortContainerChildrenByPosition = (children: Node[], startNodeId?: string) => {
+  return [...children].sort((a, b) => {
     if (a.id === startNodeId)
       return -1
     if (b.id === startNodeId)
@@ -113,12 +115,86 @@ const getInternalEdges = (containerId: string, children: Node[], edges: Edge[]) 
   })
 }
 
-const findEdgeBetween = (edges: Edge[], sourceNode: Node, targetNode: Node) => {
-  return edges.find(edge => edge.source === sourceNode.id && edge.target === targetNode.id)
-}
-
 const isContainerStartNode = (node: Node) => {
   return CONTAINER_START_NODE_TYPES.has(node.data.type)
+}
+
+const getEdgeSortedContainerChildren = (children: Node[], internalEdges: Edge[], startNodeId?: string) => {
+  const nodeById = new Map(children.map(node => [node.id, node]))
+  const startNode = (startNodeId ? nodeById.get(startNodeId) : undefined)
+    ?? children.find(isContainerStartNode)
+
+  if (!startNode)
+    return []
+
+  const edgesBySource = internalEdges.reduce<Map<string, Edge[]>>((result, edge) => {
+    if (!nodeById.has(edge.source) || !nodeById.has(edge.target))
+      return result
+
+    const sourceEdges = result.get(edge.source) ?? []
+    sourceEdges.push(edge)
+    result.set(edge.source, sourceEdges)
+
+    return result
+  }, new Map())
+  const orderedNodes: Node[] = []
+  const visitedNodeIds = new Set<string>()
+  const visit = (node: Node) => {
+    if (visitedNodeIds.has(node.id))
+      return
+
+    visitedNodeIds.add(node.id)
+    orderedNodes.push(node)
+
+    const outgoingEdges = [...(edgesBySource.get(node.id) ?? [])].sort((a, b) => {
+      const aTarget = nodeById.get(a.target)
+      const bTarget = nodeById.get(b.target)
+      const sourceHandleOrder = (a.sourceHandle || 'source').localeCompare(b.sourceHandle || 'source')
+
+      if (sourceHandleOrder !== 0)
+        return sourceHandleOrder
+
+      if (!aTarget || !bTarget)
+        return 0
+
+      return aTarget.position.x - bTarget.position.x || aTarget.position.y - bTarget.position.y
+    })
+
+    outgoingEdges.forEach((edge) => {
+      const targetNode = nodeById.get(edge.target)
+      if (targetNode)
+        visit(targetNode)
+    })
+  }
+
+  visit(startNode)
+
+  return orderedNodes
+}
+
+const getSortedContainerChildren = (containerNode: Node, nodes: Node[], edges: Edge[]) => {
+  const startNodeId = getContainerStartNodeId(containerNode)
+  const children = getContainerChildren(containerNode, nodes)
+  const fallbackChildren = sortContainerChildrenByPosition(children, startNodeId)
+  const edgeSortedChildren = getEdgeSortedContainerChildren(
+    children,
+    getInternalEdges(containerNode.id, children, edges),
+    startNodeId,
+  )
+
+  if (!edgeSortedChildren.length)
+    return fallbackChildren
+
+  const edgeSortedNodeIds = new Set(edgeSortedChildren.map(node => node.id))
+
+  return [
+    ...edgeSortedChildren,
+    ...fallbackChildren.filter(node => !edgeSortedNodeIds.has(node.id)),
+  ]
+}
+
+const findEdgeBetween = (edges: Edge[], sourceNode: Node, targetNode: Node) => {
+  return edges.find(edge => edge.source === sourceNode.id && edge.target === targetNode.id)
 }
 
 const AddBlockButton: FC<AddBlockButtonProps> = ({
@@ -382,8 +458,8 @@ const ContainerSubgraph: FC<ContainerSubgraphProps> = ({
     if (!containerNode)
       return []
 
-    return getSortedContainerChildren(containerNode, nodes)
-  }, [containerNode, nodes])
+    return getSortedContainerChildren(containerNode, nodes, edges)
+  }, [containerNode, edges, nodes])
   const internalEdges = useMemo(() => getInternalEdges(containerId, children, edges), [children, containerId, edges])
 
   if (!containerNode)
