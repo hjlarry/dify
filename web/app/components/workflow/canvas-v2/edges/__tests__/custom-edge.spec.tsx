@@ -209,7 +209,7 @@ describe('CanvasV2 CustomEdge', () => {
       expect(screen.getByText('Refund request')).toBeInTheDocument()
     })
 
-    it('should keep unlabeled edges hidden until hover', () => {
+    it('should not render node insertion controls on unlabeled edges', () => {
       sourceNodeData = {
         type: BlockEnum.Start,
         title: 'Start',
@@ -238,10 +238,7 @@ describe('CanvasV2 CustomEdge', () => {
       )
 
       expect(screen.queryByText('IF')).not.toBeInTheDocument()
-      expect(screen.getByTestId('block-selector').parentElement).toHaveStyle({
-        opacity: '0',
-        pointerEvents: 'none',
-      })
+      expect(screen.queryByTestId('block-selector')).not.toBeInTheDocument()
     })
 
     it('should not render internal container edges in the main canvas', () => {

@@ -22,6 +22,10 @@ import {
   BlockEnum,
 } from '../types'
 import { getCanvasV2SourceGraph } from './graph-adapter'
+import {
+  CANVAS_V2_NODE_ADD_ICON_CLASS_NAME,
+  getCanvasV2NodeAddTriggerClassName,
+} from './nodes/node-add-trigger'
 
 type ContainerSubgraphProps = {
   containerId: string
@@ -188,14 +192,14 @@ const AddBlockButton: FC<AddBlockButtonProps> = ({
       <button
         type="button"
         data-testid="workflow-canvas-v2-container-subgraph-add"
-        className={cn(
-          'flex size-5 items-center justify-center rounded-full border border-components-button-primary-border bg-components-button-primary-bg text-text-primary-on-surface opacity-0 shadow-xs outline-hidden transition-opacity duration-150 group-hover/subgraph-node:opacity-100 hover:border-components-button-primary-border-hover hover:bg-components-button-primary-bg-hover focus-visible:ring-2 focus-visible:ring-components-input-border-hover',
-          open && 'opacity-100',
-          disabled && 'cursor-not-allowed opacity-50',
-        )}
+        className={getCanvasV2NodeAddTriggerClassName({
+          open,
+          disabled,
+          hoverClassName: 'group-hover/subgraph-node:opacity-100',
+        })}
         aria-label={t('common.addBlock', { ns: 'workflow' })}
       >
-        <span className="i-ri-add-line size-3.5" />
+        <span className={CANVAS_V2_NODE_ADD_ICON_CLASS_NAME} />
       </button>
     )
   }, [disabled, t, variant])

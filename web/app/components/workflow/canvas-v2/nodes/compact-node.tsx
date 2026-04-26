@@ -1,20 +1,34 @@
 import type { FC } from 'react'
 import type { NodeProps as ReactFlowNodeProps } from 'reactflow'
-import type { CommonNodeType } from '../../types'
+import type {
+  CommonNodeType,
+  Edge,
+  OnSelectBlock,
+} from '../../types'
 import { cn } from '@langgenius/dify-ui/cn'
-import { memo, useMemo, useState } from 'react'
+import { intersection } from 'es-toolkit/array'
+import {
+  memo,
+  useCallback,
+  useMemo,
+  useState,
+} from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Handle,
   Position,
+  useStore as useReactFlowStore,
 } from 'reactflow'
 import BlockIcon from '../../block-icon'
+import BlockSelector from '../../block-selector'
 import {
+  useAvailableBlocks,
+  useNodesInteractions,
   useNodesReadOnly,
   useToolIcon,
 } from '../../hooks'
 import NodeControl from '../../nodes/_base/components/node-control'
 import {
-  NodeSourceHandle,
   NodeTargetHandle,
 } from '../../nodes/_base/components/node-handle'
 import {
@@ -26,6 +40,10 @@ import {
   CANVAS_V2_HIDDEN_KEY,
 } from '../graph-adapter'
 import CompactNodeStatusIcon from './compact-node-status'
+import {
+  CANVAS_V2_NODE_ADD_ICON_CLASS_NAME,
+  getCanvasV2NodeAddTriggerClassName,
+} from './node-add-trigger'
 import NodeSummaryPreview from './node-summary-preview'
 
 type CompactNodeProps = ReactFlowNodeProps<CommonNodeType>
@@ -105,6 +123,10 @@ const isCanvasV2Hidden = (data: CommonNodeType) => {
   return (data as CommonNodeType & Record<string, unknown>)[CANVAS_V2_HIDDEN_KEY] === true
 }
 
+const isCanvasV2HiddenEdge = (edge: Edge) => {
+  return (edge.data as Edge['data'] & Record<string, unknown> | undefined)?.[CANVAS_V2_HIDDEN_KEY] === true
+}
+
 const CompactBranchSourceHandle = ({
   data,
   handleId,
@@ -130,6 +152,127 @@ const CompactBranchSourceHandle = ({
       )}
       isConnectable={false}
     />
+  )
+}
+
+const CompactSourceHandle = ({
+  data,
+  handleId,
+}: {
+  data: CommonNodeType
+  handleId: string
+}) => {
+  const connected = data._connectedSourceHandleIds?.includes(handleId)
+
+  return (
+    <Handle
+      id={handleId}
+      type="source"
+      position={Position.Right}
+      className={cn(
+        'z-1 h-4! w-4! rounded-none! border-none! bg-transparent! outline-hidden!',
+        'after:absolute after:top-1 after:right-1.5 after:h-2 after:w-0.5 after:bg-workflow-link-line-handle',
+        'top-1/2! -right-[9px]! -translate-y-1/2!',
+        data._runningStatus === NodeRunningStatus.Succeeded && 'after:bg-workflow-link-line-success-handle',
+        data._runningStatus === NodeRunningStatus.Failed && 'after:bg-workflow-link-line-error-handle',
+        data._runningStatus === NodeRunningStatus.Exception && 'after:bg-workflow-link-line-failure-handle',
+        !connected && 'after:opacity-0',
+      )}
+      isConnectable={false}
+    />
+  )
+}
+
+const CompactNodeAddButton = ({
+  data,
+  id,
+  sourceHandleId,
+}: {
+  data: CommonNodeType
+  id: string
+  sourceHandleId: string
+}) => {
+  const { t } = useTranslation()
+  const { nodesReadOnly } = useNodesReadOnly()
+  const { handleNodeAdd } = useNodesInteractions()
+  const [open, setOpen] = useState(false)
+  const isInsideContainer = Boolean(data.isInIteration || data.isInLoop)
+  const outgoingTarget = useReactFlowStore(useCallback((state) => {
+    const visibleOutgoingEdges = (state.edges as Edge[]).filter(edge => (
+      edge.source === id
+      && (edge.sourceHandle || 'source') === sourceHandleId
+      && !isCanvasV2HiddenEdge(edge)
+    ))
+
+    if (visibleOutgoingEdges.length !== 1)
+      return undefined
+
+    const edge = visibleOutgoingEdges[0]!
+    const targetNodeData = state.nodeInternals.get(edge.target)?.data as CommonNodeType | undefined
+
+    return {
+      edge,
+      targetType: targetNodeData?.type,
+    }
+  }, [id, sourceHandleId]))
+  const { availableNextBlocks } = useAvailableBlocks(data.type, isInsideContainer)
+  const { availablePrevBlocks } = useAvailableBlocks(outgoingTarget?.targetType ?? BlockEnum.End, isInsideContainer)
+  const availableBlocksTypes = outgoingTarget?.targetType
+    ? intersection(availableNextBlocks, availablePrevBlocks)
+    : availableNextBlocks
+  const disabled = nodesReadOnly || availableBlocksTypes.length === 0
+
+  const handleOpenChange = useCallback((v: boolean) => {
+    setOpen(v)
+  }, [])
+
+  const handleSelect = useCallback<OnSelectBlock>((nodeType, pluginDefaultValue) => {
+    const edge = outgoingTarget?.edge
+
+    handleNodeAdd(
+      {
+        nodeType,
+        pluginDefaultValue,
+      },
+      {
+        nextNodeId: edge?.target,
+        nextNodeTargetHandle: edge?.targetHandle || 'target',
+        prevNodeId: id,
+        prevNodeSourceHandle: edge?.sourceHandle || sourceHandleId,
+      },
+    )
+  }, [handleNodeAdd, id, outgoingTarget?.edge, sourceHandleId])
+
+  const renderTrigger = useCallback((triggerOpen: boolean) => {
+    return (
+      <button
+        type="button"
+        data-testid="workflow-canvas-v2-node-add"
+        className={getCanvasV2NodeAddTriggerClassName({
+          open: triggerOpen,
+          disabled,
+        })}
+        aria-label={t('common.addBlock', { ns: 'workflow' })}
+      >
+        <span className={CANVAS_V2_NODE_ADD_ICON_CLASS_NAME} />
+      </button>
+    )
+  }, [disabled, t])
+
+  return (
+    <div className="absolute top-1/2 -right-2 z-10 -translate-y-1/2">
+      <BlockSelector
+        disabled={disabled}
+        open={open}
+        onOpenChange={handleOpenChange}
+        onSelect={handleSelect}
+        availableBlocksTypes={availableBlocksTypes}
+        popupClassName="min-w-[256px]!"
+        placement="bottom"
+        trigger={renderTrigger}
+        triggerInnerClassName="inline-flex"
+      />
+    </div>
   )
 }
 
@@ -172,10 +315,8 @@ const CompactNode: FC<CompactNodeProps> = ({
         />
       )}
       {!isBranchNode && !data._isCandidate && (
-        <NodeSourceHandle
-          id={id}
+        <CompactSourceHandle
           data={data}
-          handleClassName="top-1/2! -right-[9px]! -translate-y-1/2!"
           handleId="source"
         />
       )}
@@ -186,6 +327,13 @@ const CompactNode: FC<CompactNodeProps> = ({
           handleId={handleId}
         />
       ))}
+      {!isBranchNode && !data._isCandidate && (
+        <CompactNodeAddButton
+          data={data}
+          id={id}
+          sourceHandleId="source"
+        />
+      )}
       {!displayStatus && !nodesReadOnly && !data._isCandidate && (
         <NodeControl
           id={id}

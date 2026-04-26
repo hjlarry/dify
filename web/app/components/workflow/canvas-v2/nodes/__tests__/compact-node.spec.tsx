@@ -1,4 +1,12 @@
-import type { ComponentProps } from 'react'
+import type {
+  ComponentProps,
+  ReactNode,
+} from 'react'
+import type {
+  CommonNodeType,
+  Edge,
+  OnSelectBlock,
+} from '../../../types'
 import { fireEvent, render, screen } from '@testing-library/react'
 import {
   BlockEnum,
@@ -11,6 +19,10 @@ import {
 import CompactNode from '../compact-node'
 
 let mockNodesReadOnly = false
+let mockReactFlowEdges: Edge[] = []
+let mockReactFlowNodeInternals = new Map<string, { data: CommonNodeType }>()
+const mockHandleNodeAdd = vi.fn()
+const mockAvailableBlocks = [BlockEnum.Code, BlockEnum.LLM, BlockEnum.Answer]
 
 vi.mock('reactflow', () => ({
   Handle: ({
@@ -21,8 +33,16 @@ vi.mock('reactflow', () => ({
     type: string
   }) => <div data-testid={`${type}-handle-${id}`} />,
   Position: {
+    Left: 'left',
     Right: 'right',
   },
+  useStore: (selector: (state: {
+    edges: Edge[]
+    nodeInternals: Map<string, { data: CommonNodeType }>
+  }) => unknown) => selector({
+    edges: mockReactFlowEdges,
+    nodeInternals: mockReactFlowNodeInternals,
+  }),
 }))
 
 vi.mock('../../../block-icon', () => ({
@@ -34,10 +54,39 @@ vi.mock('../../../block-icon', () => ({
 }))
 
 vi.mock('../../../hooks', () => ({
+  useAvailableBlocks: () => ({
+    availableNextBlocks: mockAvailableBlocks,
+    availablePrevBlocks: mockAvailableBlocks,
+  }),
+  useNodesInteractions: () => ({
+    handleNodeAdd: mockHandleNodeAdd,
+  }),
   useNodesReadOnly: () => ({
     nodesReadOnly: mockNodesReadOnly,
   }),
   useToolIcon: () => '',
+}))
+
+vi.mock('../../../block-selector', () => ({
+  default: ({
+    disabled,
+    onSelect,
+    trigger,
+  }: {
+    disabled?: boolean
+    onSelect: OnSelectBlock
+    trigger?: (open: boolean) => ReactNode
+  }) => (
+    <div
+      data-testid="workflow-canvas-v2-node-add-selector"
+      onClick={() => {
+        if (!disabled)
+          onSelect(BlockEnum.Code)
+      }}
+    >
+      {trigger?.(false)}
+    </div>
+  ),
 }))
 
 vi.mock('../../../nodes/_base/components/node-control', () => ({
@@ -45,11 +94,6 @@ vi.mock('../../../nodes/_base/components/node-control', () => ({
 }))
 
 vi.mock('../../../nodes/_base/components/node-handle', () => ({
-  NodeSourceHandle: ({
-    handleId,
-  }: {
-    handleId: string
-  }) => <div data-testid={`source-selector-handle-${handleId}`} />,
   NodeTargetHandle: ({
     handleId,
   }: {
@@ -77,6 +121,8 @@ describe('CompactNode', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockNodesReadOnly = false
+    mockReactFlowEdges = []
+    mockReactFlowNodeInternals = new Map()
   })
 
   // Compact canvas nodes expose structure, not configuration summaries.
@@ -89,8 +135,54 @@ describe('CompactNode', () => {
       expect(screen.getByText('Generate answer')).toBeInTheDocument()
       expect(screen.queryByText('Long prompt and configuration summary')).not.toBeInTheDocument()
       expect(screen.getByTestId('target-selector-handle-target')).toBeInTheDocument()
-      expect(screen.getByTestId('source-selector-handle-source')).toBeInTheDocument()
+      expect(screen.getByTestId('source-handle-source')).toBeInTheDocument()
+      expect(screen.getByTestId('workflow-canvas-v2-node-add')).toHaveClass('size-4')
       expect(screen.getByTestId('node-control')).toBeInTheDocument()
+    })
+
+    it('should insert from the node-side add button when the compact node has one next node', () => {
+      mockReactFlowEdges = [
+        {
+          id: 'edge-1',
+          source: 'node-1',
+          sourceHandle: 'source',
+          target: 'node-2',
+          targetHandle: 'target',
+          data: {
+            sourceType: BlockEnum.LLM,
+            targetType: BlockEnum.Answer,
+          },
+        } as Edge,
+      ]
+      mockReactFlowNodeInternals = new Map([
+        [
+          'node-2',
+          {
+            data: {
+              title: 'Answer',
+              desc: '',
+              type: BlockEnum.Answer,
+            } as CommonNodeType,
+          },
+        ],
+      ])
+
+      renderCompactNode()
+
+      fireEvent.click(screen.getByTestId('workflow-canvas-v2-node-add-selector'))
+
+      expect(mockHandleNodeAdd).toHaveBeenCalledWith(
+        {
+          nodeType: BlockEnum.Code,
+          pluginDefaultValue: undefined,
+        },
+        {
+          nextNodeId: 'node-2',
+          nextNodeTargetHandle: 'target',
+          prevNodeId: 'node-1',
+          prevNodeSourceHandle: 'source',
+        },
+      )
     })
 
     it('should show configuration summaries only after hover without resizing the node', () => {
@@ -172,7 +264,8 @@ describe('CompactNode', () => {
 
       expect(screen.getByText('Route request')).toBeInTheDocument()
       expect(screen.queryByText('Condition A equals foo')).not.toBeInTheDocument()
-      expect(screen.queryByTestId('source-selector-handle-source')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('source-handle-source')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('workflow-canvas-v2-node-add')).not.toBeInTheDocument()
       expect(screen.getByTestId('source-handle-case-a')).toBeInTheDocument()
       expect(screen.getByTestId('source-handle-case-b')).toBeInTheDocument()
       expect(screen.getByTestId('source-handle-false')).toBeInTheDocument()

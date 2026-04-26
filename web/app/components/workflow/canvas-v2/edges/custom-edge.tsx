@@ -88,7 +88,6 @@ const CanvasV2CustomEdge = ({
     _sourceRunningStatus,
     _targetRunningStatus,
   } = edgeData || {}
-  const isTriggerVisible = !!(edgeData?._hovering || isTriggerHovered || open)
   const isLabelVisible = !!branchLabel
 
   const linearGradientId = useMemo(() => {
@@ -171,43 +170,44 @@ const CanvasV2CustomEdge = ({
           strokeDasharray: edgeData?._isTemp ? '8 8' : undefined,
         }}
       />
-      <EdgeLabelRenderer>
-        <div
-          className={cn(
-            // eslint-disable-next-line tailwindcss/no-unknown-classes
-            'group/edge-label nopan nodrag flex items-center gap-1 transition-opacity duration-150',
-            (edgeData?.isInIteration || edgeData?.isInLoop) && 'z-11',
-          )}
-          style={{
-            position: 'absolute',
-            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
-            pointerEvents: isLabelVisible || isTriggerVisible ? 'all' : 'none',
-            opacity: isLabelVisible || isTriggerVisible ? edgeOpacity : 0,
-          }}
-          onMouseEnter={() => setIsTriggerHovered(true)}
-          onMouseLeave={() => setIsTriggerHovered(false)}
-        >
-          {branchLabel && (
+      {isLabelVisible && (
+        <EdgeLabelRenderer>
+          <div
+            className={cn(
+              // eslint-disable-next-line tailwindcss/no-unknown-classes
+              'group/edge-label nopan nodrag flex items-center gap-1 transition-opacity duration-150',
+              (edgeData?.isInIteration || edgeData?.isInLoop) && 'z-11',
+            )}
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              pointerEvents: 'all',
+              opacity: edgeOpacity,
+            }}
+            onMouseEnter={() => setIsTriggerHovered(true)}
+            onMouseLeave={() => setIsTriggerHovered(false)}
+          >
             <div
               className="max-w-[160px] truncate rounded-md border-[0.5px] border-components-panel-border bg-components-panel-bg px-1.5 py-0.5 system-2xs-semibold-uppercase text-text-secondary shadow-xs"
               title={branchLabel}
             >
               {branchLabel}
             </div>
-          )}
-          <BlockSelector
-            open={open}
-            onOpenChange={handleOpenChange}
-            asChild
-            onSelect={handleInsert}
-            availableBlocksTypes={intersection(availablePrevBlocks, availableNextBlocks)}
-            triggerClassName={triggerOpen => cn(
-              'transition-all hover:scale-150',
-              branchLabel && !triggerOpen && 'opacity-0 group-hover/edge-label:opacity-100',
-            )}
-          />
-        </div>
-      </EdgeLabelRenderer>
+            <BlockSelector
+              open={open}
+              onOpenChange={handleOpenChange}
+              asChild
+              onSelect={handleInsert}
+              availableBlocksTypes={intersection(availablePrevBlocks, availableNextBlocks)}
+              triggerClassName={triggerOpen => cn(
+                'transition-all hover:scale-150',
+                !triggerOpen && !isTriggerHovered && 'opacity-0',
+                !triggerOpen && 'group-hover/edge-label:opacity-100',
+              )}
+            />
+          </div>
+        </EdgeLabelRenderer>
+      )}
     </>
   )
 }
