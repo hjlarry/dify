@@ -57,14 +57,6 @@ vi.mock('../../../nodes/_base/components/node-handle', () => ({
   }) => <div data-testid={`target-selector-handle-${handleId}`} />,
 }))
 
-vi.mock('../../../nodes/_base/components/node-status-icon', () => ({
-  default: ({
-    status,
-  }: {
-    status: string
-  }) => <div data-testid={`status-${status}`} />,
-}))
-
 const renderCompactNode = (
   data: Partial<ComponentProps<typeof CompactNode>['data']> = {},
 ) => {
@@ -142,7 +134,27 @@ describe('CompactNode', () => {
         _runningStatus: NodeRunningStatus.Running,
       })
 
-      expect(screen.getByTestId('status-running')).toBeInTheDocument()
+      expect(screen.getByTestId('workflow-canvas-v2-node-status-running')).toBeInTheDocument()
+      expect(screen.queryByTestId('node-control')).not.toBeInTheDocument()
+    })
+
+    it('should keep paused status visible on compact nodes', () => {
+      renderCompactNode({
+        _runningStatus: NodeRunningStatus.Paused,
+      })
+
+      expect(screen.getByTestId('workflow-canvas-v2-compact-node')).toHaveClass('border-state-accent-solid!')
+      expect(screen.getByTestId('workflow-canvas-v2-node-status-paused')).toBeInTheDocument()
+      expect(screen.queryByTestId('node-control')).not.toBeInTheDocument()
+    })
+
+    it('should keep one-step listening status visible on compact nodes', () => {
+      renderCompactNode({
+        _singleRunningStatus: NodeRunningStatus.Listening,
+      })
+
+      expect(screen.getByTestId('workflow-canvas-v2-compact-node')).toHaveClass('border-state-accent-solid!')
+      expect(screen.getByTestId('workflow-canvas-v2-node-status-listening')).toBeInTheDocument()
       expect(screen.queryByTestId('node-control')).not.toBeInTheDocument()
     })
 

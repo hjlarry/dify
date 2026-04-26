@@ -17,7 +17,6 @@ import {
   NodeSourceHandle,
   NodeTargetHandle,
 } from '../../nodes/_base/components/node-handle'
-import NodeStatusIcon from '../../nodes/_base/components/node-status-icon'
 import {
   BlockEnum,
   NodeRunningStatus,
@@ -26,6 +25,7 @@ import {
   CANVAS_V2_COLLAPSED_CHILDREN_COUNT_KEY,
   CANVAS_V2_HIDDEN_KEY,
 } from '../graph-adapter'
+import CompactNodeStatusIcon from './compact-node-status'
 import NodeSummaryPreview from './node-summary-preview'
 
 type CompactNodeProps = ReactFlowNodeProps<CommonNodeType>
@@ -73,6 +73,26 @@ const getBranchSourceHandleIds = (data: CommonNodeType) => {
 
 const getDisplayStatus = (data: CommonNodeType) => {
   return data._singleRunningStatus || data._runningStatus
+}
+
+const getCompactNodeStatusBorderClassName = (status?: NodeRunningStatus) => {
+  if (
+    status === NodeRunningStatus.Running
+    || status === NodeRunningStatus.Listening
+    || status === NodeRunningStatus.Retry
+    || status === NodeRunningStatus.Paused
+  ) {
+    return 'border-state-accent-solid!'
+  }
+
+  if (status === NodeRunningStatus.Succeeded)
+    return 'border-state-success-solid!'
+
+  if (status === NodeRunningStatus.Failed)
+    return 'border-state-destructive-solid!'
+
+  if (status === NodeRunningStatus.Exception || status === NodeRunningStatus.Stopped)
+    return 'border-state-warning-solid!'
 }
 
 const getCollapsedChildrenCount = (data: CommonNodeType) => {
@@ -127,7 +147,7 @@ const CompactNode: FC<CompactNodeProps> = ({
   const isBranchNode = BRANCH_NODE_TYPES.has(data.type)
   const displayStatus = getDisplayStatus(data)
   const showSelectedBorder = Boolean(data.selected || data._isBundled || data._isEntering)
-  const showStatusBorder = !showSelectedBorder && displayStatus
+  const statusBorderClassName = !showSelectedBorder ? getCompactNodeStatusBorderClassName(displayStatus) : undefined
   const collapsedChildrenCount = getCollapsedChildrenCount(data)
 
   return (
@@ -135,10 +155,7 @@ const CompactNode: FC<CompactNodeProps> = ({
       className={cn(
         'group relative flex h-12 w-[200px] items-center rounded-lg border bg-workflow-block-bg px-3 shadow-xs',
         showSelectedBorder ? 'border-components-option-card-option-selected-border' : 'border-workflow-block-border',
-        showStatusBorder === NodeRunningStatus.Running && 'border-state-accent-solid!',
-        showStatusBorder === NodeRunningStatus.Succeeded && 'border-state-success-solid!',
-        showStatusBorder === NodeRunningStatus.Failed && 'border-state-destructive-solid!',
-        showStatusBorder === NodeRunningStatus.Exception && 'border-state-warning-solid!',
+        statusBorderClassName,
         data._waitingRun && 'opacity-70',
         data._isBundled && 'shadow-lg!',
       )}
@@ -196,7 +213,7 @@ const CompactNode: FC<CompactNodeProps> = ({
         </div>
       )}
       {displayStatus && (
-        <NodeStatusIcon
+        <CompactNodeStatusIcon
           status={displayStatus}
           className="ml-2 h-3.5 w-3.5"
         />
