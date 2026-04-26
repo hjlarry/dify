@@ -36,7 +36,7 @@ const getEntryWidth = (entry: ResizeObserverEntry, element: HTMLElement): number
 
 const useResizeObserver = (
   callback: (width: number) => void,
-  dependencies: React.DependencyList = [],
+  watchKey: string,
 ) => {
   const elementRef = useRef<HTMLDivElement>(null)
 
@@ -62,7 +62,16 @@ const useResizeObserver = (
     return () => {
       resizeObserver.disconnect()
     }
-  }, [stableCallback, ...dependencies])
+  }, [stableCallback])
+
+  useEffect(() => {
+    const element = elementRef.current
+    if (!element)
+      return
+
+    stableCallback(element.getBoundingClientRect().width)
+  }, [stableCallback, watchKey])
+
   return elementRef
 }
 
@@ -112,22 +121,26 @@ const Panel: FC<PanelProps> = ({
 
   const setRightPanelWidth = useStore(s => s.setRightPanelWidth)
   const setOtherPanelWidth = useStore(s => s.setOtherPanelWidth)
+  const selectedNodeId = selectedNode?.id || ''
+  const rightPanelWatchKey = `${selectedNodeId}:${showEnvPanel}:${showWorkflowVersionHistoryPanel}`
+  const otherPanelWatchKey = `${showEnvPanel}:${showWorkflowVersionHistoryPanel}`
 
   const rightPanelRef = useResizeObserver(
     setRightPanelWidth,
-    [setRightPanelWidth, selectedNode, showEnvPanel, showWorkflowVersionHistoryPanel],
+    rightPanelWatchKey,
   )
 
   const otherPanelRef = useResizeObserver(
     setOtherPanelWidth,
-    [setOtherPanelWidth, showEnvPanel, showWorkflowVersionHistoryPanel],
+    otherPanelWatchKey,
   )
 
   return (
     <div
       ref={rightPanelRef}
       tabIndex={-1}
-      className={cn('absolute top-14 right-0 bottom-1 z-10 flex outline-hidden')}
+      className={cn('absolute right-0 bottom-1 z-10 flex outline-hidden')}
+      style={{ top: 'var(--workflow-panel-top-offset, 3.5rem)' }}
       key={`${isRestoring}`}
     >
       {components?.left}

@@ -326,6 +326,14 @@ describe('WorkflowChildren', () => {
     expect(mockHandlePaneContextmenuCancel).toHaveBeenCalled()
   })
 
+  it('should allow the v2 canvas shell to replace the default workflow header', () => {
+    render(<WorkflowChildren hideHeader />)
+
+    expect(screen.getByTestId('plugin-dependency')).toBeInTheDocument()
+    expect(screen.queryByTestId('workflow-header')).not.toBeInTheDocument()
+    expect(screen.getByTestId('workflow-panel')).toBeInTheDocument()
+  })
+
   it('should react to DSL export check events by showing the confirm modal and closing it', async () => {
     const user = userEvent.setup()
 

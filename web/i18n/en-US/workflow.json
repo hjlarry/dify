@@ -131,6 +131,7 @@
   "canvasV2.summary.variable": "Variable",
   "canvasV2.summary.variables": "Variables",
   "canvasV2.summary.vision": "Vision",
+  "canvasV2.topbar.env": "ENV",
   "changeHistory.clearHistory": "Clear History",
   "changeHistory.currentState": "Current State",
   "changeHistory.edgeDelete": "Node disconnected",

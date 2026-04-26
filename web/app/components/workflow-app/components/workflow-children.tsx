@@ -2,7 +2,10 @@ import type {
   PluginDefaultValue,
   TriggerDefaultValue,
 } from '@/app/components/workflow/block-selector/types'
-import type { EnvironmentVariable } from '@/app/components/workflow/types'
+import type {
+  EnvironmentVariable,
+  Node,
+} from '@/app/components/workflow/types'
 import {
   memo,
   useCallback,
@@ -65,7 +68,31 @@ const getTriggerPluginNodeData = (
   }
 }
 
-const WorkflowChildren = () => {
+type DSLExportCheckEvent = {
+  type: typeof DSL_EXPORT_CHECK
+  payload: {
+    data: EnvironmentVariable[]
+  }
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null
+}
+
+const isDSLExportCheckEvent = (value: unknown): value is DSLExportCheckEvent => {
+  return isRecord(value)
+    && value.type === DSL_EXPORT_CHECK
+    && isRecord(value.payload)
+    && Array.isArray(value.payload.data)
+}
+
+type WorkflowChildrenProps = {
+  hideHeader?: boolean
+}
+
+const WorkflowChildren = ({
+  hideHeader,
+}: WorkflowChildrenProps) => {
   const { eventEmitter } = useEventEmitterContextContext()
   const [secretEnvList, setSecretEnvList] = useState<EnvironmentVariable[]>([])
   const showFeaturesPanel = useStore(s => s.showFeaturesPanel)
@@ -87,9 +114,9 @@ const WorkflowChildren = () => {
     handleExportDSL,
   } = useDSL()
 
-  eventEmitter?.useSubscription((v: any) => {
-    if (v.type === DSL_EXPORT_CHECK)
-      setSecretEnvList(v.payload.data as EnvironmentVariable[])
+  eventEmitter?.useSubscription((v: unknown) => {
+    if (isDSLExportCheckEvent(v))
+      setSecretEnvList(v.payload.data)
   })
 
   const autoGenerateWebhookUrl = useAutoGenerateWebhookUrl()
@@ -123,7 +150,7 @@ const WorkflowChildren = () => {
         ...baseNodeData,
         ...triggerNodeData,
         config: {
-          ...(baseNodeData as { config?: Record<string, any> }).config,
+          ...(baseNodeData as { config?: Record<string, unknown> }).config,
           ...triggerNodeData.config,
         },
       }
@@ -132,7 +159,7 @@ const WorkflowChildren = () => {
     const { newNode } = generateNewNode({
       data: {
         ...mergedNodeData,
-      } as any,
+      } as Node['data'],
       position: START_INITIAL_POSITION,
     })
 
@@ -152,7 +179,7 @@ const WorkflowChildren = () => {
         console.error('Failed to save node to draft')
       },
     })
-  }, [availableNodesMetaData, setShowOnboarding, setHasSelectedStartNode, reactFlowStore, handleSyncWorkflowDraft])
+  }, [availableNodesMetaData, autoGenerateWebhookUrl, setShowOnboarding, setHasSelectedStartNode, setShouldAutoOpenStartNodeSelector, reactFlowStore, handleSyncWorkflowDraft])
 
   return (
     <>
@@ -187,7 +214,7 @@ const WorkflowChildren = () => {
           />
         )
       }
-      <WorkflowHeader />
+      {!hideHeader && <WorkflowHeader />}
       <WorkflowPanel />
     </>
   )

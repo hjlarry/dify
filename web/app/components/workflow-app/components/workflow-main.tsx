@@ -16,6 +16,7 @@ import { FILE_EXTS } from '@/app/components/base/prompt-editor/constants'
 import { WorkflowWithInnerContext } from '@/app/components/workflow'
 import { WorkflowCanvasV2WithInnerContext } from '@/app/components/workflow/canvas-v2'
 import { useNewWorkflowCanvasEnabled } from '@/app/components/workflow/canvas-v2/hooks'
+import WorkflowCanvasV2Topbar from '@/app/components/workflow/canvas-v2/topbar'
 import { collaborationManager } from '@/app/components/workflow/collaboration/core/collaboration-manager'
 import { useCollaboration } from '@/app/components/workflow/collaboration/hooks/use-collaboration'
 import { useWorkflowUpdate } from '@/app/components/workflow/hooks/use-workflow-interactions'
@@ -336,7 +337,8 @@ const WorkflowMain = ({
               myUserId={myUserId}
               onlineUsers={onlineUsers}
             >
-              <WorkflowChildren />
+              <WorkflowCanvasV2Topbar />
+              <WorkflowChildren hideHeader />
             </WorkflowCanvasV2WithInnerContext>
           )
         : (

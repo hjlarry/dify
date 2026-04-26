@@ -219,6 +219,10 @@ vi.mock('@/app/components/workflow/canvas-v2/hooks', () => ({
   useNewWorkflowCanvasEnabled: () => mockUseNewWorkflowCanvasEnabled(),
 }))
 
+vi.mock('@/app/components/workflow/canvas-v2/topbar', () => ({
+  default: () => <div data-testid="workflow-canvas-v2-topbar">workflow-canvas-v2-topbar</div>,
+}))
+
 vi.mock('@/app/components/workflow/canvas-v2', () => ({
   WorkflowCanvasV2WithInnerContext: ({
     nodes,
@@ -297,7 +301,14 @@ vi.mock('@/app/components/workflow-app/hooks', () => ({
 }))
 
 vi.mock('../workflow-children', () => ({
-  default: () => <div data-testid="workflow-children">workflow-children</div>,
+  default: ({ hideHeader }: { hideHeader?: boolean }) => (
+    <div
+      data-testid="workflow-children"
+      data-hide-header={String(!!hideHeader)}
+    >
+      workflow-children
+    </div>
+  ),
 }))
 
 describe('WorkflowMain', () => {
@@ -356,7 +367,9 @@ describe('WorkflowMain', () => {
 
     expect(screen.getByTestId('workflow-canvas-v2')).toBeInTheDocument()
     expect(screen.queryByTestId('workflow-inner-context')).not.toBeInTheDocument()
+    expect(screen.getByTestId('workflow-canvas-v2-topbar')).toBeInTheDocument()
     expect(screen.getByTestId('workflow-children')).toBeInTheDocument()
+    expect(screen.getByTestId('workflow-children')).toHaveAttribute('data-hide-header', 'true')
     expect(capturedCanvasV2Props).toMatchObject({
       nodes,
       edges,

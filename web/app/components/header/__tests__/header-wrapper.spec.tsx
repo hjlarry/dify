@@ -2,6 +2,7 @@ import { act, render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
 import { useEventEmitterContextContext } from '@/context/event-emitter'
 import { usePathname } from '@/next/navigation'
+import { useNewWorkflowCanvasEnabled } from '../../workflow/canvas-v2/hooks'
 import HeaderWrapper from '../header-wrapper'
 
 vi.mock('@/next/navigation', () => ({
@@ -10,6 +11,10 @@ vi.mock('@/next/navigation', () => ({
 
 vi.mock('@/context/event-emitter', () => ({
   useEventEmitterContextContext: vi.fn(),
+}))
+
+vi.mock('../../workflow/canvas-v2/hooks', () => ({
+  useNewWorkflowCanvasEnabled: vi.fn(),
 }))
 
 describe('HeaderWrapper', () => {
@@ -24,6 +29,7 @@ describe('HeaderWrapper', () => {
     localStorage.clear()
     subscriptionCallback = null
     vi.mocked(usePathname).mockReturnValue('/test')
+    vi.mocked(useNewWorkflowCanvasEnabled).mockReturnValue(false)
     vi.mocked(useEventEmitterContextContext).mockReturnValue({
       eventEmitter: { useSubscription: mockUseSubscription },
     } as never)
@@ -53,6 +59,33 @@ describe('HeaderWrapper', () => {
     })
 
     expect(screen.getByText('Workflow Content')).toBeInTheDocument()
+  })
+
+  it('should hide the global header on workflow routes when canvas v2 is enabled', () => {
+    vi.mocked(usePathname).mockReturnValue('/app/app-1/workflow')
+    vi.mocked(useNewWorkflowCanvasEnabled).mockReturnValue(true)
+
+    const { container } = render(
+      <HeaderWrapper>
+        <div>Workflow Content</div>
+      </HeaderWrapper>,
+    )
+
+    expect(container.firstElementChild).toHaveClass('hidden')
+    expect(screen.getByText('Workflow Content')).toBeInTheDocument()
+  })
+
+  it('should keep the global header on non-workflow routes when canvas v2 is enabled', () => {
+    vi.mocked(usePathname).mockReturnValue('/apps')
+    vi.mocked(useNewWorkflowCanvasEnabled).mockReturnValue(true)
+
+    const { container } = render(
+      <HeaderWrapper>
+        <div>App Content</div>
+      </HeaderWrapper>,
+    )
+
+    expect(container.firstElementChild).not.toHaveClass('hidden')
   })
 
   it('should keep children mounted on pipeline routes when maximize is enabled from storage', () => {

@@ -77,8 +77,11 @@ const ContainerSubgraph: FC<ContainerSubgraphProps> = ({
   return (
     <div
       data-testid="workflow-canvas-v2-container-subgraph"
-      className="absolute top-4 bottom-4 left-4 z-20 flex min-w-[560px] flex-col overflow-hidden rounded-xl border border-effects-highlight bg-background-default shadow-lg"
-      style={{ width: `min(960px, calc(100% - ${reservedRightWidth}px))` }}
+      className="absolute bottom-4 left-4 z-20 flex min-w-[560px] flex-col overflow-hidden rounded-xl border border-effects-highlight bg-background-default shadow-lg"
+      style={{
+        top: 'calc(var(--workflow-canvas-v2-topbar-height, 72px) + 1rem)',
+        width: `min(960px, calc(100% - ${reservedRightWidth}px))`,
+      }}
     >
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-divider-subtle px-4">
         <SubgraphTitle

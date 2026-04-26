@@ -1,6 +1,9 @@
 'use client'
 
-import type { FC } from 'react'
+import type {
+  CSSProperties,
+  FC,
+} from 'react'
 import type {
   EdgeMouseHandler,
   NodeChange,
@@ -72,6 +75,9 @@ import {
   withSelectedGraphNode,
   withSelectedNodeData,
 } from './canvas-state'
+import {
+  WORKFLOW_CANVAS_V2_TOPBAR_HEIGHT,
+} from './constants'
 import ContainerSubgraph from './container-subgraph'
 import {
   getCanvasV2Graph,
@@ -216,11 +222,18 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
   const { workflowReadOnly } = useWorkflowReadOnly()
   const { handleSyncWorkflowDraft } = useNodesSyncDraft()
   const { saveStateToHistory } = useWorkflowHistory()
+  const canvasRootStyle = useMemo(() => ({
+    '--workflow-canvas-v2-topbar-height': `${WORKFLOW_CANVAS_V2_TOPBAR_HEIGHT}px`,
+    '--workflow-panel-top-offset': `${WORKFLOW_CANVAS_V2_TOPBAR_HEIGHT}px`,
+  }) as CSSProperties, [])
+  const canvasBodyStyle = useMemo(() => ({
+    top: WORKFLOW_CANVAS_V2_TOPBAR_HEIGHT,
+  }) as CSSProperties, [])
   const controlHeight = useMemo(() => {
-    if (!workflowCanvasHeight)
+    if (typeof workflowCanvasHeight !== 'number')
       return '100%'
 
-    return workflowCanvasHeight - bottomPanelHeight
+    return Math.max(workflowCanvasHeight - bottomPanelHeight - WORKFLOW_CANVAS_V2_TOPBAR_HEIGHT, 0)
   }, [bottomPanelHeight, workflowCanvasHeight])
   const viewGraph = useMemo(() => getCanvasV2Graph(graph), [graph])
 
@@ -385,6 +398,7 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
       ref={workflowContainerRef}
       data-testid="workflow-canvas-v2"
       className="relative h-full w-full min-w-[960px] overflow-hidden"
+      style={canvasRootStyle}
       onMouseMove={handleMouseMove}
     >
       <CandidateNode />
@@ -408,54 +422,60 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
           </AlertDialogActions>
         </AlertDialogContent>
       </AlertDialog>
-      <div
-        data-testid="workflow-canvas-v2-control"
-        className="pointer-events-none absolute top-0 left-0 z-10 flex w-12 items-center justify-center p-1 pl-2"
-        style={{ height: controlHeight }}
-      >
-        <Control onLayout={handleLayout} />
-      </div>
       {children}
-      <ReactFlow
-        nodeTypes={canvasV2NodeTypes}
-        edgeTypes={canvasV2EdgeTypes}
-        nodes={viewGraph.nodes}
-        edges={viewGraph.edges}
-        onNodesChange={handleNodesChange}
-        onNodeClick={handleNodeClick}
-        onEdgeMouseEnter={handleEdgeMouseEnter}
-        onEdgeMouseLeave={handleEdgeMouseLeave}
-        defaultViewport={viewport}
-        multiSelectionKeyCode={null}
-        deleteKeyCode={null}
-        nodesDraggable={!nodesReadOnly && controlMode !== ControlMode.Comment}
-        nodesConnectable={false}
-        nodesFocusable={!nodesReadOnly}
-        edgesFocusable={false}
-        panOnScroll={controlMode === ControlMode.Pointer && !workflowReadOnly}
-        panOnDrag={panOnDrag}
-        zoomOnPinch
-        zoomOnScroll
-        zoomOnDoubleClick
-        selectionKeyCode={null}
-        selectionMode={SelectionMode.Partial}
-        selectionOnDrag={false}
-        minZoom={0.25}
+      <div
+        data-testid="workflow-canvas-v2-body"
+        className="absolute inset-x-0 bottom-0"
+        style={canvasBodyStyle}
       >
-        <Background
-          gap={[14, 14]}
-          size={2}
-          className="bg-workflow-canvas-workflow-bg"
-          color="var(--color-workflow-canvas-workflow-dot-color)"
-        />
-        {showUserCursors && cursors && (
-          <UserCursors
-            cursors={cursors}
-            myUserId={myUserId || null}
-            onlineUsers={onlineUsers || []}
+        <div
+          data-testid="workflow-canvas-v2-control"
+          className="pointer-events-none absolute top-0 left-0 z-10 flex w-12 items-center justify-center p-1 pl-2"
+          style={{ height: controlHeight }}
+        >
+          <Control onLayout={handleLayout} />
+        </div>
+        <ReactFlow
+          nodeTypes={canvasV2NodeTypes}
+          edgeTypes={canvasV2EdgeTypes}
+          nodes={viewGraph.nodes}
+          edges={viewGraph.edges}
+          onNodesChange={handleNodesChange}
+          onNodeClick={handleNodeClick}
+          onEdgeMouseEnter={handleEdgeMouseEnter}
+          onEdgeMouseLeave={handleEdgeMouseLeave}
+          defaultViewport={viewport}
+          multiSelectionKeyCode={null}
+          deleteKeyCode={null}
+          nodesDraggable={!nodesReadOnly && controlMode !== ControlMode.Comment}
+          nodesConnectable={false}
+          nodesFocusable={!nodesReadOnly}
+          edgesFocusable={false}
+          panOnScroll={controlMode === ControlMode.Pointer && !workflowReadOnly}
+          panOnDrag={panOnDrag}
+          zoomOnPinch
+          zoomOnScroll
+          zoomOnDoubleClick
+          selectionKeyCode={null}
+          selectionMode={SelectionMode.Partial}
+          selectionOnDrag={false}
+          minZoom={0.25}
+        >
+          <Background
+            gap={[14, 14]}
+            size={2}
+            className="bg-workflow-canvas-workflow-bg"
+            color="var(--color-workflow-canvas-workflow-dot-color)"
           />
-        )}
-      </ReactFlow>
+          {showUserCursors && cursors && (
+            <UserCursors
+              cursors={cursors}
+              myUserId={myUserId || null}
+              onlineUsers={onlineUsers || []}
+            />
+          )}
+        </ReactFlow>
+      </div>
       {activeContainerId && (
         <ContainerSubgraph
           containerId={activeContainerId}

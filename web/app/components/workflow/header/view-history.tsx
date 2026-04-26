@@ -33,11 +33,13 @@ import { formatWorkflowRunIdentifier } from '../utils'
 
 export type ViewHistoryProps = {
   withText?: boolean
+  text?: string
   onClearLogAndMessageModal?: () => void
   historyUrl?: string
 }
 const ViewHistory = ({
   withText,
+  text,
   onClearLogAndMessageModal,
   historyUrl,
 }: ViewHistoryProps) => {
@@ -83,7 +85,7 @@ const ViewHistory = ({
                     )}
                   >
                     <span className="mr-1 i-custom-vender-line-time-clock-play h-4 w-4" />
-                    {t('common.showRunHistory', { ns: 'workflow' })}
+                    {text ?? t('common.showRunHistory', { ns: 'workflow' })}
                   </button>
                 )}
               />
