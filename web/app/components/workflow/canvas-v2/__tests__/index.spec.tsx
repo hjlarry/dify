@@ -51,9 +51,13 @@ const mockHandleNodeConnectStart = vi.hoisted(() => vi.fn())
 const mockHandleNodeConnectEnd = vi.hoisted(() => vi.fn())
 const mockHandleNodeEnter = vi.hoisted(() => vi.fn())
 const mockHandleNodeLeave = vi.hoisted(() => vi.fn())
+const mockHandleNodeContextMenu = vi.hoisted(() => vi.fn())
+const mockHandleEdgeContextMenu = vi.hoisted(() => vi.fn())
 const mockHandleSelectionStart = vi.hoisted(() => vi.fn())
 const mockHandleSelectionChange = vi.hoisted(() => vi.fn())
 const mockHandleSelectionDrag = vi.hoisted(() => vi.fn())
+const mockHandleSelectionContextMenu = vi.hoisted(() => vi.fn())
+const mockHandlePaneContextMenu = vi.hoisted(() => vi.fn())
 const mockIsValidConnection = vi.hoisted(() => vi.fn())
 const mockAvailableBlocks = vi.hoisted(() => ['code', 'answer'])
 const mockSetShowConfirm = vi.hoisted(() => vi.fn())
@@ -77,13 +81,17 @@ type MockReactFlowProps = {
   onConnectStart?: OnConnectStart
   onEdgeMouseEnter?: EdgeMouseHandler
   onEdgeMouseLeave?: EdgeMouseHandler
+  onEdgeContextMenu?: EdgeMouseHandler
   onNodeClick?: NodeMouseHandler
+  onNodeContextMenu?: NodeMouseHandler
   onNodeMouseEnter?: NodeMouseHandler
   onNodeMouseLeave?: NodeMouseHandler
   onNodesChange?: (changes: NodeChange[]) => void
   onSelectionChange?: OnSelectionChangeFunc
+  onSelectionContextMenu?: (event: ReactMouseEvent) => void
   onSelectionDrag?: (event: ReactMouseEvent, nodes: Node[]) => void
   onSelectionStart?: () => void
+  onPaneContextMenu?: (event: ReactMouseEvent) => void
   selectionOnDrag?: boolean
 }
 
@@ -143,13 +151,17 @@ vi.mock('reactflow', () => ({
       onConnectStart,
       onEdgeMouseEnter,
       onEdgeMouseLeave,
+      onEdgeContextMenu,
       onNodeClick,
+      onNodeContextMenu,
       onNodeMouseEnter,
       onNodeMouseLeave,
       onNodesChange,
       onSelectionChange,
+      onSelectionContextMenu,
       onSelectionDrag,
       onSelectionStart,
+      onPaneContextMenu,
       selectionOnDrag,
     } = props
 
@@ -166,13 +178,17 @@ vi.mock('reactflow', () => ({
       onConnectStart,
       onEdgeMouseEnter,
       onEdgeMouseLeave,
+      onEdgeContextMenu,
       onNodeClick,
+      onNodeContextMenu,
       onNodeMouseEnter,
       onNodeMouseLeave,
       onNodesChange,
       onSelectionChange,
+      onSelectionContextMenu,
       onSelectionDrag,
       onSelectionStart,
+      onPaneContextMenu,
       selectionOnDrag,
     })
     return <div data-testid="react-flow">{children}</div>
@@ -241,6 +257,22 @@ vi.mock('../../custom-connection-line', () => ({
   default: () => null,
 }))
 
+vi.mock('../../panel-contextmenu', () => ({
+  default: () => <div data-testid="panel-contextmenu" />,
+}))
+
+vi.mock('../../node-contextmenu', () => ({
+  default: () => <div data-testid="node-contextmenu" />,
+}))
+
+vi.mock('../../edge-contextmenu', () => ({
+  default: () => <div data-testid="edge-contextmenu" />,
+}))
+
+vi.mock('../../selection-contextmenu', () => ({
+  default: () => <div data-testid="selection-contextmenu" />,
+}))
+
 vi.mock('../../hooks', () => ({
   useAvailableBlocks: () => ({
     availableNextBlocks: mockAvailableBlocks,
@@ -253,6 +285,10 @@ vi.mock('../../hooks', () => ({
     handleNodeConnectEnd: mockHandleNodeConnectEnd,
     handleNodeEnter: mockHandleNodeEnter,
     handleNodeLeave: mockHandleNodeLeave,
+    handleNodeContextMenu: mockHandleNodeContextMenu,
+  }),
+  useEdgesInteractions: () => ({
+    handleEdgeContextMenu: mockHandleEdgeContextMenu,
   }),
   useNodesSyncDraft: () => ({
     handleSyncWorkflowDraft: mockHandleSyncWorkflowDraft,
@@ -261,6 +297,10 @@ vi.mock('../../hooks', () => ({
     handleSelectionStart: mockHandleSelectionStart,
     handleSelectionChange: mockHandleSelectionChange,
     handleSelectionDrag: mockHandleSelectionDrag,
+    handleSelectionContextMenu: mockHandleSelectionContextMenu,
+  }),
+  usePanelInteractions: () => ({
+    handlePaneContextMenu: mockHandlePaneContextMenu,
   }),
   useWorkflow: () => ({
     isValidConnection: mockIsValidConnection,
@@ -458,6 +498,10 @@ describe('WorkflowCanvasV2', () => {
 
       expect(screen.getByTestId('workflow-canvas-v2')).toBeInTheDocument()
       expect(screen.getByTestId('candidate-node')).toBeInTheDocument()
+      expect(screen.getByTestId('panel-contextmenu')).toBeInTheDocument()
+      expect(screen.getByTestId('node-contextmenu')).toBeInTheDocument()
+      expect(screen.getByTestId('edge-contextmenu')).toBeInTheDocument()
+      expect(screen.getByTestId('selection-contextmenu')).toBeInTheDocument()
       expect(screen.getByTestId('workflow-canvas-v2-control')).toBeInTheDocument()
       expect(screen.getByTestId('workflow-control')).toBeInTheDocument()
       expect(screen.getByTestId('workflow-canvas-v2-zoom-controls')).toBeInTheDocument()
@@ -478,10 +522,14 @@ describe('WorkflowCanvasV2', () => {
         onConnect: expect.any(Function),
         onConnectEnd: expect.any(Function),
         onConnectStart: expect.any(Function),
+        onEdgeContextMenu: expect.any(Function),
+        onNodeContextMenu: expect.any(Function),
         onNodeMouseEnter: expect.any(Function),
         onNodeMouseLeave: expect.any(Function),
         onNodesChange: expect.any(Function),
+        onPaneContextMenu: expect.any(Function),
         onSelectionChange: expect.any(Function),
+        onSelectionContextMenu: expect.any(Function),
         onSelectionDrag: expect.any(Function),
         onSelectionStart: expect.any(Function),
         selectionOnDrag: true,
@@ -803,6 +851,129 @@ describe('WorkflowCanvasV2', () => {
           ],
         }))
       })
+    })
+
+    it('should delegate node context menu and sync selection from the workflow store', async () => {
+      const nodes = [
+        makeNode({ id: 'code-1' }),
+        makeNode({ id: 'code-2', position: { x: 260, y: 0 } }),
+      ]
+      const selectedNodes = nodes.map(node => ({
+        ...node,
+        data: {
+          ...node.data,
+          selected: node.id === 'code-2',
+        },
+      }))
+      mockHandleNodeContextMenu.mockImplementation(() => {
+        mockReactFlowGetNodes.mockReturnValue(selectedNodes)
+        mockReactFlowGetEdges.mockReturnValue([])
+      })
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={[]}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        reactFlowProps.onNodeContextMenu?.({} as never, nodes[1]!)
+      })
+
+      expect(mockHandleNodeContextMenu).toHaveBeenCalledWith({}, nodes[1])
+      await waitFor(() => {
+        expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+          nodes: [
+            expect.objectContaining({
+              data: expect.objectContaining({ selected: false }),
+              id: 'code-1',
+            }),
+            expect.objectContaining({
+              data: expect.objectContaining({ selected: true }),
+              id: 'code-2',
+            }),
+          ],
+        }))
+      })
+    })
+
+    it('should delegate edge context menu and sync cleared node selection from the workflow store', async () => {
+      const selectedNode = makeNode({
+        id: 'code-1',
+        data: { selected: true },
+      })
+      const nextNode = {
+        ...selectedNode,
+        data: {
+          ...selectedNode.data,
+          selected: false,
+        },
+      }
+      const edge = makeEdge({
+        id: 'code-1-code-1',
+        source: 'code-1',
+        target: 'code-1',
+      })
+      mockHandleEdgeContextMenu.mockImplementation(() => {
+        mockReactFlowGetNodes.mockReturnValue([nextNode])
+        mockReactFlowGetEdges.mockReturnValue([edge])
+      })
+
+      render(
+        <WorkflowCanvasV2
+          nodes={[selectedNode]}
+          edges={[edge]}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+
+      act(() => {
+        reactFlowProps.onEdgeContextMenu?.({} as never, edge)
+      })
+
+      expect(mockHandleEdgeContextMenu).toHaveBeenCalledWith({}, edge)
+      await waitFor(() => {
+        expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+          nodes: [
+            expect.objectContaining({
+              data: expect.objectContaining({ selected: false }),
+              id: 'code-1',
+            }),
+          ],
+        }))
+      })
+    })
+
+    it('should delegate pane and selection context menus to legacy interactions', () => {
+      const nodes = [
+        makeNode({ id: 'code-1' }),
+      ]
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={[]}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+      const paneEvent = { clientX: 10, clientY: 20 } as ReactMouseEvent
+      const selectionEvent = { clientX: 30, clientY: 40 } as ReactMouseEvent
+
+      act(() => {
+        reactFlowProps.onPaneContextMenu?.(paneEvent)
+        reactFlowProps.onSelectionContextMenu?.(selectionEvent)
+      })
+
+      expect(mockHandlePaneContextMenu).toHaveBeenCalledWith(paneEvent)
+      expect(mockHandleSelectionContextMenu).toHaveBeenCalledWith(selectionEvent)
     })
 
     it('should select the container and open its subgraph when clicking a loop node', () => {

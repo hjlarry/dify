@@ -55,10 +55,13 @@ import {
   WORKFLOW_DATA_UPDATE,
 } from '../constants'
 import CustomConnectionLine from '../custom-connection-line'
+import EdgeContextmenu from '../edge-contextmenu'
 import {
+  useEdgesInteractions,
   useNodesInteractions,
   useNodesReadOnly,
   useNodesSyncDraft,
+  usePanelInteractions,
   useSelectionInteractions,
   useWorkflow,
   useWorkflowHistory,
@@ -66,8 +69,11 @@ import {
   WorkflowHistoryEvent,
 } from '../hooks'
 import { HooksStoreContextProvider } from '../hooks-store'
+import NodeContextmenu from '../node-contextmenu'
 import Control from '../operator/control'
 import ZoomInOut from '../operator/zoom-in-out'
+import PanelContextmenu from '../panel-contextmenu'
+import SelectionContextmenu from '../selection-contextmenu'
 import {
   useStore,
   useWorkflowStore,
@@ -244,12 +250,20 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
     handleNodeConnectEnd,
     handleNodeEnter,
     handleNodeLeave,
+    handleNodeContextMenu,
   } = useNodesInteractions()
+  const {
+    handleEdgeContextMenu,
+  } = useEdgesInteractions()
   const {
     handleSelectionStart,
     handleSelectionChange,
     handleSelectionDrag,
+    handleSelectionContextMenu,
   } = useSelectionInteractions()
+  const {
+    handlePaneContextMenu,
+  } = usePanelInteractions()
   const {
     isValidConnection,
   } = useWorkflow()
@@ -435,6 +449,24 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
     handleGraphChangeFromReactFlow()
   }, [handleGraphChangeFromReactFlow, handleSelectionDrag])
 
+  const handleCanvasNodeContextMenu = useCallback<NodeMouseHandler>((event, node) => {
+    handleNodeContextMenu(event, node)
+    handleGraphChangeFromReactFlow()
+  }, [handleGraphChangeFromReactFlow, handleNodeContextMenu])
+
+  const handleCanvasEdgeContextMenu = useCallback<EdgeMouseHandler>((event, edge) => {
+    handleEdgeContextMenu(event, edge)
+    handleGraphChangeFromReactFlow()
+  }, [handleEdgeContextMenu, handleGraphChangeFromReactFlow])
+
+  const handleCanvasPaneContextMenu = useCallback((event: ReactMouseEvent) => {
+    handlePaneContextMenu(event)
+  }, [handlePaneContextMenu])
+
+  const handleCanvasSelectionContextMenu = useCallback((event: ReactMouseEvent) => {
+    handleSelectionContextMenu(event)
+  }, [handleSelectionContextMenu])
+
   const handleLayout = useCallback(async () => {
     if (nodesReadOnly)
       return
@@ -492,6 +524,10 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
       onMouseMove={handleMouseMove}
     >
       <CandidateNode />
+      <PanelContextmenu />
+      <NodeContextmenu />
+      <EdgeContextmenu />
+      <SelectionContextmenu />
       <AlertDialog open={!!showConfirm} onOpenChange={open => !open && setShowConfirm(undefined)}>
         <AlertDialogContent>
           <div className="flex flex-col gap-2 px-6 pt-6 pb-4">
@@ -548,14 +584,18 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
           onNodeClick={handleNodeClick}
           onNodeMouseEnter={handleNodeMouseEnter}
           onNodeMouseLeave={handleNodeMouseLeave}
+          onNodeContextMenu={handleCanvasNodeContextMenu}
           onConnect={handleConnect}
           onConnectStart={handleConnectStart}
           onConnectEnd={handleConnectEnd}
           onEdgeMouseEnter={handleEdgeMouseEnter}
           onEdgeMouseLeave={handleEdgeMouseLeave}
+          onEdgeContextMenu={handleCanvasEdgeContextMenu}
           onSelectionStart={handleCanvasSelectionStart}
           onSelectionChange={handleCanvasSelectionChange}
           onSelectionDrag={handleCanvasSelectionDrag}
+          onPaneContextMenu={handleCanvasPaneContextMenu}
+          onSelectionContextMenu={handleCanvasSelectionContextMenu}
           connectionLineComponent={CustomConnectionLine}
           defaultViewport={viewport}
           multiSelectionKeyCode={null}
