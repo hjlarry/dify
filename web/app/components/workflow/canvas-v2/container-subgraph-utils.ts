@@ -91,9 +91,11 @@ export const getInternalEdges = (containerId: string, children: Node[], edges: E
     if (!childIds.has(edge.source) || !childIds.has(edge.target))
       return false
 
-    return edge.data?.iteration_id === containerId
-      || edge.data?.loop_id === containerId
-      || edge.data?.isInIteration
+    const explicitContainerId = edge.data?.iteration_id ?? edge.data?.loop_id
+    if (typeof explicitContainerId === 'string')
+      return explicitContainerId === containerId
+
+    return edge.data?.isInIteration
       || edge.data?.isInLoop
       || children.some(node => node.parentId === containerId)
   })
