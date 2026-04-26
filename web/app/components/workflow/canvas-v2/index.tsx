@@ -91,6 +91,9 @@ import {
   canvasV2EdgeTypes,
   canvasV2NodeTypes,
 } from './node-types'
+import {
+  useCanvasV2Shortcuts,
+} from './shortcuts'
 
 type WorkflowDataUpdatePayload = {
   nodes: Node[]
@@ -362,6 +365,13 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
     setGraph(getCurrentSourceGraph(reactflow))
   }, [reactflow, showConfirm])
 
+  const handleGraphChangeFromReactFlow = useCallback(() => {
+    const nextGraph = getCurrentSourceGraph(reactflow)
+
+    workflowStore.getState().setNodes(nextGraph.nodes)
+    setGraph(nextGraph)
+  }, [reactflow, workflowStore])
+
   const handleLayout = useCallback(async () => {
     if (nodesReadOnly)
       return
@@ -403,6 +413,11 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
   const handleToggleUserComments = useCallback(() => {
     setShowUserComments(!showUserComments)
   }, [setShowUserComments, showUserComments])
+
+  useCanvasV2Shortcuts({
+    handleLayout,
+    onGraphChange: handleGraphChangeFromReactFlow,
+  })
 
   return (
     <div

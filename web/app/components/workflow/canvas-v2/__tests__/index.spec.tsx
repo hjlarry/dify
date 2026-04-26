@@ -43,6 +43,7 @@ const mockAvailableBlocks = vi.hoisted(() => ['code', 'answer'])
 const mockSetShowConfirm = vi.hoisted(() => vi.fn())
 const mockSetShowUserCursors = vi.hoisted(() => vi.fn())
 const mockSetShowUserComments = vi.hoisted(() => vi.fn())
+const mockUseCanvasV2Shortcuts = vi.hoisted(() => vi.fn())
 let mockNodesReadOnly = false
 let mockShowConfirm: { title: string, desc?: string, onConfirm: () => void } | undefined
 
@@ -274,6 +275,10 @@ vi.mock('../layout/elk-layout', () => ({
   getCanvasV2LayoutNodes: (...args: unknown[]) => mockGetCanvasV2LayoutNodes(...args),
 }))
 
+vi.mock('../shortcuts', () => ({
+  useCanvasV2Shortcuts: (...args: unknown[]) => mockUseCanvasV2Shortcuts(...args),
+}))
+
 vi.mock('../../store', () => ({
   useStore: (selector: (state: Record<string, unknown>) => unknown) => selector({
     controlMode: 'pointer',
@@ -391,6 +396,10 @@ describe('WorkflowCanvasV2', () => {
       expect(screen.getByTestId('workflow-canvas-v2-zoom-control-inner')).toHaveAttribute('data-show-mini-map-option', 'false')
       expect(screen.getByTestId('workflow-children')).toBeInTheDocument()
       expect(screen.getByTestId('react-flow')).toBeInTheDocument()
+      expect(mockUseCanvasV2Shortcuts).toHaveBeenCalledWith(expect.objectContaining({
+        handleLayout: expect.any(Function),
+        onGraphChange: expect.any(Function),
+      }))
       expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
         edgesFocusable: false,
         nodesDraggable: true,
