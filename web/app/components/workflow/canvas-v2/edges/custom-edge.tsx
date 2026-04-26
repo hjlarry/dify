@@ -43,6 +43,8 @@ type CanvasV2EdgeData = Edge['data'] & {
   _dimmed?: boolean
 }
 
+const CANVAS_V2_EDGE_BORDER_RADIUS = 12
+
 const CanvasV2CustomEdge = ({
   id,
   data,
@@ -68,7 +70,7 @@ const CanvasV2CustomEdge = ({
     targetX,
     targetY,
     targetPosition: Position.Left,
-    borderRadius: 0,
+    borderRadius: CANVAS_V2_EDGE_BORDER_RADIUS,
   })
   const [open, setOpen] = useState(false)
   const [isTriggerHovered, setIsTriggerHovered] = useState(false)

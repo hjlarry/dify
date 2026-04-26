@@ -143,7 +143,7 @@ describe('CanvasV2 CustomEdge', () => {
       expect(screen.getByTestId('base-edge')).toHaveAttribute('data-stroke', 'var(--color-workflow-link-line-normal)')
       expect(screen.getByTestId('base-edge')).toHaveAttribute('data-path', 'M 0 0 H 24 V 48')
       expect(mockGetSmoothStepPath).toHaveBeenCalledWith(expect.objectContaining({
-        borderRadius: 0,
+        borderRadius: 12,
         sourceX: 100,
         sourceY: 120,
         sourcePosition: Position.Right,
