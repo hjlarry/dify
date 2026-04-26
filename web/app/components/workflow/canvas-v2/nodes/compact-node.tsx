@@ -1,4 +1,7 @@
-import type { FC } from 'react'
+import type {
+  FC,
+  MouseEvent,
+} from 'react'
 import type { NodeProps as ReactFlowNodeProps } from 'reactflow'
 import type {
   CommonNodeType,
@@ -29,9 +32,6 @@ import {
 } from '../../hooks'
 import NodeControl from '../../nodes/_base/components/node-control'
 import {
-  NodeTargetHandle,
-} from '../../nodes/_base/components/node-handle'
-import {
   BlockEnum,
   NodeRunningStatus,
 } from '../../types'
@@ -53,6 +53,8 @@ const BRANCH_NODE_TYPES = new Set<BlockEnum>([
   BlockEnum.QuestionClassifier,
   BlockEnum.HumanInput,
 ])
+
+const COMPACT_HANDLE_CLASS_NAME = 'z-1 h-4! w-4! rounded-none! border-none! bg-transparent! opacity-0! outline-hidden!'
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null
@@ -127,56 +129,90 @@ const isCanvasV2HiddenEdge = (edge: Edge) => {
   return (edge.data as Edge['data'] & Record<string, unknown> | undefined)?.[CANVAS_V2_HIDDEN_KEY] === true
 }
 
-const CompactBranchSourceHandle = ({
+const CompactTargetHandle = ({
   data,
   handleId,
+  id,
 }: {
   data: CommonNodeType
   handleId: string
+  id: string
 }) => {
-  const connected = data._connectedSourceHandleIds?.includes(handleId)
+  const { handleNodeAdd } = useNodesInteractions()
+  const { nodesReadOnly } = useNodesReadOnly()
+  const [open, setOpen] = useState(false)
+  const connected = data._connectedTargetHandleIds?.includes(handleId)
+  const { availablePrevBlocks } = useAvailableBlocks(data.type, data.isInIteration || data.isInLoop)
+  const isConnectable = availablePrevBlocks.length > 0
+
+  const handleOpenChange = useCallback((v: boolean) => {
+    setOpen(v)
+  }, [])
+
+  const handleHandleClick = useCallback((event: MouseEvent) => {
+    event.stopPropagation()
+    if (!connected && isConnectable && !nodesReadOnly)
+      setOpen(v => !v)
+  }, [connected, isConnectable, nodesReadOnly])
+
+  const handleSelect = useCallback<OnSelectBlock>((nodeType, pluginDefaultValue) => {
+    handleNodeAdd(
+      {
+        nodeType,
+        pluginDefaultValue,
+      },
+      {
+        nextNodeId: id,
+        nextNodeTargetHandle: handleId,
+      },
+    )
+  }, [handleNodeAdd, handleId, id])
 
   return (
     <Handle
       id={handleId}
-      type="source"
-      position={Position.Right}
+      type="target"
+      position={Position.Left}
       className={cn(
-        'z-1 h-4! w-4! rounded-none! border-none! bg-transparent! outline-hidden!',
-        'after:absolute after:top-1 after:right-1.5 after:h-2 after:w-0.5 after:bg-workflow-link-line-handle',
-        data._runningStatus === NodeRunningStatus.Succeeded && 'after:bg-workflow-link-line-success-handle',
-        data._runningStatus === NodeRunningStatus.Failed && 'after:bg-workflow-link-line-error-handle',
-        data._runningStatus === NodeRunningStatus.Exception && 'after:bg-workflow-link-line-failure-handle',
-        !connected && 'after:opacity-0',
-        'top-1/2! -right-[9px]! -translate-y-1/2!',
+        COMPACT_HANDLE_CLASS_NAME,
+        'top-1/2! left-0!',
       )}
-      isConnectable={false}
-    />
+      isConnectable={isConnectable}
+      onClick={handleHandleClick}
+    >
+      {!connected && isConnectable && !nodesReadOnly && (
+        <BlockSelector
+          open={open}
+          onOpenChange={handleOpenChange}
+          onSelect={handleSelect}
+          asChild
+          placement="left"
+          triggerClassName={triggerOpen => cn(
+            'pointer-events-none absolute top-0 left-0 opacity-0 transition-opacity duration-150',
+            'group-hover:opacity-100',
+            data.selected && 'opacity-100',
+            triggerOpen && 'opacity-100',
+          )}
+          availableBlocksTypes={availablePrevBlocks}
+        />
+      )}
+    </Handle>
   )
 }
 
 const CompactSourceHandle = ({
-  data,
   handleId,
 }: {
-  data: CommonNodeType
   handleId: string
 }) => {
-  const connected = data._connectedSourceHandleIds?.includes(handleId)
-
   return (
     <Handle
       id={handleId}
       type="source"
       position={Position.Right}
       className={cn(
-        'z-1 h-4! w-4! rounded-none! border-none! bg-transparent! outline-hidden!',
-        'after:absolute after:top-1 after:right-1.5 after:h-2 after:w-0.5 after:bg-workflow-link-line-handle',
-        'top-1/2! -right-[9px]! -translate-y-1/2!',
-        data._runningStatus === NodeRunningStatus.Succeeded && 'after:bg-workflow-link-line-success-handle',
-        data._runningStatus === NodeRunningStatus.Failed && 'after:bg-workflow-link-line-error-handle',
-        data._runningStatus === NodeRunningStatus.Exception && 'after:bg-workflow-link-line-failure-handle',
-        !connected && 'after:opacity-0',
+        COMPACT_HANDLE_CLASS_NAME,
+        'top-1/2! right-0!',
       )}
       isConnectable={false}
     />
@@ -307,23 +343,20 @@ const CompactNode: FC<CompactNodeProps> = ({
       onMouseLeave={() => setSummaryOpen(false)}
     >
       {!data._isCandidate && (
-        <NodeTargetHandle
-          id={id}
+        <CompactTargetHandle
           data={data}
-          handleClassName="top-1/2! -left-[9px]! -translate-y-1/2!"
           handleId="target"
+          id={id}
         />
       )}
       {!isBranchNode && !data._isCandidate && (
         <CompactSourceHandle
-          data={data}
           handleId="source"
         />
       )}
       {isBranchNode && !data._isCandidate && branchSourceHandleIds.map(handleId => (
-        <CompactBranchSourceHandle
+        <CompactSourceHandle
           key={handleId}
-          data={data}
           handleId={handleId}
         />
       ))}

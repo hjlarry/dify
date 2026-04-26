@@ -144,8 +144,10 @@ describe('CanvasV2 CustomEdge', () => {
       expect(screen.getByTestId('base-edge')).toHaveAttribute('data-path', 'M 0 0 H 24 V 48')
       expect(mockGetSmoothStepPath).toHaveBeenCalledWith(expect.objectContaining({
         borderRadius: 0,
+        sourceX: 100,
         sourceY: 120,
         sourcePosition: Position.Right,
+        targetX: 300,
         targetY: 220,
         targetPosition: Position.Left,
       }))

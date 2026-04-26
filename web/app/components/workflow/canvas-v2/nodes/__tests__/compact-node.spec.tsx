@@ -26,12 +26,23 @@ const mockAvailableBlocks = [BlockEnum.Code, BlockEnum.LLM, BlockEnum.Answer]
 
 vi.mock('reactflow', () => ({
   Handle: ({
+    children,
+    className,
     id,
     type,
   }: {
+    children?: ReactNode
+    className?: string
     id: string
     type: string
-  }) => <div data-testid={`${type}-handle-${id}`} />,
+  }) => (
+    <div
+      className={className}
+      data-testid={`${type}-handle-${id}`}
+    >
+      {children}
+    </div>
+  ),
   Position: {
     Left: 'left',
     Right: 'right',
@@ -71,14 +82,16 @@ vi.mock('../../../block-selector', () => ({
   default: ({
     disabled,
     onSelect,
+    placement,
     trigger,
   }: {
     disabled?: boolean
     onSelect: OnSelectBlock
+    placement?: string
     trigger?: (open: boolean) => ReactNode
   }) => (
     <div
-      data-testid="workflow-canvas-v2-node-add-selector"
+      data-testid={placement === 'left' ? 'workflow-canvas-v2-target-add-selector' : 'workflow-canvas-v2-node-add-selector'}
       onClick={() => {
         if (!disabled)
           onSelect(BlockEnum.Code)
@@ -91,14 +104,6 @@ vi.mock('../../../block-selector', () => ({
 
 vi.mock('../../../nodes/_base/components/node-control', () => ({
   default: () => <div data-testid="node-control" />,
-}))
-
-vi.mock('../../../nodes/_base/components/node-handle', () => ({
-  NodeTargetHandle: ({
-    handleId,
-  }: {
-    handleId: string
-  }) => <div data-testid={`target-selector-handle-${handleId}`} />,
 }))
 
 const renderCompactNode = (
@@ -134,8 +139,14 @@ describe('CompactNode', () => {
       expect(screen.getByTestId('block-icon-llm')).toBeInTheDocument()
       expect(screen.getByText('Generate answer')).toBeInTheDocument()
       expect(screen.queryByText('Long prompt and configuration summary')).not.toBeInTheDocument()
-      expect(screen.getByTestId('target-selector-handle-target')).toBeInTheDocument()
+      expect(screen.getByTestId('target-handle-target')).toHaveClass('opacity-0!')
       expect(screen.getByTestId('source-handle-source')).toBeInTheDocument()
+      expect(screen.getByTestId('source-handle-source')).toHaveClass('opacity-0!')
+      expect(screen.getByTestId('target-handle-target')).toHaveClass('top-1/2!', 'left-0!')
+      expect(screen.getByTestId('source-handle-source')).toHaveClass('top-1/2!', 'right-0!')
+      expect(screen.getByTestId('source-handle-source')).not.toHaveClass('-translate-y-1/2!')
+      expect(screen.getByTestId('source-handle-source')).not.toHaveClass('after:bg-workflow-link-line-handle')
+      expect(screen.getByTestId('workflow-canvas-v2-target-add-selector')).toBeInTheDocument()
       expect(screen.getByTestId('workflow-canvas-v2-node-add')).toHaveClass('size-4')
       expect(screen.getByTestId('node-control')).toBeInTheDocument()
     })

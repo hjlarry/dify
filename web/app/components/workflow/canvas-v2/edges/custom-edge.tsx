@@ -62,10 +62,10 @@ const CanvasV2CustomEdge = ({
     labelX,
     labelY,
   ] = getSmoothStepPath({
-    sourceX: sourceX - 8,
+    sourceX,
     sourceY,
     sourcePosition: Position.Right,
-    targetX: targetX + 8,
+    targetX,
     targetY,
     targetPosition: Position.Left,
     borderRadius: 0,
