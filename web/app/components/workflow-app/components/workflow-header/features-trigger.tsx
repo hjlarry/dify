@@ -9,7 +9,6 @@ import type { PublishWorkflowParams } from '@/types/workflow'
 import { Button } from '@langgenius/dify-ui/button'
 import { cn } from '@langgenius/dify-ui/cn'
 import { toast } from '@langgenius/dify-ui/toast'
-import { RiApps2AddLine } from '@remixicon/react'
 import {
   memo,
   useCallback,
@@ -45,7 +44,13 @@ import { fetchAppDetail } from '@/service/apps'
 import { useInvalidateAppTriggers } from '@/service/use-tools'
 import { useInvalidateAppWorkflow, usePublishWorkflow, useResetWorkflowVersionHistory } from '@/service/use-workflow'
 
-const FeaturesTrigger = () => {
+type FeaturesTriggerProps = {
+  showFeaturesButton?: boolean
+}
+
+const FeaturesTrigger = ({
+  showFeaturesButton = true,
+}: FeaturesTriggerProps) => {
   const { t } = useTranslation()
   const { theme } = useTheme()
   const isChatMode = useIsChatMode()
@@ -189,7 +194,7 @@ const FeaturesTrigger = () => {
   return (
     <>
       {/* Feature button is only visible in chatflow mode (advanced-chat) */}
-      {isChatMode && (
+      {showFeaturesButton && isChatMode && (
         <Button
           className={cn(
             'rounded-lg border border-transparent text-components-button-secondary-text',
@@ -197,7 +202,7 @@ const FeaturesTrigger = () => {
           )}
           onClick={handleShowFeatures}
         >
-          <RiApps2AddLine className="mr-1 h-4 w-4 text-components-button-secondary-text" />
+          <span aria-hidden className="mr-1 i-ri-apps-2-add-line h-4 w-4 text-components-button-secondary-text" />
           {t('common.features', { ns: 'workflow' })}
         </Button>
       )}

@@ -7,6 +7,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@langgenius/dify-ui/dropdown-menu'
 import { memo, useCallback, useMemo, useState } from 'react'
@@ -16,10 +17,8 @@ import AppInfoModals from '@/app/components/app-sidebar/app-info/app-info-modals
 import { useAppInfoActions } from '@/app/components/app-sidebar/app-info/use-app-info-actions'
 import { useStore as useAppStore } from '@/app/components/app/store'
 import AccountDropdown from '@/app/components/header/account-dropdown'
-import ChatVariableTrigger from '@/app/components/workflow-app/components/workflow-header/chat-variable-trigger'
+import { useInputFieldPanel } from '@/app/components/rag-pipeline/hooks'
 import FeaturesTrigger from '@/app/components/workflow-app/components/workflow-header/features-trigger'
-import EnvButton from '@/app/components/workflow/header/env-button'
-import GlobalVariableButton from '@/app/components/workflow/header/global-variable-button'
 import RunAndHistory from '@/app/components/workflow/header/run-and-history'
 import ScrollToSelectedNodeButton from '@/app/components/workflow/header/scroll-to-selected-node-button'
 import {
@@ -190,7 +189,17 @@ const WorkflowCanvasV2MoreMenu = memo(() => {
   const { t } = useTranslation()
   const { theme } = useTheme()
   const [open, setOpen] = useState(false)
+  const isChatMode = useIsChatMode()
+  const { nodesReadOnly, getNodesReadOnly } = useNodesReadOnly()
+  const showFeaturesPanel = useStore(s => s.showFeaturesPanel)
+  const setShowFeaturesPanel = useStore(s => s.setShowFeaturesPanel)
+  const isRestoring = useStore(s => s.isRestoring)
   const setShowImportDSLModal = useStore(s => s.setShowImportDSLModal)
+  const setShowChatVariablePanel = useStore(s => s.setShowChatVariablePanel)
+  const setShowEnvPanel = useStore(s => s.setShowEnvPanel)
+  const setShowGlobalVariablePanel = useStore(s => s.setShowGlobalVariablePanel)
+  const setShowDebugAndPreviewPanel = useStore(s => s.setShowDebugAndPreviewPanel)
+  const { closeAllInputFieldPanels } = useInputFieldPanel()
   const { exportCheck } = useDSL()
   const {
     appDetail,
@@ -222,7 +231,75 @@ const WorkflowCanvasV2MoreMenu = memo(() => {
     setOpen(false)
   }, [exportCheck])
 
-  const menuItems = useMemo(() => [
+  const handleShowFeatures = useCallback(() => {
+    if (getNodesReadOnly() && !isRestoring)
+      return
+    setShowFeaturesPanel(!showFeaturesPanel)
+    setOpen(false)
+  }, [getNodesReadOnly, isRestoring, setShowFeaturesPanel, showFeaturesPanel])
+
+  const handleShowChatVariables = useCallback(() => {
+    setShowChatVariablePanel(true)
+    setShowEnvPanel(false)
+    setShowGlobalVariablePanel(false)
+    setShowDebugAndPreviewPanel(false)
+    setOpen(false)
+  }, [setShowChatVariablePanel, setShowDebugAndPreviewPanel, setShowEnvPanel, setShowGlobalVariablePanel])
+
+  const handleShowEnvironmentVariables = useCallback(() => {
+    setShowEnvPanel(true)
+    setShowChatVariablePanel(false)
+    setShowGlobalVariablePanel(false)
+    setShowDebugAndPreviewPanel(false)
+    closeAllInputFieldPanels()
+    setOpen(false)
+  }, [closeAllInputFieldPanels, setShowChatVariablePanel, setShowDebugAndPreviewPanel, setShowEnvPanel, setShowGlobalVariablePanel])
+
+  const handleShowSystemVariables = useCallback(() => {
+    setShowGlobalVariablePanel(true)
+    setShowChatVariablePanel(false)
+    setShowEnvPanel(false)
+    setShowDebugAndPreviewPanel(false)
+    closeAllInputFieldPanels()
+    setOpen(false)
+  }, [closeAllInputFieldPanels, setShowChatVariablePanel, setShowDebugAndPreviewPanel, setShowEnvPanel, setShowGlobalVariablePanel])
+
+  const workflowItems = useMemo(() => [
+    ...(isChatMode
+      ? [
+          {
+            id: 'features',
+            icon: <span aria-hidden className="i-ri-apps-2-add-line h-4 w-4 text-text-tertiary" />,
+            label: t('common.features', { ns: 'workflow' }),
+            disabled: nodesReadOnly && !isRestoring,
+            onClick: handleShowFeatures,
+          },
+          {
+            id: 'conversation-variables',
+            icon: <span aria-hidden className="i-custom-vender-line-others-bubble-x h-4 w-4 text-text-tertiary" />,
+            label: t('chatVariable.panelTitle', { ns: 'workflow' }),
+            disabled: nodesReadOnly,
+            onClick: handleShowChatVariables,
+          },
+        ]
+      : []),
+    {
+      id: 'environment-variables',
+      icon: <span aria-hidden className="i-custom-vender-line-others-env h-4 w-4 text-text-tertiary" />,
+      label: t('env.envPanelTitle', { ns: 'workflow' }),
+      disabled: nodesReadOnly,
+      onClick: handleShowEnvironmentVariables,
+    },
+    {
+      id: 'system-variables',
+      icon: <span aria-hidden className="i-custom-vender-line-others-global-variable h-4 w-4 text-text-tertiary" />,
+      label: t('globalVar.title', { ns: 'workflow' }),
+      disabled: nodesReadOnly,
+      onClick: handleShowSystemVariables,
+    },
+  ], [handleShowChatVariables, handleShowEnvironmentVariables, handleShowFeatures, handleShowSystemVariables, isChatMode, isRestoring, nodesReadOnly, t])
+
+  const appItems = useMemo(() => [
     {
       id: 'edit-info',
       icon: <span aria-hidden className="i-ri-edit-line h-4 w-4 text-text-tertiary" />,
@@ -271,7 +348,19 @@ const WorkflowCanvasV2MoreMenu = memo(() => {
           sideOffset={6}
           popupClassName="min-w-[180px]"
         >
-          {menuItems.map(item => (
+          {workflowItems.map(item => (
+            <DropdownMenuItem
+              key={item.id}
+              disabled={item.disabled}
+              className="gap-x-2 px-2"
+              onClick={item.onClick}
+            >
+              {item.icon}
+              <span className="system-md-regular text-text-secondary">{item.label}</span>
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          {appItems.map(item => (
             <DropdownMenuItem
               key={item.id}
               className="gap-x-2 px-2"
@@ -315,7 +404,6 @@ const WorkflowCanvasV2Topbar = () => {
     setCurrentLogItem: state.setCurrentLogItem,
     setShowMessageLogModal: state.setShowMessageLogModal,
   })))
-  const { nodesReadOnly } = useNodesReadOnly()
 
   const handleClearLogAndMessageModal = useCallback(() => {
     setCurrentLogItem()
@@ -352,12 +440,7 @@ const WorkflowCanvasV2Topbar = () => {
           showPreviewButton={isChatMode}
           viewHistoryProps={viewHistoryProps}
         />
-        <div className="shrink-0 cursor-pointer rounded-lg border-[0.5px] border-components-button-secondary-border bg-components-button-secondary-bg shadow-xs backdrop-blur-[10px]">
-          <ChatVariableTrigger />
-          <EnvButton disabled={nodesReadOnly} />
-          <GlobalVariableButton disabled={nodesReadOnly} />
-        </div>
-        <FeaturesTrigger />
+        <FeaturesTrigger showFeaturesButton={false} />
         <WorkflowCanvasV2MoreMenu />
         <div className="mx-1 h-5 w-px bg-divider-subtle" />
         <div data-testid="workflow-canvas-v2-account-controls">

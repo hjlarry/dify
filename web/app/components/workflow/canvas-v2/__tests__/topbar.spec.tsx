@@ -17,6 +17,14 @@ const mockAppInfoExportCheck = vi.hoisted(() => vi.fn())
 const mockHandleConfirmExport = vi.hoisted(() => vi.fn())
 const mockOnConfirmDelete = vi.hoisted(() => vi.fn())
 const mockRouterPush = vi.hoisted(() => vi.fn())
+const mockCloseAllInputFieldPanels = vi.hoisted(() => vi.fn())
+const mockSetShowFeaturesPanel = vi.hoisted(() => vi.fn())
+const mockSetShowChatVariablePanel = vi.hoisted(() => vi.fn())
+const mockSetShowEnvPanel = vi.hoisted(() => vi.fn())
+const mockSetShowGlobalVariablePanel = vi.hoisted(() => vi.fn())
+const mockSetShowDebugAndPreviewPanel = vi.hoisted(() => vi.fn())
+const mockUseIsChatMode = vi.hoisted(() => vi.fn(() => false))
+const mockGetNodesReadOnly = vi.hoisted(() => vi.fn(() => false))
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -118,6 +126,7 @@ vi.mock('@langgenius/dify-ui/dropdown-menu', () => {
         </button>
       )
     },
+    DropdownMenuSeparator: () => <hr data-testid="more-menu-separator" />,
   }
 })
 
@@ -150,19 +159,9 @@ vi.mock('@/hooks/use-theme', () => ({
 }))
 
 vi.mock('@/app/components/workflow-app/components/workflow-header/features-trigger', () => ({
-  default: () => <div data-testid="features-trigger" />,
-}))
-
-vi.mock('@/app/components/workflow-app/components/workflow-header/chat-variable-trigger', () => ({
-  default: () => <div data-testid="chat-variable-trigger" />,
-}))
-
-vi.mock('@/app/components/workflow/header/env-button', () => ({
-  default: () => <div data-testid="env-button" />,
-}))
-
-vi.mock('@/app/components/workflow/header/global-variable-button', () => ({
-  default: () => <div data-testid="global-variable-button" />,
+  default: ({ showFeaturesButton }: { showFeaturesButton?: boolean }) => (
+    <div data-testid="features-trigger" data-show-features-button={String(showFeaturesButton)} />
+  ),
 }))
 
 vi.mock('@/app/components/workflow/header/run-and-history', () => ({
@@ -177,9 +176,16 @@ vi.mock('@/app/components/workflow/hooks', () => ({
   useDSL: () => ({
     exportCheck: mockWorkflowExportCheck,
   }),
-  useIsChatMode: () => false,
+  useIsChatMode: () => mockUseIsChatMode(),
   useNodesReadOnly: () => ({
     nodesReadOnly: false,
+    getNodesReadOnly: mockGetNodesReadOnly,
+  }),
+}))
+
+vi.mock('@/app/components/rag-pipeline/hooks', () => ({
+  useInputFieldPanel: () => ({
+    closeAllInputFieldPanels: mockCloseAllInputFieldPanels,
   }),
 }))
 
@@ -188,28 +194,38 @@ vi.mock('@/app/components/workflow/store', () => ({
     draftUpdatedAt: 1000,
     publishedAt: 2000,
     isSyncingWorkflowDraft: false,
+    isRestoring: false,
+    showFeaturesPanel: false,
+    setShowFeaturesPanel: mockSetShowFeaturesPanel,
     setShowImportDSLModal: mockSetShowImportDSLModal,
+    setShowChatVariablePanel: mockSetShowChatVariablePanel,
+    setShowEnvPanel: mockSetShowEnvPanel,
+    setShowGlobalVariablePanel: mockSetShowGlobalVariablePanel,
+    setShowDebugAndPreviewPanel: mockSetShowDebugAndPreviewPanel,
   }),
 }))
 
 describe('WorkflowCanvasV2Topbar', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseIsChatMode.mockReturnValue(false)
+    mockGetNodesReadOnly.mockReturnValue(false)
   })
 
-  it('should render legacy-ordered workflow actions, more menu, and account avatar', () => {
+  it('should render workflow actions, more menu, and account avatar', () => {
     render(<WorkflowCanvasV2Topbar />)
 
     expect(screen.getByTestId('workflow-canvas-v2-topbar')).toBeInTheDocument()
     expect(screen.getByTestId('run-and-history')).toBeInTheDocument()
-    expect(screen.getByTestId('chat-variable-trigger')).toBeInTheDocument()
-    expect(screen.getByTestId('env-button')).toBeInTheDocument()
-    expect(screen.getByTestId('global-variable-button')).toBeInTheDocument()
     expect(screen.getByTestId('features-trigger')).toBeInTheDocument()
+    expect(screen.getByTestId('features-trigger')).toHaveAttribute('data-show-features-button', 'false')
     expect(screen.getByTestId('workflow-canvas-v2-more-menu-trigger')).toBeInTheDocument()
     expect(screen.getByTestId('workflow-canvas-v2-account-controls')).toBeInTheDocument()
     expect(screen.getByTestId('account-dropdown')).toBeInTheDocument()
     expect(screen.getByTestId('app-info-modals')).toBeInTheDocument()
+    expect(screen.queryByTestId('chat-variable-trigger')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('env-button')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('global-variable-button')).not.toBeInTheDocument()
     expect(screen.queryByTestId('online-users')).not.toBeInTheDocument()
     expect(screen.queryByTestId('version-history')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'userProfile.settings' })).not.toBeInTheDocument()
@@ -243,6 +259,9 @@ describe('WorkflowCanvasV2Topbar', () => {
 
     await user.click(screen.getByTestId('workflow-canvas-v2-more-menu-trigger'))
 
+    expect(screen.getByText('env.envPanelTitle')).toBeInTheDocument()
+    expect(screen.getByText('globalVar.title')).toBeInTheDocument()
+    expect(screen.getByTestId('more-menu-separator')).toBeInTheDocument()
     expect(screen.getByText('editApp')).toBeInTheDocument()
     expect(screen.getByText('duplicate')).toBeInTheDocument()
     expect(screen.getByText('common.importDSL')).toBeInTheDocument()
@@ -262,5 +281,34 @@ describe('WorkflowCanvasV2Topbar', () => {
     await user.click(screen.getByTestId('workflow-canvas-v2-more-menu-trigger'))
     await user.click(screen.getByText('export'))
     expect(mockWorkflowExportCheck).toHaveBeenCalledTimes(1)
+  })
+
+  it('should open workflow panels from the more menu', async () => {
+    const user = userEvent.setup()
+    mockUseIsChatMode.mockReturnValue(true)
+
+    render(<WorkflowCanvasV2Topbar />)
+
+    await user.click(screen.getByTestId('workflow-canvas-v2-more-menu-trigger'))
+    expect(screen.getByText('common.features')).toBeInTheDocument()
+    expect(screen.getByText('chatVariable.panelTitle')).toBeInTheDocument()
+
+    await user.click(screen.getByText('common.features'))
+    expect(mockSetShowFeaturesPanel).toHaveBeenCalledWith(true)
+
+    await user.click(screen.getByTestId('workflow-canvas-v2-more-menu-trigger'))
+    await user.click(screen.getByText('chatVariable.panelTitle'))
+    expect(mockSetShowChatVariablePanel).toHaveBeenCalledWith(true)
+    expect(mockSetShowDebugAndPreviewPanel).toHaveBeenCalledWith(false)
+
+    await user.click(screen.getByTestId('workflow-canvas-v2-more-menu-trigger'))
+    await user.click(screen.getByText('env.envPanelTitle'))
+    expect(mockSetShowEnvPanel).toHaveBeenCalledWith(true)
+    expect(mockCloseAllInputFieldPanels).toHaveBeenCalledTimes(1)
+
+    await user.click(screen.getByTestId('workflow-canvas-v2-more-menu-trigger'))
+    await user.click(screen.getByText('globalVar.title'))
+    expect(mockSetShowGlobalVariablePanel).toHaveBeenCalledWith(true)
+    expect(mockCloseAllInputFieldPanels).toHaveBeenCalledTimes(2)
   })
 })
