@@ -234,7 +234,7 @@ describe('getCanvasV2Graph', () => {
       expect((result.edges[0]!.data as Record<string, unknown>)[CANVAS_V2_HIDDEN_KEY]).toBeUndefined()
     })
 
-    it('should render edges as non-focusable and keep edge selection out of the source graph', () => {
+    it('should preserve transient edge interaction state in the view and keep it out of the source graph', () => {
       const selectedEdge = makeEdge({
         id: 'start-end',
         source: 'start',
@@ -256,8 +256,8 @@ describe('getCanvasV2Graph', () => {
       })
 
       expect(viewGraph.edges[0]).toEqual(expect.objectContaining({
-        focusable: false,
-        selected: false,
+        focusable: true,
+        selected: true,
       }))
       expect(sourceGraph.edges[0]!.focusable).toBeUndefined()
       expect(sourceGraph.edges[0]!.selected).toBeUndefined()

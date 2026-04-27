@@ -131,29 +131,29 @@ const withoutCanvasV2NodeFrame = (node: Node) => {
   return nextNode
 }
 
-const withoutCanvasV2EdgeMetadata = (edge: Edge) => {
+const withoutCanvasV2EdgeMetadata = (edge: Edge, stripInteractionState = true) => {
   const data = {
     ...edge.data,
   } as Edge['data'] & Record<string, unknown>
+
+  delete data[CANVAS_V2_HIDDEN_KEY]
+
+  if (!stripInteractionState) {
+    return {
+      ...edge,
+      data,
+    } as Edge
+  }
+
   const {
     selected: _selected,
     focusable: _focusable,
     ...edgeWithoutSelection
   } = edge
 
-  delete data[CANVAS_V2_HIDDEN_KEY]
-
   return {
     ...edgeWithoutSelection,
     data,
-  } as Edge
-}
-
-const withCanvasV2EdgeInteractionState = (edge: Edge) => {
-  return {
-    ...edge,
-    focusable: false,
-    selected: false,
   } as Edge
 }
 
@@ -163,7 +163,7 @@ export const getCanvasV2SourceGraph = ({
 }: CanvasV2Graph): CanvasV2Graph => {
   return {
     nodes: nodes.map(node => withoutCanvasV2NodeFrame(withoutCanvasV2NodeMetadata(node))),
-    edges: edges.map(withoutCanvasV2EdgeMetadata),
+    edges: edges.map(edge => withoutCanvasV2EdgeMetadata(edge)),
   }
 }
 
@@ -199,7 +199,7 @@ const withNodeVisibility = (node: Node, nodes: Node[], hiddenNodeIds: Set<string
 }
 
 const withEdgeVisibility = (edge: Edge, hiddenNodeIds: Set<string>) => {
-  const nextEdge = withCanvasV2EdgeInteractionState(withoutCanvasV2EdgeMetadata(edge))
+  const nextEdge = withoutCanvasV2EdgeMetadata(edge, false)
   if (!isCanvasV2InternalEdge(nextEdge, hiddenNodeIds))
     return nextEdge
 

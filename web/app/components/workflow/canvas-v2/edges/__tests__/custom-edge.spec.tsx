@@ -259,7 +259,7 @@ describe('CanvasV2 CustomEdge', () => {
       )
     })
 
-    it('should not turn blue when React Flow marks the edge as selected', () => {
+    it('should highlight the edge when React Flow marks it as selected', () => {
       sourceNodeData = {
         type: BlockEnum.Start,
         title: 'Start',
@@ -287,7 +287,7 @@ describe('CanvasV2 CustomEdge', () => {
         />,
       )
 
-      expect(screen.getByTestId('base-edge')).toHaveAttribute('data-stroke', 'var(--color-workflow-link-line-normal)')
+      expect(screen.getByTestId('base-edge')).toHaveAttribute('data-stroke', 'var(--color-workflow-link-line-handle)')
     })
 
     it('should not render internal container edges in the main canvas', () => {

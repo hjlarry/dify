@@ -3,6 +3,7 @@ import type {
   ReactNode,
 } from 'react'
 import type {
+  EdgeChange,
   EdgeMouseHandler,
   NodeChange,
   NodeMouseHandler,
@@ -53,6 +54,7 @@ const mockHandleNodeEnter = vi.hoisted(() => vi.fn())
 const mockHandleNodeLeave = vi.hoisted(() => vi.fn())
 const mockHandleNodeContextMenu = vi.hoisted(() => vi.fn())
 const mockHandleEdgeContextMenu = vi.hoisted(() => vi.fn())
+const mockHandleEdgesChange = vi.hoisted(() => vi.fn())
 const mockHandleSelectionStart = vi.hoisted(() => vi.fn())
 const mockHandleSelectionChange = vi.hoisted(() => vi.fn())
 const mockHandleSelectionDrag = vi.hoisted(() => vi.fn())
@@ -66,12 +68,15 @@ const mockSetShowUserComments = vi.hoisted(() => vi.fn())
 const mockUseCanvasV2Shortcuts = vi.hoisted(() => vi.fn())
 let mockNodesReadOnly = false
 let mockShowConfirm: { title: string, desc?: string, onConfirm: () => void } | undefined
+let mockReactFlowUserSelectionRect: { height?: number, width?: number } | undefined
 
 type MockReactFlowProps = {
   children?: ReactNode
   connectionLineComponent?: unknown
   edges?: Array<{ data?: Record<string, unknown>, focusable?: boolean, id: string, selected?: boolean }>
   edgesFocusable?: boolean
+  elementsSelectable?: boolean
+  onEdgesChange?: (changes: EdgeChange[]) => void
   isValidConnection?: unknown
   nodes?: Array<{ data?: Record<string, unknown>, id: string }>
   nodesConnectable?: boolean
@@ -96,6 +101,25 @@ type MockReactFlowProps = {
 }
 
 vi.mock('reactflow', () => ({
+  applyEdgeChanges: (changes: EdgeChange[], edges: Edge[]) => {
+    return edges.map((edge) => {
+      const edgeChanges = changes.filter(change => 'id' in change && change.id === edge.id)
+      if (!edgeChanges.length)
+        return edge
+
+      let nextEdge = edge
+      for (const edgeChange of edgeChanges) {
+        if (edgeChange.type === 'select') {
+          nextEdge = {
+            ...nextEdge,
+            selected: edgeChange.selected,
+          }
+        }
+      }
+
+      return nextEdge
+    })
+  },
   applyNodeChanges: (changes: NodeChange[], nodes: Node[]) => {
     const resetChanges = changes.filter((change): change is Extract<NodeChange, { type: 'reset' }> => change.type === 'reset')
     if (resetChanges.length)
@@ -142,6 +166,8 @@ vi.mock('reactflow', () => ({
       connectionLineComponent,
       edges,
       edgesFocusable,
+      elementsSelectable,
+      onEdgesChange,
       isValidConnection,
       nodes,
       nodesConnectable,
@@ -169,6 +195,8 @@ vi.mock('reactflow', () => ({
       connectionLineComponent,
       edges,
       edgesFocusable,
+      elementsSelectable,
+      onEdgesChange,
       isValidConnection,
       nodes,
       nodesConnectable,
@@ -204,6 +232,11 @@ vi.mock('reactflow', () => ({
     getNodes: mockReactFlowGetNodes,
     setNodes: mockReactFlowSetNodes,
     setViewport: mockReactFlowSetViewport,
+  }),
+  useStoreApi: () => ({
+    getState: () => ({
+      userSelectionRect: mockReactFlowUserSelectionRect,
+    }),
   }),
 }))
 
@@ -289,6 +322,7 @@ vi.mock('../../hooks', () => ({
   }),
   useEdgesInteractions: () => ({
     handleEdgeContextMenu: mockHandleEdgeContextMenu,
+    handleEdgesChange: mockHandleEdgesChange,
   }),
   useNodesSyncDraft: () => ({
     handleSyncWorkflowDraft: mockHandleSyncWorkflowDraft,
@@ -478,6 +512,7 @@ describe('WorkflowCanvasV2', () => {
     vi.clearAllMocks()
     mockNodesReadOnly = false
     mockShowConfirm = undefined
+    mockReactFlowUserSelectionRect = undefined
     mockReactFlowGetNodes.mockReturnValue([])
     mockReactFlowGetEdges.mockReturnValue([])
     mockGetCanvasV2LayoutNodes.mockImplementation(async (nodes: Node[]) => nodes)
@@ -515,7 +550,8 @@ describe('WorkflowCanvasV2', () => {
       }))
       expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
         connectionLineComponent: expect.any(Function),
-        edgesFocusable: false,
+        edgesFocusable: true,
+        elementsSelectable: true,
         isValidConnection: mockIsValidConnection,
         nodesConnectable: true,
         nodesDraggable: true,
@@ -524,6 +560,7 @@ describe('WorkflowCanvasV2', () => {
         onConnectStart: expect.any(Function),
         onEdgeContextMenu: expect.any(Function),
         onNodeContextMenu: expect.any(Function),
+        onEdgesChange: expect.any(Function),
         onNodeMouseEnter: expect.any(Function),
         onNodeMouseLeave: expect.any(Function),
         onNodesChange: expect.any(Function),
@@ -707,8 +744,8 @@ describe('WorkflowCanvasV2', () => {
           expect.objectContaining({
             data: expect.objectContaining({ _hovering: true }),
             id: 'start-code',
-            focusable: false,
-            selected: false,
+            focusable: true,
+            selected: true,
           }),
         ],
       }))
@@ -724,8 +761,76 @@ describe('WorkflowCanvasV2', () => {
           expect.objectContaining({
             data: expect.objectContaining({ _hovering: false }),
             id: 'start-code',
-            focusable: false,
-            selected: false,
+            focusable: true,
+            selected: true,
+          }),
+        ],
+      }))
+    })
+
+    it('should delegate edge selection changes and keep the selected edge in the v2 graph', async () => {
+      const nodes = [
+        makeNode({ id: 'start', data: { type: BlockEnum.Start, title: 'Start' } }),
+        makeNode({ id: 'code', position: { x: 260, y: 0 } }),
+      ]
+      const edge = makeEdge({
+        id: 'start-code',
+        source: 'start',
+        target: 'code',
+        data: { sourceType: BlockEnum.Start, targetType: BlockEnum.Code },
+      })
+
+      render(
+        <WorkflowCanvasV2
+          nodes={nodes}
+          edges={[edge]}
+          viewport={{ x: 0, y: 0, zoom: 1 }}
+        />,
+      )
+
+      const reactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+      const changes: EdgeChange[] = [
+        {
+          id: 'start-code',
+          selected: true,
+          type: 'select',
+        },
+      ]
+
+      act(() => {
+        reactFlowProps.onEdgesChange?.(changes)
+      })
+
+      expect(mockHandleEdgesChange).toHaveBeenCalledWith(changes)
+      await waitFor(() => {
+        expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+          edges: [
+            expect.objectContaining({
+              id: 'start-code',
+              selected: true,
+            }),
+          ],
+        }))
+      })
+
+      const selectedReactFlowProps = mockReactFlowProps.mock.calls.at(-1)?.[0] as MockReactFlowProps
+      const selectedCallCount = mockReactFlowProps.mock.calls.length
+      mockReactFlowGetNodes.mockReturnValue(nodes)
+      mockReactFlowGetEdges.mockReturnValue([edge])
+
+      act(() => {
+        selectedReactFlowProps.onSelectionChange?.({
+          edges: [{ ...edge, selected: true }],
+          nodes: [],
+        })
+      })
+
+      expect(mockReactFlowProps).toHaveBeenCalledTimes(selectedCallCount)
+      expect(mockReactFlowProps).toHaveBeenLastCalledWith(expect.objectContaining({
+        edges: [
+          expect.objectContaining({
+            id: 'start-code',
+            selected: true,
           }),
         ],
       }))
@@ -814,6 +919,7 @@ describe('WorkflowCanvasV2', () => {
         mockReactFlowGetNodes.mockReturnValue(bundledNodes)
         mockReactFlowGetEdges.mockReturnValue([])
       })
+      mockReactFlowUserSelectionRect = { height: 80, width: 120 }
 
       render(
         <WorkflowCanvasV2

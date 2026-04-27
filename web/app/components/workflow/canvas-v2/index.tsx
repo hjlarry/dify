@@ -6,6 +6,7 @@ import type {
   MouseEvent as ReactMouseEvent,
 } from 'react'
 import type {
+  EdgeChange,
   EdgeMouseHandler,
   NodeChange,
   NodeMouseHandler,
@@ -43,10 +44,12 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import ReactFlow, {
+  applyEdgeChanges,
   applyNodeChanges,
   Background,
   SelectionMode,
   useReactFlow,
+  useStoreApi as useReactFlowStoreApi,
 } from 'reactflow'
 import { useEventEmitterContextContext } from '@/context/event-emitter'
 import CandidateNode from '../candidate-node'
@@ -142,11 +145,9 @@ const CONTAINER_NODE_TYPES = new Set<BlockEnum>([
 ])
 
 const withHoveredGraphEdge = (graph: WorkflowGraph, edgeId: string, hovering: boolean): WorkflowGraph => {
-  const sourceGraph = getCanvasV2SourceGraph(graph)
-
   return {
-    nodes: sourceGraph.nodes,
-    edges: sourceGraph.edges.map((edge) => {
+    nodes: graph.nodes,
+    edges: graph.edges.map((edge) => {
       if (edge.id !== edgeId)
         return edge
 
@@ -222,6 +223,7 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
   const workflowContainerRef = useRef<HTMLDivElement>(null)
   const workflowStore = useWorkflowStore()
   const reactflow = useReactFlow()
+  const reactflowStore = useReactFlowStoreApi()
   const { eventEmitter } = useEventEmitterContextContext()
   const [graph, setGraph] = useState<WorkflowGraph>({
     nodes: originalNodes,
@@ -254,6 +256,7 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
   } = useNodesInteractions()
   const {
     handleEdgeContextMenu,
+    handleEdgesChange,
   } = useEdgesInteractions()
   const {
     handleSelectionStart,
@@ -394,6 +397,18 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
     })
   }, [reactflow])
 
+  const handleCanvasEdgesChange = useCallback((changes: EdgeChange[]) => {
+    handleEdgesChange(changes)
+    setGraph((prevGraph) => {
+      const baseGraph = getFreshGraph(prevGraph, reactflow)
+
+      return {
+        nodes: baseGraph.nodes,
+        edges: applyEdgeChanges(changes, baseGraph.edges) as Edge[],
+      }
+    })
+  }, [handleEdgesChange, reactflow])
+
   const handleSubgraphChange = useCallback((nextGraph: WorkflowGraph) => {
     setGraph(nextGraph)
   }, [])
@@ -441,8 +456,12 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
 
   const handleCanvasSelectionChange = useCallback<OnSelectionChangeFunc>((params) => {
     handleSelectionChange(params)
+    const userSelectionRect = reactflowStore.getState().userSelectionRect
+    if (!userSelectionRect?.width || !userSelectionRect?.height)
+      return
+
     handleGraphChangeFromReactFlow()
-  }, [handleGraphChangeFromReactFlow, handleSelectionChange])
+  }, [handleGraphChangeFromReactFlow, handleSelectionChange, reactflowStore])
 
   const handleCanvasSelectionDrag = useCallback((event: ReactMouseEvent, nodesWithDrag: Node[]) => {
     handleSelectionDrag(event, nodesWithDrag)
@@ -581,6 +600,7 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
           nodes={viewGraph.nodes}
           edges={viewGraph.edges}
           onNodesChange={handleNodesChange}
+          onEdgesChange={handleCanvasEdgesChange}
           onNodeClick={handleNodeClick}
           onNodeMouseEnter={handleNodeMouseEnter}
           onNodeMouseLeave={handleNodeMouseLeave}
@@ -603,7 +623,8 @@ export const WorkflowCanvasV2: FC<WorkflowCanvasV2Props> = memo(({
           nodesDraggable={!nodesReadOnly && controlMode !== ControlMode.Comment}
           nodesConnectable={!nodesReadOnly}
           nodesFocusable={!nodesReadOnly}
-          edgesFocusable={false}
+          edgesFocusable={!nodesReadOnly}
+          elementsSelectable={!nodesReadOnly}
           panOnScroll={controlMode === ControlMode.Pointer && !workflowReadOnly}
           panOnDrag={panOnDrag}
           zoomOnPinch

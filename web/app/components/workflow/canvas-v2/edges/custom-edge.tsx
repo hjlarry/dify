@@ -56,6 +56,7 @@ const CanvasV2CustomEdge = ({
   sourceY,
   targetX,
   targetY,
+  selected,
 }: EdgeProps) => {
   const { t } = useTranslation()
   const [
@@ -129,6 +130,9 @@ const CanvasV2CustomEdge = ({
   }, [handleNodeAdd, source, sourceHandleId, target, targetHandleId])
 
   const stroke = useMemo(() => {
+    if (selected)
+      return getEdgeColor(NodeRunningStatus.Running, sourceHandleId === ErrorHandleTypeEnum.failBranch)
+
     if (linearGradientId)
       return `url(#${linearGradientId})`
 
@@ -136,7 +140,7 @@ const CanvasV2CustomEdge = ({
       return getEdgeColor(NodeRunningStatus.Running, sourceHandleId === ErrorHandleTypeEnum.failBranch)
 
     return getEdgeColor()
-  }, [edgeData?._connectedNodeIsHovering, linearGradientId, sourceHandleId])
+  }, [edgeData?._connectedNodeIsHovering, linearGradientId, selected, sourceHandleId])
 
   const edgeOpacity = edgeData?._dimmed ? 0.3 : (edgeData?._waitingRun ? 0.7 : 1)
   const hidden = (edgeData as CanvasV2EdgeData & Record<string, unknown> | undefined)?.[CANVAS_V2_HIDDEN_KEY] === true
