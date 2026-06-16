@@ -106,7 +106,7 @@ const renderUseNodesSyncDraft = () =>
     systemFeatures: { enable_collaboration_mode: isCollaborationEnabled },
   })
 
-describe('useNodesSyncDraft — handleRefreshWorkflowDraft(true) on 409', () => {
+describe('useNodesSyncDraft — collaboration and draft conflict handling', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     reactFlowState = {
@@ -142,7 +142,7 @@ describe('useNodesSyncDraft — handleRefreshWorkflowDraft(true) on 409', () => 
     isCollaborationEnabled = false
   })
 
-  it('should call handleRefreshWorkflowDraft(true) — not updating canvas — on draft_workflow_not_sync', async () => {
+  it('should refresh canvas and hash together on draft_workflow_not_sync', async () => {
     const error = { json: vi.fn().mockResolvedValue({ code: 'draft_workflow_not_sync' }), bodyUsed: false }
     mockSyncWorkflowDraft.mockRejectedValue(error)
 
@@ -152,7 +152,7 @@ describe('useNodesSyncDraft — handleRefreshWorkflowDraft(true) on 409', () => 
     })
     await new Promise(r => setTimeout(r, 0))
 
-    expect(mockHandleRefreshWorkflowDraft).toHaveBeenCalledWith(true)
+    expect(mockHandleRefreshWorkflowDraft).toHaveBeenCalledWith()
   })
 
   it('should NOT refresh when notRefreshWhenSyncError=true', async () => {
@@ -337,11 +337,11 @@ describe('useNodesSyncDraft — handleRefreshWorkflowDraft(true) on 409', () => 
       await result.current.doSyncWorkflowDraft(false, callbacks)
     })
 
-    expect(mockCollaborationEmitSyncRequest).toHaveBeenCalled()
+    expect(mockCollaborationEmitSyncRequest).toHaveBeenCalledWith(callbacks)
     expect(mockSyncWorkflowDraft).not.toHaveBeenCalled()
     expect(callbacks.onSuccess).not.toHaveBeenCalled()
     expect(callbacks.onError).not.toHaveBeenCalled()
-    expect(callbacks.onSettled).toHaveBeenCalled()
+    expect(callbacks.onSettled).not.toHaveBeenCalled()
   })
 
   it('should skip keepalive sync on page close when current user is collaboration follower', () => {

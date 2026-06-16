@@ -62,8 +62,9 @@ const collaborationRuntime = vi.hoisted(() => ({
 const collaborationListeners = vi.hoisted(() => ({
   varsAndFeaturesUpdate: null as null | ((update: unknown) => void | Promise<void>),
   workflowUpdate: null as null | (() => void | Promise<void>),
-  syncRequest: null as null | (() => void),
+  syncRequest: null as null | ((data?: { requestId?: string }) => void),
 }))
+const mockEmitSyncResult = vi.hoisted(() => vi.fn())
 
 let capturedContextProps: Record<string, unknown> | null = null
 
@@ -134,10 +135,11 @@ vi.mock('@/app/components/workflow/collaboration/core/collaboration-manager', ()
       collaborationListeners.workflowUpdate = handler
       return vi.fn()
     }),
-    onSyncRequest: mockOnSyncRequest.mockImplementation((handler: () => void) => {
+    onSyncRequest: mockOnSyncRequest.mockImplementation((handler: (data?: { requestId?: string }) => void) => {
       collaborationListeners.syncRequest = handler
       return vi.fn()
     }),
+    emitSyncResult: (...args: unknown[]) => mockEmitSyncResult(...args),
   },
 }))
 
@@ -296,6 +298,7 @@ describe('WorkflowMain', () => {
     collaborationListeners.varsAndFeaturesUpdate = null
     collaborationListeners.workflowUpdate = null
     collaborationListeners.syncRequest = null
+    mockEmitSyncResult.mockReset()
     mockFetchWorkflowDraft.mockReset()
   })
 
@@ -463,8 +466,13 @@ describe('WorkflowMain', () => {
     expect(mockOnWorkflowUpdate).toHaveBeenCalled()
     expect(mockOnSyncRequest).toHaveBeenCalled()
 
-    collaborationListeners.syncRequest?.()
+    collaborationListeners.syncRequest?.({ requestId: 'sync-1' })
     expect(hookFns.doSyncWorkflowDraft).toHaveBeenCalled()
+    const syncCallbacks = hookFns.doSyncWorkflowDraft.mock.calls[0]?.[1] as
+      | { onSuccess?: () => void, onError?: () => void }
+      | undefined
+    syncCallbacks?.onSuccess?.()
+    expect(mockEmitSyncResult).toHaveBeenCalledWith({ requestId: 'sync-1', success: true })
 
     await collaborationListeners.varsAndFeaturesUpdate?.({})
     await collaborationListeners.workflowUpdate?.()

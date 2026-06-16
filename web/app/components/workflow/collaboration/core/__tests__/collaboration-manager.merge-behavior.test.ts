@@ -38,6 +38,8 @@ type StartNodeData = {
 }
 
 type LLMNodeData = {
+  title: string
+  desc: string
   model: {
     mode: string
     name: string
@@ -266,6 +268,58 @@ describe('Loro merge behavior smoke test', () => {
 
     expect(finalA!.data.prompt_template).toEqual(expectedTemplates)
     expect(finalB!.data.prompt_template).toEqual(expectedTemplates)
+  })
+
+  it('patches only changed node fields so stale local snapshots do not overwrite remote data', () => {
+    const baseNode = {
+      ...createLLMNode([{
+        id: 'system-1',
+        role: 'system',
+        text: 'base instruction',
+      }]),
+      data: {
+        ...createLLMNode([]).data,
+        title: 'LLM',
+        desc: 'base description',
+      },
+    } as Node<LLMNodeData>
+
+    const docA = new LoroDoc()
+    const managerA = getManager(docA)
+    syncNodes(managerA, [], [deepClone(baseNode)])
+
+    const snapshot = docA.export({ mode: 'snapshot' })
+    const docB = LoroDoc.fromSnapshot(snapshot)
+    const managerB = getManager(docB)
+
+    const docAUpdate = {
+      ...deepClone(baseNode),
+      position: { x: 300, y: 200 },
+    }
+    const docBUpdate = {
+      ...deepClone(baseNode),
+      data: {
+        ...baseNode.data,
+        desc: 'updated remotely',
+      },
+    }
+
+    syncNodes(managerA, [deepClone(baseNode)], [docAUpdate])
+    syncNodes(managerB, [deepClone(baseNode)], [docBUpdate])
+
+    const updateForA = docB.export({ mode: 'update', from: docA.version() })
+    docA.import(updateForA)
+
+    const updateForB = docA.export({ mode: 'update', from: docB.version() })
+    docB.import(updateForB)
+
+    const finalA = exportNodes(managerA).find(node => node.id === LLM_NODE_ID)
+    const finalB = exportNodes(managerB).find(node => node.id === LLM_NODE_ID)
+
+    expect(finalA?.position).toEqual({ x: 300, y: 200 })
+    expect(finalB?.position).toEqual({ x: 300, y: 200 })
+    expect(finalA?.data.desc).toBe('updated remotely')
+    expect(finalB?.data.desc).toBe('updated remotely')
   })
 
   it('converges when parameter lists are edited concurrently', () => {

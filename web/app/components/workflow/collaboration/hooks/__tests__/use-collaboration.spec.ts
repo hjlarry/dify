@@ -17,12 +17,14 @@ let onCursorCallback: ((cursors: Record<string, CursorPosition>) => void) | null
 let onUsersCallback: ((users: OnlineUser[]) => void) | null = null
 let onPresenceCallback: ((presence: NodePanelPresenceMap) => void) | null = null
 let onLeaderCallback: ((isLeader: boolean) => void) | null = null
+let onHydrationCallback: ((state: { isHydrated: boolean }) => void) | null = null
 
 const unsubscribeState = vi.hoisted(() => vi.fn())
 const unsubscribeCursor = vi.hoisted(() => vi.fn())
 const unsubscribeUsers = vi.hoisted(() => vi.fn())
 const unsubscribePresence = vi.hoisted(() => vi.fn())
 const unsubscribeLeader = vi.hoisted(() => vi.fn())
+const unsubscribeHydration = vi.hoisted(() => vi.fn())
 
 let isCollaborationEnabled = true
 
@@ -57,6 +59,10 @@ vi.mock('../../core/collaboration-manager', () => ({
       onLeaderCallback = callback
       return unsubscribeLeader
     },
+    onHydrationChange: (callback: (state: { isHydrated: boolean }) => void) => {
+      onHydrationCallback = callback
+      return unsubscribeHydration
+    },
   },
 }))
 
@@ -78,6 +84,7 @@ describe('useCollaboration', () => {
     onUsersCallback = null
     onPresenceCallback = null
     onLeaderCallback = null
+    onHydrationCallback = null
     isCollaborationEnabled = true
     cursorServiceInstances.length = 0
     mockConnect.mockResolvedValue('conn-1')
@@ -101,6 +108,7 @@ describe('useCollaboration', () => {
     onCursorCallback?.({ u1: { x: 10, y: 20, userId: 'u1', timestamp: 1 } })
     onPresenceCallback?.({ nodeA: { sid1: { userId: 'u1', username: 'U1', clientId: 'sid1', timestamp: 1 } } })
     onLeaderCallback?.(true)
+    onHydrationCallback?.({ isHydrated: true })
 
     await waitFor(() => {
       expect(result.current.isConnected).toBe(true)
@@ -108,6 +116,7 @@ describe('useCollaboration', () => {
       expect(result.current.cursors.u1?.x).toBe(10)
       expect(result.current.nodePanelPresence.nodeA).toBeDefined()
       expect(result.current.isLeader).toBe(true)
+      expect(result.current.isHydrated).toBe(true)
       expect(result.current.leaderId).toBe('leader-1')
     })
 
@@ -131,6 +140,7 @@ describe('useCollaboration', () => {
     expect(unsubscribeUsers).toHaveBeenCalled()
     expect(unsubscribePresence).toHaveBeenCalled()
     expect(unsubscribeLeader).toHaveBeenCalled()
+    expect(unsubscribeHydration).toHaveBeenCalled()
     expect(mockDisconnect).toHaveBeenCalledWith('conn-1')
   })
 

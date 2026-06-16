@@ -195,8 +195,17 @@ const WorkflowMain = ({
     if (!appId || !isCollaborationEnabled)
       return
 
-    const unsubscribe = collaborationManager.onSyncRequest(() => {
-      doSyncWorkflowDraft()
+    const unsubscribe = collaborationManager.onSyncRequest((data) => {
+      doSyncWorkflowDraft(false, {
+        onSuccess: () => {
+          if (data?.requestId)
+            collaborationManager.emitSyncResult({ requestId: data.requestId, success: true })
+        },
+        onError: () => {
+          if (data?.requestId)
+            collaborationManager.emitSyncResult({ requestId: data.requestId, success: false })
+        },
+      })
     })
 
     return unsubscribe

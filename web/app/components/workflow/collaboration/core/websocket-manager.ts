@@ -22,6 +22,12 @@ const isUnauthorizedAck = (...ackArgs: AckArgs): boolean => {
 export type EmitAckOptions = {
   onAck?: (...ackArgs: AckArgs) => void
   onUnauthorized?: (...ackArgs: AckArgs) => void
+  onTimeout?: () => void
+  retry?: {
+    attempts: number
+    ackTimeoutMs: number
+    delayMs: number
+  }
 }
 
 export const emitWithAuthGuard = (
@@ -33,15 +39,48 @@ export const emitWithAuthGuard = (
   if (!socket)
     return
 
-  socket.emit(
-    event,
-    payload,
-    (...ackArgs: AckArgs) => {
-      options?.onAck?.(...ackArgs)
-      if (isUnauthorizedAck(...ackArgs))
-        options?.onUnauthorized?.(...ackArgs)
-    },
-  )
+  const maxAttempts = Math.max(1, options?.retry?.attempts ?? 1)
+  const ackTimeoutMs = options?.retry?.ackTimeoutMs
+  const retryDelayMs = options?.retry?.delayMs ?? 0
+
+  const emitAttempt = (attempt: number): void => {
+    let settled = false
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+
+    if (ackTimeoutMs !== undefined) {
+      timeoutId = setTimeout(() => {
+        if (settled)
+          return
+
+        settled = true
+        if (attempt < maxAttempts) {
+          setTimeout(() => emitAttempt(attempt + 1), retryDelayMs)
+          return
+        }
+
+        options?.onTimeout?.()
+      }, ackTimeoutMs)
+    }
+
+    socket.emit(
+      event,
+      payload,
+      (...ackArgs: AckArgs) => {
+        if (settled)
+          return
+
+        settled = true
+        if (timeoutId)
+          clearTimeout(timeoutId)
+
+        options?.onAck?.(...ackArgs)
+        if (isUnauthorizedAck(...ackArgs))
+          options?.onUnauthorized?.(...ackArgs)
+      },
+    )
+  }
+
+  emitAttempt(1)
 }
 
 export class WebSocketClient {

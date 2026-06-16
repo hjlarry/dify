@@ -50,6 +50,7 @@ type CollaborationEventType
     | 'workflow_restore_intent'
     | 'workflow_restore_complete'
     | 'workflow_history_action'
+    | 'workflow_sync_result'
 
 export type CollaborationUpdate = {
   type: CollaborationEventType
@@ -67,6 +68,18 @@ export type RestoreIntentData = {
 
 export type RestoreCompleteData = {
   versionId: string
+  success: boolean
+  error?: string
+}
+
+export type WorkflowSyncRequestData = {
+  requestId?: string
+  requestedAt?: number
+  requesterClientId?: string
+}
+
+export type WorkflowSyncResultData = {
+  requestId: string
   success: boolean
   error?: string
 }

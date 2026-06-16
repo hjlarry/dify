@@ -43,11 +43,13 @@ export const useCollaborativeWorkflow = () => {
     const { getNodes, setNodes: reactFlowSetNodes } = store.getState()
     if (shouldBroadcast) {
       const oldNodes = getNodes()
-      collabSetNodes(
+      const wasAccepted = collabSetNodes(
         oldNodes.map(sanitizeNodeForBroadcast),
         newNodes.map(sanitizeNodeForBroadcast),
         source,
       )
+      if (!wasAccepted)
+        return
     }
     reactFlowSetNodes(newNodes)
   }, [store, collabSetNodes])
@@ -55,10 +57,12 @@ export const useCollaborativeWorkflow = () => {
   const setEdges = useCallback((newEdges: Edge[], shouldBroadcast: boolean = true) => {
     const { edges, setEdges: reactFlowSetEdges } = store.getState()
     if (shouldBroadcast) {
-      collabSetEdges(
+      const wasAccepted = collabSetEdges(
         edges.map(sanitizeEdgeForBroadcast),
         newEdges.map(sanitizeEdgeForBroadcast),
       )
+      if (!wasAccepted)
+        return
     }
 
     reactFlowSetEdges(newEdges)

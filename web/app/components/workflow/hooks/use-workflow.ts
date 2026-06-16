@@ -18,6 +18,7 @@ import {
   getOutgoers,
 } from 'reactflow'
 import { useStore as useAppStore } from '@/app/components/app/store'
+import { collaborationManager } from '@/app/components/workflow/collaboration/core/collaboration-manager'
 import { useCollaborativeWorkflow } from '@/app/components/workflow/hooks/use-collaborative-workflow'
 import { CUSTOM_ITERATION_START_NODE } from '@/app/components/workflow/nodes/iteration-start/constants'
 import { CUSTOM_LOOP_START_NODE } from '@/app/components/workflow/nodes/loop-start/constants'
@@ -455,6 +456,7 @@ export const useNodesReadOnly = () => {
       || workflowRunningData?.result.status === WorkflowRunningStatus.Paused
       || historyWorkflowData
       || isRestoring
+      || collaborationManager.shouldBlockLocalEdits()
     )
   }, [workflowStore])
 
@@ -465,6 +467,7 @@ export const useNodesReadOnly = () => {
       || workflowRunningData?.result.status === WorkflowRunningStatus.Paused
       || historyWorkflowData
       || isRestoring
+      || collaborationManager.shouldBlockLocalEdits()
     ),
     getNodesReadOnly,
   }

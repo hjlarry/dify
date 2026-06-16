@@ -57,6 +57,7 @@ type CollaborationManagerInternals = {
   isLeader: boolean
   leaderId: string | null
   pendingInitialSync: boolean
+  collaborationHydrated: boolean
   pendingGraphImportEmit: boolean
   rejoinInProgress: boolean
   onlineUsers: OnlineUser[]
@@ -72,6 +73,7 @@ type CollaborationManagerInternals = {
   emitGraphResyncRequest: () => void
   broadcastCurrentGraph: () => void
   requestInitialSyncIfNeeded: () => void
+  shouldBlockLocalGraphMutation: () => boolean
   cleanupNodePanelPresence: (activeClientIds: Set<string>) => void
   recordGraphSyncDiagnostic: (
     stage: 'nodes_subscribe' | 'edges_subscribe' | 'nodes_import_apply' | 'edges_import_apply' | 'schedule_graph_import_emit' | 'graph_import_emit' | 'start_import_log' | 'finalize_import_log',
@@ -158,6 +160,67 @@ describe('CollaborationManager socket and subscription behavior', () => {
     expect(payloads.map(item => item.type)).toEqual(['mouse_move', 'sync_request', 'workflow_update'])
     expect(payloads[0]?.data).toMatchObject({ x: 11, y: 22 })
     expect(payloads[2]?.data).toMatchObject({ appId: 'wf-1' })
+  })
+
+  it('resolves follower sync callbacks when the leader broadcasts a sync result', () => {
+    const { manager, internals } = setupManagerWithDoc()
+    const socket = createMockSocket('socket-sync-result')
+    const callbacks = {
+      onSuccess: vi.fn(),
+      onError: vi.fn(),
+      onSettled: vi.fn(),
+    }
+
+    internals.currentAppId = 'app-1'
+    internals.setupSocketEventListeners(socket as unknown as Socket)
+    vi.spyOn(webSocketClient, 'isConnected').mockReturnValue(true)
+    vi.spyOn(webSocketClient, 'getSocket').mockReturnValue(socket as unknown as Socket)
+
+    manager.emitSyncRequest(callbacks)
+
+    const emitCall = socket.emit.mock.calls[0]
+    const payload = emitCall?.[1] as { type: string, data: { requestId: string } } | undefined
+    const ack = emitCall?.[2] as ((...ackArgs: unknown[]) => void) | undefined
+    expect(payload?.type).toBe('sync_request')
+    expect(payload?.data.requestId).toBeTruthy()
+    ack?.({ msg: 'sync_request_forwarded' }, 200)
+
+    socket.trigger('collaboration_update', {
+      type: 'workflow_sync_result',
+      userId: 'leader',
+      data: {
+        requestId: payload!.data.requestId,
+        success: true,
+      },
+      timestamp: 1,
+    } satisfies CollaborationUpdate)
+
+    expect(callbacks.onSuccess).toHaveBeenCalledTimes(1)
+    expect(callbacks.onError).not.toHaveBeenCalled()
+    expect(callbacks.onSettled).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails follower sync callbacks when no active leader can save', () => {
+    const { manager, internals } = setupManagerWithDoc()
+    const socket = createMockSocket('socket-no-leader')
+    const callbacks = {
+      onSuccess: vi.fn(),
+      onError: vi.fn(),
+      onSettled: vi.fn(),
+    }
+
+    internals.currentAppId = 'app-1'
+    vi.spyOn(webSocketClient, 'isConnected').mockReturnValue(true)
+    vi.spyOn(webSocketClient, 'getSocket').mockReturnValue(socket as unknown as Socket)
+
+    manager.emitSyncRequest(callbacks)
+
+    const ack = socket.emit.mock.calls[0]?.[2] as ((...ackArgs: unknown[]) => void) | undefined
+    ack?.({ msg: 'no_active_leader' }, 200)
+
+    expect(callbacks.onSuccess).not.toHaveBeenCalled()
+    expect(callbacks.onError).toHaveBeenCalledTimes(1)
+    expect(callbacks.onSettled).toHaveBeenCalledTimes(1)
   })
 
   it('tries to rejoin on unauthorized and forces disconnect on unauthorized ack', () => {
@@ -621,6 +684,7 @@ describe('CollaborationManager socket and subscription behavior', () => {
     internals.doc = doc
     internals.nodesMap = doc.getMap('nodes')
     internals.edgesMap = doc.getMap('edges')
+    internals.collaborationHydrated = true
     internals.broadcastCurrentGraph()
     expect(sendGraphEventSpy).not.toHaveBeenCalled()
 
@@ -682,6 +746,14 @@ describe('CollaborationManager socket and subscription behavior', () => {
       'disconnect',
     ).mockImplementation(() => undefined)
 
+    internals.doc = null
+    expect(manager.setNodes([], [createNode('docless-node')])).toBe(true)
+    expect(manager.setEdges([], [createEdge('docless-edge', 'n-a', 'n-b')])).toBe(true)
+
+    const doc = new LoroDoc()
+    internals.doc = doc
+    internals.nodesMap = doc.getMap('nodes')
+    internals.edgesMap = doc.getMap('edges')
     manager.setNodes([], [createNode('n-guard')])
     manager.setEdges([], [createEdge('e-guard', 'n-a', 'n-b')])
 
@@ -710,6 +782,23 @@ describe('CollaborationManager socket and subscription behavior', () => {
 
     manager.destroy()
     expect(destroyDisconnectSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('blocks follower graph mutations until collaboration hydration completes', () => {
+    const { manager, internals } = setupManagerWithDoc()
+
+    internals.currentAppId = 'app-hydration'
+    internals.isLeader = false
+    internals.collaborationHydrated = false
+
+    expect(manager.shouldBlockLocalEdits()).toBe(true)
+    expect(manager.setNodes([], [createNode('blocked-node')])).toBe(false)
+    expect(manager.getNodes()).toHaveLength(0)
+
+    internals.collaborationHydrated = true
+    expect(manager.shouldBlockLocalEdits()).toBe(false)
+    expect(manager.setNodes([], [createNode('accepted-node')])).toBe(true)
+    expect(manager.getNodes()).toHaveLength(1)
   })
 
   it('covers emit guards and node panel presence local updates', () => {
@@ -853,6 +942,7 @@ describe('CollaborationManager socket and subscription behavior', () => {
     internals.doc = doc
     internals.nodesMap = doc.getMap('nodes')
     internals.edgesMap = doc.getMap('edges')
+    internals.collaborationHydrated = true
     manager.setNodes([], [createNode('node-error')])
     getSocketSpy.mockReturnValue(socket as unknown as Socket)
     vi.spyOn(internals.doc, 'export').mockImplementation(() => {
@@ -1088,6 +1178,7 @@ describe('CollaborationManager socket and subscription behavior', () => {
     manager.onUndoRedoStateChange(undoStateSpy)
 
     const connectionId = await manager.connect('app-undo-pop', reactFlowStore)
+    internals.collaborationHydrated = true
     manager.setNodes([], nodes)
     const nextNodes = nodes.map((node) => {
       if (node.id === 'undo-node-1') {

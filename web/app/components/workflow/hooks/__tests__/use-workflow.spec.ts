@@ -11,13 +11,20 @@ import {
 } from '../use-workflow'
 
 let mockAppMode = 'workflow'
+const mockShouldBlockLocalEdits = vi.hoisted(() => vi.fn(() => false))
 vi.mock('@/app/components/app/store', () => ({
   useStore: (selector: (state: { appDetail: { mode: string } }) => unknown) => selector({ appDetail: { mode: mockAppMode } }),
+}))
+vi.mock('@/app/components/workflow/collaboration/core/collaboration-manager', () => ({
+  collaborationManager: {
+    shouldBlockLocalEdits: () => mockShouldBlockLocalEdits(),
+  },
 }))
 
 beforeEach(() => {
   vi.clearAllMocks()
   mockAppMode = 'workflow'
+  mockShouldBlockLocalEdits.mockReturnValue(false)
 })
 
 // ---------------------------------------------------------------------------
@@ -155,6 +162,15 @@ describe('useNodesReadOnly', () => {
   it('should return false when none of the conditions are met', () => {
     const { result } = renderWorkflowHook(() => useNodesReadOnly())
     expect(result.current.nodesReadOnly).toBe(false)
+  })
+
+  it('should return true while collaboration is waiting for a safe graph sync point', () => {
+    mockShouldBlockLocalEdits.mockReturnValue(true)
+
+    const { result } = renderWorkflowHook(() => useNodesReadOnly())
+
+    expect(result.current.nodesReadOnly).toBe(true)
+    expect(result.current.getNodesReadOnly()).toBe(true)
   })
 
   it('should expose getNodesReadOnly that reads from store state', () => {

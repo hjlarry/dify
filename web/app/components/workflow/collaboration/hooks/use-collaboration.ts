@@ -17,6 +17,7 @@ type CollaborationViewState = {
   cursors: Record<string, CursorPosition>
   nodePanelPresence: NodePanelPresenceMap
   isLeader: boolean
+  isHydrated: boolean
 }
 
 type ReactFlowStore = NonNullable<Parameters<typeof collaborationManager.connect>[1]>
@@ -27,6 +28,7 @@ const initialState: CollaborationViewState = {
   cursors: {},
   nodePanelPresence: {},
   isLeader: false,
+  isHydrated: false,
 }
 
 export function useCollaboration(appId: string, reactFlowStore?: ReactFlowStore) {
@@ -98,6 +100,10 @@ export function useCollaboration(appId: string, reactFlowStore?: ReactFlowStore)
       setState(prev => ({ ...prev, isLeader }))
     })
 
+    const unsubscribeHydrationChange = collaborationManager.onHydrationChange(({ isHydrated }) => {
+      setState(prev => ({ ...prev, isHydrated }))
+    })
+
     return () => {
       isUnmounted = true
       unsubscribeStateChange()
@@ -105,6 +111,7 @@ export function useCollaboration(appId: string, reactFlowStore?: ReactFlowStore)
       unsubscribeUsers()
       unsubscribeNodePanelPresence()
       unsubscribeLeaderChange()
+      unsubscribeHydrationChange()
       cursorServiceRef.current?.stopTracking()
       if (connectionId)
         collaborationManager.disconnect(connectionId)
@@ -144,6 +151,7 @@ export function useCollaboration(appId: string, reactFlowStore?: ReactFlowStore)
     cursors: state.cursors || {},
     nodePanelPresence: state.nodePanelPresence || {},
     isLeader: state.isLeader || false,
+    isHydrated: state.isHydrated || false,
     leaderId: collaborationManager.getLeaderId(),
     isEnabled: isCollaborationEnabled,
     startCursorTracking,

@@ -16,7 +16,10 @@ import type {
   OnlineUser,
   RestoreCompleteData,
   RestoreIntentData,
+  WorkflowSyncRequestData,
+  WorkflowSyncResultData,
 } from '../types/collaboration'
+import type { EmitAckOptions } from './websocket-manager'
 import { cloneDeep } from 'es-toolkit/object'
 import { isEqual } from 'es-toolkit/predicate'
 import { LoroDoc, LoroList, LoroMap, UndoManager } from 'loro-crdt'
@@ -46,6 +49,17 @@ type CollaborationEventPayload = {
   data: Record<string, unknown>
   timestamp: number
   userId?: string
+}
+
+type SyncRequestCallback = {
+  onSuccess?: () => void
+  onError?: () => void
+  onSettled?: () => void
+}
+
+type PendingSyncRequest = {
+  callback?: SyncRequestCallback
+  timeoutId: ReturnType<typeof setTimeout>
 }
 
 type LoroSubscribeEvent = {
@@ -131,6 +145,11 @@ type GraphSyncDiagnosticEvent = {
 const GRAPH_IMPORT_LOG_LIMIT = 20
 const SET_NODES_ANOMALY_LOG_LIMIT = 100
 const GRAPH_SYNC_DIAGNOSTIC_LOG_LIMIT = 400
+const SYNC_REQUEST_ACK_TIMEOUT_MS = 10000
+const SYNC_REQUEST_RESULT_TIMEOUT_MS = 30000
+const SYNC_REQUEST_RETRY_ATTEMPTS = 2
+const SYNC_REQUEST_RETRY_DELAY_MS = 400
+const NODE_DATA_LIST_FIELDS = new Set(['variables', 'prompt_template', 'parameters'])
 
 const toLoroValue = (value: unknown): Value => cloneDeep(value) as Value
 const toLoroRecord = (value: unknown): Record<string, Value> => cloneDeep(value) as Record<string, Value>
@@ -151,9 +170,11 @@ export class CollaborationManager {
   private activeConnections = new Set<string>()
   private isUndoRedoInProgress = false
   private pendingInitialSync = false
+  private collaborationHydrated = false
   private rejoinInProgress = false
   private pendingGraphImportEmit = false
   private graphViewActive: boolean | null = null
+  private pendingSyncRequests = new Map<string, PendingSyncRequest>()
   private graphImportLogs: GraphImportLogEntry[] = []
   private setNodesAnomalyLogs: SetNodesAnomalyLogEntry[] = []
   private graphSyncDiagnostics: GraphSyncDiagnosticEvent[] = []
@@ -201,12 +222,15 @@ export class CollaborationManager {
     )
   }
 
-  private sendCollaborationEvent(payload: CollaborationEventPayload): void {
+  private sendCollaborationEvent(payload: CollaborationEventPayload, options?: EmitAckOptions): void {
     const socket = this.getActiveSocket()
     if (!socket)
       return
 
-    emitWithAuthGuard(socket, 'collaboration_event', payload, { onUnauthorized: this.handleSessionUnauthorized })
+    emitWithAuthGuard(socket, 'collaboration_event', payload, {
+      onUnauthorized: this.handleSessionUnauthorized,
+      ...options,
+    })
   }
 
   private sendGraphEvent(payload: Uint8Array): void {
@@ -215,6 +239,49 @@ export class CollaborationManager {
       return
 
     emitWithAuthGuard(socket, 'graph_event', payload, { onUnauthorized: this.handleSessionUnauthorized })
+  }
+
+  private generateRequestId(): string {
+    const randomPart = Math.random().toString(36).slice(2, 10)
+    return `${Date.now().toString(36)}-${randomPart}`
+  }
+
+  private setCollaborationHydrated(isHydrated: boolean): void {
+    const changed = this.collaborationHydrated !== isHydrated
+    this.collaborationHydrated = isHydrated
+
+    if (changed) {
+      this.eventEmitter.emit('hydrationChange', {
+        isHydrated,
+      })
+    }
+  }
+
+  private shouldBlockLocalGraphMutation(): boolean {
+    if (!this.currentAppId)
+      return false
+    if (this.isLeader)
+      return false
+
+    return !this.collaborationHydrated
+  }
+
+  private settlePendingSyncRequest(requestId: string, success: boolean): void {
+    const pendingRequest = this.pendingSyncRequests.get(requestId)
+    if (!pendingRequest)
+      return
+
+    clearTimeout(pendingRequest.timeoutId)
+    this.pendingSyncRequests.delete(requestId)
+    if (success)
+      pendingRequest.callback?.onSuccess?.()
+    else
+      pendingRequest.callback?.onError?.()
+    pendingRequest.callback?.onSettled?.()
+  }
+
+  private rejectPendingSyncRequests(): void {
+    Array.from(this.pendingSyncRequests.keys()).forEach(requestId => this.settlePendingSyncRequest(requestId, false))
   }
 
   private getNodeContainer(nodeId: string): LoroMap<Record<string, Value>> {
@@ -274,7 +341,6 @@ export class CollaborationManager {
   }
 
   private populateNodeContainer(container: LoroMap<Record<string, Value>>, node: Node): void {
-    const listFields = new Set(['variables', 'prompt_template', 'parameters'])
     container.set('id', node.id)
     container.set('type', node.type)
     container.set('position', toLoroValue(node.position))
@@ -329,8 +395,8 @@ export class CollaborationManager {
         return
       handledKeys.add(key)
 
-      if (listFields.has(key))
-        this.syncList(container, key, Array.isArray(value) ? value : [])
+      if (NODE_DATA_LIST_FIELDS.has(key))
+        this.replaceList(container, key, Array.isArray(value) ? value : [])
       else
         dataContainer.set(key, toLoroValue(value))
     })
@@ -346,12 +412,103 @@ export class CollaborationManager {
     })
   }
 
+  private patchNodeContainer(container: LoroMap<Record<string, Value>>, oldNode: Node, newNode: Node): void {
+    const topLevelFields: Array<keyof Node> = [
+      'type',
+      'position',
+      'sourcePosition',
+      'targetPosition',
+      'width',
+      'height',
+      'selected',
+      'parentId',
+      'positionAbsolute',
+      'extent',
+      'zIndex',
+      'draggable',
+      'selectable',
+      'dragHandle',
+      'dragging',
+      'connectable',
+      'expandParent',
+      'focusable',
+      'hidden',
+      'style',
+      'className',
+      'ariaLabel',
+      'resizing',
+      'deletable',
+    ]
+
+    topLevelFields.forEach((field) => {
+      const oldValue = oldNode[field]
+      const newValue = newNode[field]
+      if (isEqual(oldValue, newValue))
+        return
+
+      if (newValue === undefined)
+        container.delete(field as string)
+      else
+        container.set(field as string, toLoroValue(newValue))
+    })
+
+    const dataContainer = this.ensureDataContainer(container)
+    const oldData = oldNode.data || {}
+    const newData = newNode.data || {}
+    const dataKeys = new Set([...Object.keys(oldData), ...Object.keys(newData)])
+
+    dataKeys.forEach((key) => {
+      if (!this.shouldSyncDataKey(key))
+        return
+
+      const oldHasKey = Object.prototype.hasOwnProperty.call(oldData, key)
+      const newHasKey = Object.prototype.hasOwnProperty.call(newData, key)
+      const oldValue = oldData[key as keyof typeof oldData]
+      const newValue = newData[key as keyof typeof newData]
+
+      if (oldHasKey && newHasKey && isEqual(oldValue, newValue))
+        return
+
+      if (!newHasKey) {
+        dataContainer.delete(key)
+        return
+      }
+
+      if (NODE_DATA_LIST_FIELDS.has(key)) {
+        this.patchList(
+          container,
+          key,
+          Array.isArray(oldValue) ? oldValue : [],
+          Array.isArray(newValue) ? newValue : [],
+        )
+        return
+      }
+
+      dataContainer.set(key, toLoroValue(newValue))
+    })
+  }
+
   private shouldSyncDataKey(key: string): boolean {
     const syncDataAllowList = new Set(['_children', '_connectedSourceHandleIds', '_connectedTargetHandleIds', '_targetBranches'])
     return (syncDataAllowList.has(key) || !key.startsWith('_')) && key !== 'selected'
   }
 
-  private syncList(nodeContainer: LoroMap<Record<string, Value>>, key: string, desired: Array<unknown>): void {
+  private getStableListItemKey(item: unknown): string | null {
+    if (!item || typeof item !== 'object' || Array.isArray(item))
+      return null
+
+    const record = item as Record<string, unknown>
+    const keyFields = ['id', 'name', 'variable', 'key']
+    for (const field of keyFields) {
+      const value = record[field]
+      if (typeof value === 'string' && value)
+        return `${field}:${value}`
+    }
+
+    return null
+  }
+
+  private replaceList(nodeContainer: LoroMap<Record<string, Value>>, key: string, desired: Array<unknown>): void {
     const list = this.ensureList(nodeContainer, key)
     const current = list.toJSON() as Array<unknown>
     const target = Array.isArray(desired) ? desired : []
@@ -371,6 +528,65 @@ export class CollaborationManager {
       for (let i = current.length; i < target.length; i += 1)
         list.insert(i, cloneDeep(target[i]))
     }
+  }
+
+  private patchList(
+    nodeContainer: LoroMap<Record<string, Value>>,
+    key: string,
+    previous: Array<unknown>,
+    desired: Array<unknown>,
+  ): void {
+    const previousKeys = previous.map(item => this.getStableListItemKey(item))
+    const desiredKeys = desired.map(item => this.getStableListItemKey(item))
+    const canPatchByKey = [...previousKeys, ...desiredKeys].every(Boolean)
+
+    if (!canPatchByKey) {
+      this.replaceList(nodeContainer, key, desired)
+      return
+    }
+
+    const list = this.ensureList(nodeContainer, key)
+    const desiredByKey = new Map<string, unknown>()
+    desired.forEach((item, index) => {
+      const itemKey = desiredKeys[index]
+      if (itemKey)
+        desiredByKey.set(itemKey, item)
+    })
+
+    const previousKeySet = new Set(previousKeys.filter((itemKey): itemKey is string => Boolean(itemKey)))
+    const desiredKeySet = new Set(desiredKeys.filter((itemKey): itemKey is string => Boolean(itemKey)))
+
+    // Apply only the local add/update/delete intent. Remote-only list items are kept in place
+    // instead of being removed just because they were absent from this client's stale snapshot.
+    previousKeySet.forEach((itemKey) => {
+      if (desiredKeySet.has(itemKey))
+        return
+
+      const current = list.toJSON() as Array<unknown>
+      const index = current.findIndex(item => this.getStableListItemKey(item) === itemKey)
+      if (index >= 0)
+        list.delete(index, 1)
+    })
+
+    desired.forEach((item, desiredIndex) => {
+      const itemKey = desiredKeys[desiredIndex]
+      if (!itemKey)
+        return
+
+      const current = list.toJSON() as Array<unknown>
+      const currentIndex = current.findIndex(currentItem => this.getStableListItemKey(currentItem) === itemKey)
+      if (currentIndex < 0) {
+        const insertIndex = Math.min(desiredIndex, current.length)
+        list.insert(insertIndex, cloneDeep(item))
+        return
+      }
+
+      const desiredItem = desiredByKey.get(itemKey)
+      if (desiredItem !== undefined && !isEqual(current[currentIndex], desiredItem)) {
+        list.delete(currentIndex, 1)
+        list.insert(currentIndex, cloneDeep(desiredItem))
+      }
+    })
   }
 
   private getNodePanelPresenceSnapshot(): NodePanelPresenceMap {
@@ -444,31 +660,47 @@ export class CollaborationManager {
     this.connect(appId, reactFlowStore)
   }
 
-  setNodes = (oldNodes: Node[], newNodes: Node[], source = 'collaboration-manager:setNodes'): void => {
+  setNodes = (oldNodes: Node[], newNodes: Node[], source = 'collaboration-manager:setNodes'): boolean => {
     if (!this.doc)
-      return
+      return true
 
     // Don't track operations during undo/redo to prevent loops
     if (this.isUndoRedoInProgress)
-      return
+      return true
+
+    if (this.shouldBlockLocalGraphMutation()) {
+      this.eventEmitter.emit('hydrationChange', {
+        isHydrated: this.collaborationHydrated,
+      })
+      return false
+    }
 
     this.seedCrdtGraphFromReactFlowIfNeeded()
     this.captureSetNodesAnomaly(oldNodes, newNodes, source)
     this.syncNodes(oldNodes, newNodes)
     this.doc.commit()
+    return true
   }
 
-  setEdges = (oldEdges: Edge[], newEdges: Edge[]): void => {
+  setEdges = (oldEdges: Edge[], newEdges: Edge[]): boolean => {
     if (!this.doc)
-      return
+      return true
 
     // Don't track operations during undo/redo to prevent loops
     if (this.isUndoRedoInProgress)
-      return
+      return true
+
+    if (this.shouldBlockLocalGraphMutation()) {
+      this.eventEmitter.emit('hydrationChange', {
+        isHydrated: this.collaborationHydrated,
+      })
+      return false
+    }
 
     this.seedCrdtGraphFromReactFlowIfNeeded()
     this.syncEdges(oldEdges, newEdges)
     this.doc.commit()
+    return true
   }
 
   destroy = (): void => {
@@ -577,6 +809,7 @@ export class CollaborationManager {
     if (this.currentAppId)
       webSocketClient.disconnect(this.currentAppId)
 
+    this.rejectPendingSyncRequests()
     this.provider?.destroy()
     this.undoManager = null
     this.doc = null
@@ -590,6 +823,8 @@ export class CollaborationManager {
     this.nodePanelPresence = {}
     this.isUndoRedoInProgress = false
     this.rejoinInProgress = false
+    this.pendingInitialSync = false
+    this.setCollaborationHydrated(false)
     this.clearGraphImportLog()
 
     // Only reset leader status when actually disconnecting
@@ -606,6 +841,14 @@ export class CollaborationManager {
 
   isConnected(): boolean {
     return this.currentAppId ? webSocketClient.isConnected(this.currentAppId) : false
+  }
+
+  isHydrated(): boolean {
+    return this.collaborationHydrated
+  }
+
+  shouldBlockLocalEdits(): boolean {
+    return this.shouldBlockLocalGraphMutation()
   }
 
   getNodes(): Node[] {
@@ -634,13 +877,73 @@ export class CollaborationManager {
     })
   }
 
-  emitSyncRequest(): void {
+  emitSyncRequest(callback?: SyncRequestCallback): void {
+    if (!this.currentAppId || !webSocketClient.isConnected(this.currentAppId)) {
+      callback?.onError?.()
+      callback?.onSettled?.()
+      return
+    }
+
+    const socket = this.getActiveSocket()
+    if (!socket) {
+      callback?.onError?.()
+      callback?.onSettled?.()
+      return
+    }
+
+    const requestId = this.generateRequestId()
+    if (callback) {
+      const timeoutId = setTimeout(() => {
+        this.settlePendingSyncRequest(requestId, false)
+      }, SYNC_REQUEST_RESULT_TIMEOUT_MS)
+
+      this.pendingSyncRequests.set(requestId, { callback, timeoutId })
+    }
+
+    const failPendingRequest = () => {
+      this.settlePendingSyncRequest(requestId, false)
+    }
+
+    const payload: CollaborationEventPayload = {
+      type: 'sync_request',
+      data: {
+        requestId,
+        requesterClientId: socket?.id,
+        requestedAt: Date.now(),
+      },
+      timestamp: Date.now(),
+    }
+
+    if (!callback) {
+      this.sendCollaborationEvent(payload)
+      return
+    }
+
+    this.sendCollaborationEvent(
+      payload,
+      {
+        retry: {
+          attempts: SYNC_REQUEST_RETRY_ATTEMPTS,
+          ackTimeoutMs: SYNC_REQUEST_ACK_TIMEOUT_MS,
+          delayMs: SYNC_REQUEST_RETRY_DELAY_MS,
+        },
+        onAck: (ack) => {
+          const response = ack as { msg?: unknown } | undefined
+          if (response?.msg === 'no_active_leader')
+            failPendingRequest()
+        },
+        onTimeout: failPendingRequest,
+      },
+    )
+  }
+
+  emitSyncResult(data: WorkflowSyncResultData): void {
     if (!this.currentAppId || !webSocketClient.isConnected(this.currentAppId))
       return
 
     this.sendCollaborationEvent({
-      type: 'sync_request',
-      data: { timestamp: Date.now() },
+      type: 'workflow_sync_result',
+      data: data as unknown as Record<string, unknown>,
       timestamp: Date.now(),
     })
   }
@@ -681,8 +984,12 @@ export class CollaborationManager {
     this.applyNodePanelPresenceUpdate(payload)
   }
 
-  onSyncRequest(callback: () => void): () => void {
+  onSyncRequest(callback: (data?: WorkflowSyncRequestData) => void): () => void {
     return this.eventEmitter.on('syncRequest', callback)
+  }
+
+  onHydrationChange(callback: (state: { isHydrated: boolean }) => void): () => void {
+    return this.eventEmitter.on('hydrationChange', callback)
   }
 
   onGraphImport(callback: (payload: { nodes: Node[], edges: Edge[] }) => void): () => void {
@@ -931,7 +1238,10 @@ export class CollaborationManager {
         return
 
       const nodeContainer = this.getNodeContainer(newNode.id)
-      this.populateNodeContainer(nodeContainer, newNode)
+      if (oldNode)
+        this.patchNodeContainer(nodeContainer, oldNode, newNode)
+      else
+        this.populateNodeContainer(nodeContainer, newNode)
     })
   }
 
@@ -1034,6 +1344,7 @@ export class CollaborationManager {
         // Call ReactFlow's native setter directly to avoid triggering collaboration
         this.captureSetNodesAnomaly(previousNodes, updatedNodes, 'reactflow-native:import-nodes-map-subscribe')
         state.setNodes(updatedNodes)
+        this.setCollaborationHydrated(true)
         this.recordGraphSyncDiagnostic(
           'nodes_import_apply',
           'applied',
@@ -1093,6 +1404,7 @@ export class CollaborationManager {
 
         // Call ReactFlow's native setter directly to avoid triggering collaboration
         state.setEdges(updatedEdges)
+        this.setCollaborationHydrated(true)
         this.recordGraphSyncDiagnostic(
           'edges_import_apply',
           'applied',
@@ -1454,7 +1766,15 @@ export class CollaborationManager {
       else if (update.type === 'sync_request') {
         // Only process if we are the leader
         if (this.isLeader)
-          this.eventEmitter.emit('syncRequest', {})
+          this.eventEmitter.emit('syncRequest', update.data as WorkflowSyncRequestData)
+      }
+      else if (update.type === 'workflow_sync_result') {
+        const data = update.data as unknown as WorkflowSyncResultData
+        const pendingRequest = this.pendingSyncRequests.get(data.requestId)
+        if (!pendingRequest)
+          return
+
+        this.settlePendingSyncRequest(data.requestId, data.success)
       }
       else if (update.type === 'graph_resync_request') {
         if (this.isLeader)
@@ -1521,8 +1841,10 @@ export class CollaborationManager {
         if (this.isLeader) {
           this.seedCrdtGraphFromReactFlowIfNeeded()
           this.pendingInitialSync = false
+          this.setCollaborationHydrated(true)
         }
         else {
+          this.setCollaborationHydrated(false)
           this.requestInitialSyncIfNeeded()
         }
 
@@ -1537,14 +1859,17 @@ export class CollaborationManager {
     socket.on('connect', () => {
       this.eventEmitter.emit('stateChange', { isConnected: true })
       this.pendingInitialSync = true
+      this.setCollaborationHydrated(false)
     })
 
     socket.on('disconnect', (reason) => {
+      this.rejectPendingSyncRequests()
       this.cursors = {}
       this.onlineUsers = []
       this.isLeader = false
       this.leaderId = null
       this.pendingInitialSync = false
+      this.setCollaborationHydrated(false)
       this.eventEmitter.emit('stateChange', { isConnected: false, disconnectReason: reason })
       this.eventEmitter.emit('onlineUsers', [])
       this.eventEmitter.emit('cursors', {})
@@ -1552,6 +1877,7 @@ export class CollaborationManager {
 
     socket.on('connect_error', (error: Error) => {
       console.error('WebSocket connection error:', error)
+      this.rejectPendingSyncRequests()
       this.eventEmitter.emit('stateChange', { isConnected: false, error: error.message })
     })
 

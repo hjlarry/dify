@@ -130,8 +130,7 @@ export const useNodesSyncDraft = () => {
       && !collaborationManager.getIsLeader()
 
     if (isFollower) {
-      collaborationManager.emitSyncRequest()
-      callback?.onSettled?.()
+      collaborationManager.emitSyncRequest(callback)
       return
     }
 
@@ -163,8 +162,11 @@ export const useNodesSyncDraft = () => {
     catch (error: any) {
       if (error && error.json && !error.bodyUsed) {
         error.json().then((err: any) => {
-          if (err.code === 'draft_workflow_not_sync' && !notRefreshWhenSyncError)
-            handleRefreshWorkflowDraft(true)
+          if (err.code === 'draft_workflow_not_sync' && !notRefreshWhenSyncError) {
+            // Do not adopt only the newest hash over a stale canvas. Refresh the
+            // graph as well, otherwise the next autosave can overwrite peers.
+            handleRefreshWorkflowDraft()
+          }
         })
       }
       callback?.onError?.()

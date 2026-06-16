@@ -235,8 +235,8 @@ describe('useNodesInteractions', () => {
     ]
     const isConnectedSpy = vi.spyOn(collaborationManager, 'isConnected').mockReturnValue(true)
     const emitHistoryActionSpy = vi.spyOn(collaborationManager, 'emitHistoryAction').mockImplementation(() => undefined)
-    const collabSetNodesSpy = vi.spyOn(collaborationManager, 'setNodes').mockImplementation(() => undefined)
-    const collabSetEdgesSpy = vi.spyOn(collaborationManager, 'setEdges').mockImplementation(() => undefined)
+    const collabSetNodesSpy = vi.spyOn(collaborationManager, 'setNodes').mockImplementation(() => true)
+    const collabSetEdgesSpy = vi.spyOn(collaborationManager, 'setEdges').mockImplementation(() => true)
 
     const { result } = renderWorkflowHook(() => useNodesInteractions(), {
       historyStore: {
@@ -277,8 +277,8 @@ describe('useNodesInteractions', () => {
     ]
     vi.spyOn(collaborationManager, 'isConnected').mockReturnValue(false)
     const emitHistoryActionSpy = vi.spyOn(collaborationManager, 'emitHistoryAction').mockImplementation(() => undefined)
-    const collabSetNodesSpy = vi.spyOn(collaborationManager, 'setNodes').mockImplementation(() => undefined)
-    const collabSetEdgesSpy = vi.spyOn(collaborationManager, 'setEdges').mockImplementation(() => undefined)
+    const collabSetNodesSpy = vi.spyOn(collaborationManager, 'setNodes').mockImplementation(() => true)
+    const collabSetEdgesSpy = vi.spyOn(collaborationManager, 'setEdges').mockImplementation(() => true)
 
     const { result } = renderWorkflowHook(() => useNodesInteractions(), {
       historyStore: {
