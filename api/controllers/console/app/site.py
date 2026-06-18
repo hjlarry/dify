@@ -31,6 +31,7 @@ class AppSiteUpdatePayload(BaseModel):
     icon: str | None = Field(default=None)
     icon_background: str | None = Field(default=None)
     description: str | None = Field(default=None)
+    chat_input_placeholder: str | None = Field(default=None, max_length=255)
     default_language: str | None = Field(default=None)
     chat_color_theme: str | None = Field(default=None)
     chat_color_theme_inverted: bool | None = Field(default=None)
@@ -59,6 +60,7 @@ class AppSiteResponse(ResponseModel):
     icon: str | None = None
     icon_background: str | None = None
     description: str | None = None
+    chat_input_placeholder: str | None = None
     default_language: str
     customize_domain: str | None = None
     copyright: str | None = None
@@ -100,6 +102,7 @@ class AppSite(Resource):
             "icon",
             "icon_background",
             "description",
+            "chat_input_placeholder",
             "default_language",
             "chat_color_theme",
             "chat_color_theme_inverted",

@@ -36,6 +36,7 @@ class AppSiteResponse(ResponseModel):
     icon_background: str | None = None
     icon_url: str | None = None
     description: str | None = None
+    chat_input_placeholder: str | None = None
     copyright: str | None = None
     privacy_policy: str | None = None
     custom_disclaimer: str | None = None
@@ -82,6 +83,7 @@ class AppSiteApi(WebApiResource):
         "icon_background": fields.String,
         "icon_url": AppIconUrlField,
         "description": fields.String,
+        "chat_input_placeholder": fields.String,
         "copyright": fields.String,
         "privacy_policy": fields.String,
         "custom_disclaimer": fields.String,

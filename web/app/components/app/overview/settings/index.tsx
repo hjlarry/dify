@@ -42,6 +42,7 @@ export type ConfigParams = {
   default_language: string
   chat_color_theme: string
   chat_color_theme_inverted: boolean
+  chat_input_placeholder: string
   prompt_public: boolean
   copyright: string
   privacy_policy: string
@@ -68,6 +69,7 @@ const createInputInfo = (appInfo: ISettingsModalProps['appInfo']) => {
     description,
     chat_color_theme,
     chat_color_theme_inverted,
+    chat_input_placeholder,
     copyright,
     privacy_policy,
     custom_disclaimer,
@@ -80,6 +82,7 @@ const createInputInfo = (appInfo: ISettingsModalProps['appInfo']) => {
     desc: description,
     chatColorTheme: chat_color_theme,
     chatColorThemeInverted: chat_color_theme_inverted,
+    chatInputPlaceholder: chat_input_placeholder ?? '',
     copyright,
     copyrightSwitchValue: !!copyright,
     privacyPolicy: privacy_policy,
@@ -105,6 +108,7 @@ const getSettingsResetKey = (appInfo: ISettingsModalProps['appInfo']) => JSON.st
   appInfo.site.description,
   appInfo.site.chat_color_theme,
   appInfo.site.chat_color_theme_inverted,
+  appInfo.site.chat_input_placeholder,
   appInfo.site.copyright,
   appInfo.site.privacy_policy,
   appInfo.site.custom_disclaimer,
@@ -214,6 +218,7 @@ const SettingsModal: FC<ISettingsModalProps> = ({
       default_language: language,
       chat_color_theme: inputInfo.chatColorTheme,
       chat_color_theme_inverted: inputInfo.chatColorThemeInverted,
+      chat_input_placeholder: inputInfo.chatInputPlaceholder,
       prompt_public: false,
       copyright: !webappCopyrightEnabled
         ? ''
@@ -356,6 +361,21 @@ const SettingsModal: FC<ISettingsModalProps> = ({
                     <Switch checked={inputInfo.chatColorThemeInverted} onCheckedChange={v => setInputInfo({ ...inputInfo, chatColorThemeInverted: v })}></Switch>
                   </div>
                 </div>
+              </div>
+            )}
+            {/* chat input placeholder */}
+            {isChat && (
+              <div className="flex items-center">
+                <div className="min-w-0 grow">
+                  <div className={cn('py-1 system-sm-semibold text-text-secondary')}>{t(`${prefixSettings}.chatInputPlaceholder`, { ns: 'appOverview' })}</div>
+                  <div className="pb-0.5 body-xs-regular text-text-tertiary">{t(`${prefixSettings}.chatInputPlaceholderTip`, { ns: 'appOverview' })}</div>
+                </div>
+                <Input
+                  className="w-[200px] shrink-0"
+                  value={inputInfo.chatInputPlaceholder}
+                  onChange={onChange('chatInputPlaceholder')}
+                  placeholder={t(`${prefixSettings}.chatInputPlaceholderPlaceholder`, { ns: 'appOverview' }) as string}
+                />
               </div>
             )}
             {/* workflow detail */}

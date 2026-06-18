@@ -17,6 +17,7 @@ export type SiteInfo = {
   icon_background?: string | null
   icon_url?: string | null
   description?: string
+  chat_input_placeholder?: string | null
   default_language?: Locale
   prompt_public?: boolean
   copyright?: string

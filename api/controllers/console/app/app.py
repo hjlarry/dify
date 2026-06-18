@@ -332,6 +332,7 @@ class Site(ResponseModel):
     icon: str | None = None
     icon_background: str | None = None
     description: str | None = None
+    chat_input_placeholder: str | None = None
     default_language: str | None = None
     chat_color_theme: str | None = None
     chat_color_theme_inverted: bool | None = None

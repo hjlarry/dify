@@ -104,6 +104,7 @@ const mockAppInfo = {
     icon_background: '#ABCDEF',
     icon_url: 'https://example.com/icon.png',
     description: 'A description',
+    chat_input_placeholder: 'Ask anything',
     chat_color_theme: '#123456',
     chat_color_theme_inverted: true,
     copyright: '© Dify',
@@ -217,6 +218,7 @@ describe('SettingsModal', () => {
       default_language: mockAppInfo.site.default_language,
       chat_color_theme: mockAppInfo.site.chat_color_theme,
       chat_color_theme_inverted: mockAppInfo.site.chat_color_theme_inverted,
+      chat_input_placeholder: mockAppInfo.site.chat_input_placeholder,
       prompt_public: false,
       copyright: mockAppInfo.site.copyright,
       privacy_policy: mockAppInfo.site.privacy_policy,
@@ -349,6 +351,22 @@ describe('SettingsModal', () => {
         icon_background: undefined,
         show_workflow_steps: false,
         use_icon_as_answer_icon: false,
+      }))
+    })
+  })
+
+  it('should save a custom chat input placeholder', async () => {
+    mockOnSave.mockResolvedValueOnce(undefined)
+    renderSettingsModal()
+
+    fireEvent.change(screen.getByPlaceholderText('appOverview.overview.appInfo.settings.chatInputPlaceholderPlaceholder'), {
+      target: { value: 'Ask about your invoices' },
+    })
+    fireEvent.click(screen.getByText('common.operation.save'))
+
+    await waitFor(() => {
+      expect(mockOnSave).toHaveBeenCalledWith(expect.objectContaining({
+        chat_input_placeholder: 'Ask about your invoices',
       }))
     })
   })

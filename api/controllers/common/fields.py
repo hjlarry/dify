@@ -180,6 +180,7 @@ class Site(BaseModel):
     icon: str | None = None
     icon_background: str | None = None
     description: str | None = None
+    chat_input_placeholder: str | None = None
     copyright: str | None = None
     privacy_policy: str | None = None
     custom_disclaimer: str | None = None

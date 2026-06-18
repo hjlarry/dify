@@ -270,6 +270,8 @@ export type SiteConfig = {
   title: string
   /** Application Description will be shown in the Client  */
   description: string
+  /** Placeholder shown in the chat input before users type */
+  chat_input_placeholder: string | null
   /**
    * Define the color in hex for different elements of the chatbot, such as:
    * The header, the button , etc.
