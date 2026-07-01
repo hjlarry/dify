@@ -23,6 +23,7 @@ PLUGIN_CATEGORIES = tuple(PluginCategory)
 SECONDS_PER_DAY = 24 * 60 * 60
 AUTO_UPGRADE_CHECK_SLOT_SECONDS = 15 * 60
 AUTO_UPGRADE_CHECK_SLOT_COUNT = SECONDS_PER_DAY // AUTO_UPGRADE_CHECK_SLOT_SECONDS
+PLUGIN_INSTALLATION_FETCH_BATCH_SIZE = 256
 
 
 @dataclass(frozen=True)
@@ -60,15 +61,30 @@ class PluginAutoUpgradeService:
             return None
 
     @staticmethod
-    def _get_installed_plugin_categories(tenant_id: str) -> dict[str, PluginCategory]:
-        """Build a plugin_id -> category map for splitting legacy include/exclude lists."""
-        installed_plugins = PluginInstaller().list_plugins(tenant_id)
+    def _get_installed_plugin_categories(tenant_id: str, plugin_ids: list[str]) -> dict[str, PluginCategory]:
+        """Build a plugin_id -> category map for splitting legacy include/exclude lists.
+
+        Backfill only needs the plugin IDs already stored in the strategy lists.
+        Fetching every installation can fail on unrelated stale daemon rows and
+        block migration for a tenant whose strategy itself is otherwise valid.
+        """
+        unique_plugin_ids = list(dict.fromkeys(plugin_ids))
+        if not unique_plugin_ids:
+            return {}
+
+        installer = PluginInstaller()
         plugin_categories: dict[str, PluginCategory] = {}
 
-        for plugin in installed_plugins:
-            plugin_category = PluginAutoUpgradeService._coerce_category(plugin.declaration.category)
-            if plugin_category is not None:
-                plugin_categories[plugin.plugin_id] = plugin_category
+        for start in range(0, len(unique_plugin_ids), PLUGIN_INSTALLATION_FETCH_BATCH_SIZE):
+            installed_plugins = installer.fetch_plugin_installation_by_ids(
+                tenant_id,
+                unique_plugin_ids[start : start + PLUGIN_INSTALLATION_FETCH_BATCH_SIZE],
+            )
+
+            for plugin in installed_plugins:
+                plugin_category = PluginAutoUpgradeService._coerce_category(plugin.declaration.category)
+                if plugin_category is not None:
+                    plugin_categories[plugin.plugin_id] = plugin_category
 
         return plugin_categories
 
@@ -164,9 +180,12 @@ class PluginAutoUpgradeService:
             exclude_plugins = source_strategy.exclude_plugins
             include_plugins = source_strategy.include_plugins
             should_split_plugin_lists = bool(exclude_plugins or include_plugins)
-            # Query daemon only for tenants that actually customized plugin lists.
+            # Query daemon only for plugin IDs that the historical strategy customized.
             plugin_categories = (
-                PluginAutoUpgradeService._get_installed_plugin_categories(tenant_id)
+                PluginAutoUpgradeService._get_installed_plugin_categories(
+                    tenant_id,
+                    exclude_plugins + include_plugins,
+                )
                 if should_split_plugin_lists
                 else {}
             )

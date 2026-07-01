@@ -212,6 +212,7 @@ class TestBackfillStrategyCategories:
         assert result.created_count == len(TenantPluginAutoUpgradeStrategy.PluginCategory) - 1
         assert result.normalized is False
         installer.list_plugins.assert_not_called()
+        installer.fetch_plugin_installation_by_ids.assert_not_called()
         assert tool_strategy.upgrade_time_of_day == expected_time
         created_strategies = [call.args[0] for call in session.add.call_args_list]
         model_strategy = next(
@@ -261,7 +262,8 @@ class TestBackfillStrategyCategories:
             ),
         ]
         installer = MagicMock()
-        installer.list_plugins.return_value = installed_plugins
+        installer.list_plugins.side_effect = AssertionError("backfill should not list unrelated plugin installations")
+        installer.fetch_plugin_installation_by_ids.return_value = installed_plugins
 
         with (
             p1,
@@ -275,6 +277,11 @@ class TestBackfillStrategyCategories:
         assert result.created_count == len(TenantPluginAutoUpgradeStrategy.PluginCategory) - 2
         assert result.normalized is True
         assert session.add.call_count == len(TenantPluginAutoUpgradeStrategy.PluginCategory) - 2
+        installer.list_plugins.assert_not_called()
+        installer.fetch_plugin_installation_by_ids.assert_called_once_with(
+            "t1",
+            ["tool-plugin", "model-plugin", "unknown-plugin"],
+        )
         assert tool_strategy.exclude_plugins == ["tool-plugin"]
         assert tool_strategy.include_plugins == ["tool-plugin"]
         assert model_strategy.exclude_plugins == ["model-plugin"]
