@@ -147,7 +147,7 @@ export const getMarketplacePlugins = async (
     }
   }
 
-  const { query, sort_by, sort_order, category, tags, type, page_size = 40 } = queryParams
+  const { query, sort_by, sort_order, category, tags, exclude, type, page_size = 40 } = queryParams
 
   try {
     const res = await marketplaceClient.searchAdvanced(
@@ -163,6 +163,7 @@ export const getMarketplacePlugins = async (
           sort_order,
           category: category !== 'all' ? category : '',
           tags,
+          exclude,
         },
       },
       { signal },
