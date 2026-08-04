@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "Tidak dapat mengambil rilis. Silakan coba lagi nanti.",
   "error.inValidGitHubUrl": "URL GitHub tidak valid. Silakan masukkan URL yang valid dalam format: https://github.com/owner/repo",
   "error.noReleasesFound": "Tidak ada rilis yang ditemukan. Silakan periksa repositori GitHub atau URL input.",
+  "errors.plugin_package_too_large.hint": "Tutup dialog ini, lalu pilih paket plugin yang lebih kecil dan coba lagi.",
+  "errors.plugin_package_too_large.message": "Paket plugin terlalu besar",
   "findMoreInMarketplace": "Temukan selengkapnya di Marketplace",
   "from": "Dari",
   "fromMarketplace": "Dari Marketplace",

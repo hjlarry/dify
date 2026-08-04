@@ -151,17 +151,29 @@ describe('Uploading', () => {
       })
     })
 
-    it('should call onFailed when upload fails with error message', async () => {
+    it('should pass the error code and message when upload fails', async () => {
       const errorMessage = 'Upload failed: file too large'
       mockUploadFile.mockRejectedValue({
-        response: { message: errorMessage },
+        get responseText(): string {
+          throw new DOMException(
+            'The value is only accessible if responseType is empty or text.',
+            'InvalidStateError',
+          )
+        },
+        response: {
+          code: 'plugin_package_too_large',
+          message: errorMessage,
+        },
       })
 
       const onFailed = vi.fn()
       render(<Uploading {...defaultProps} onFailed={onFailed} />)
 
       await waitFor(() => {
-        expect(onFailed).toHaveBeenCalledWith(errorMessage)
+        expect(onFailed).toHaveBeenCalledWith({
+          code: 'plugin_package_too_large',
+          message: errorMessage,
+        })
       })
     })
 
@@ -295,7 +307,9 @@ describe('Uploading', () => {
 
       await waitFor(() => {
         expect(onPackageUploaded).not.toHaveBeenCalled()
-        expect(onFailed).toHaveBeenCalledWith('plugin.installModal.uploadFailed')
+        expect(onFailed).toHaveBeenCalledWith({
+          message: 'plugin.installModal.uploadFailed',
+        })
       })
     })
 
@@ -312,7 +326,9 @@ describe('Uploading', () => {
 
       await waitFor(() => {
         expect(onPackageUploaded).not.toHaveBeenCalled()
-        expect(onFailed).toHaveBeenCalledWith('plugin.installModal.uploadFailed')
+        expect(onFailed).toHaveBeenCalledWith({
+          message: 'plugin.installModal.uploadFailed',
+        })
       })
     })
 
@@ -329,7 +345,9 @@ describe('Uploading', () => {
 
       await waitFor(() => {
         expect(onPackageUploaded).not.toHaveBeenCalled()
-        expect(onFailed).toHaveBeenCalledWith('plugin.installModal.uploadFailed')
+        expect(onFailed).toHaveBeenCalledWith({
+          message: 'plugin.installModal.uploadFailed',
+        })
       })
     })
 

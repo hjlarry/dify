@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "Не вдається отримати згоди. Повторіть спробу пізніше.",
   "error.inValidGitHubUrl": "Невірна URL-адреса GitHub. Будь ласка, введіть дійсну URL-адресу у форматі: https://github.com/owner/repo",
   "error.noReleasesFound": "Релізів не знайдено. Будь ласка, перевірте репозиторій GitHub або URL-адресу введення.",
+  "errors.plugin_package_too_large.hint": "Закрийте це діалогове вікно, виберіть менший пакет плагіна та повторіть спробу.",
+  "errors.plugin_package_too_large.message": "Пакет плагіна завеликий",
   "findMoreInMarketplace": "Дізнайтеся більше в Marketplace",
   "from": "Від",
   "fromMarketplace": "Від Marketplace",

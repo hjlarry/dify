@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "Nu se pot recupera versiunile. Vă rugăm să încercați din nou mai târziu.",
   "error.inValidGitHubUrl": "URL GitHub nevalid. Vă rugăm să introduceți o adresă URL validă în formatul: https://github.com/owner/repo",
   "error.noReleasesFound": "Nu s-au găsit eliberări. Vă rugăm să verificați depozitul GitHub sau URL-ul de intrare.",
+  "errors.plugin_package_too_large.hint": "Închideți această fereastră de dialog, apoi selectați un pachet de plugin mai mic și încercați din nou.",
+  "errors.plugin_package_too_large.message": "Pachetul pluginului este prea mare",
   "findMoreInMarketplace": "Află mai multe în Marketplace",
   "from": "Din",
   "fromMarketplace": "Din Marketplace",

@@ -1,3 +1,4 @@
+import type { PluginAppError } from '../../../error'
 import type { Dependency, PluginDeclaration } from '../../../types'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -73,7 +74,7 @@ let uploadingOnPackageUploaded:
   | ((result: { uniqueIdentifier: string; manifest: PluginDeclaration }) => void)
   | null = null
 let uploadingOnBundleUploaded: ((result: Dependency[]) => void) | null = null
-let _uploadingOnFailed: ((errorMsg: string) => void) | null = null
+let _uploadingOnFailed: ((failure: PluginAppError) => void) | null = null
 
 vi.mock('../steps/uploading', () => ({
   default: ({
@@ -89,7 +90,7 @@ vi.mock('../steps/uploading', () => ({
     onCancel: () => void
     onPackageUploaded: (result: { uniqueIdentifier: string; manifest: PluginDeclaration }) => void
     onBundleUploaded: (result: Dependency[]) => void
-    onFailed: (errorMsg: string) => void
+    onFailed: (failure: PluginAppError) => void
   }) => {
     uploadingOnPackageUploaded = onPackageUploaded
     uploadingOnBundleUploaded = onBundleUploaded
@@ -120,9 +121,25 @@ vi.mock('../steps/uploading', () => ({
         </button>
         <button
           data-testid="trigger-upload-fail-btn"
-          onClick={() => onFailed('Upload failed error')}
+          onClick={() =>
+            onFailed({
+              code: 'unknown_upload_error',
+              message: 'Upload failed error',
+            })
+          }
         >
           Trigger Upload Fail
+        </button>
+        <button
+          data-testid="trigger-package-too-large-btn"
+          onClick={() =>
+            onFailed({
+              code: 'plugin_package_too_large',
+              message: 'Raw backend package-too-large message',
+            })
+          }
+        >
+          Trigger Package Too Large
         </button>
       </div>
     )
@@ -330,6 +347,24 @@ describe('InstallFromLocalPackage', () => {
       await waitFor(() => {
         expect(screen.getByText('plugin.installModal.uploadFailed')).toBeInTheDocument()
       })
+    })
+
+    it('should localize a known package-too-large error instead of showing backend copy', async () => {
+      render(<InstallFromLocalPackage {...defaultProps} />)
+
+      fireEvent.click(screen.getByTestId('trigger-package-too-large-btn'))
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('plugin.errors.plugin_package_too_large.message'),
+        ).toBeInTheDocument()
+        expect(screen.getByTestId('package-error-msg')).toHaveTextContent(
+          'plugin.errors.plugin_package_too_large.hint',
+        )
+      })
+      expect(screen.queryByText('Raw backend package-too-large message')).not.toBeInTheDocument()
+      fireEvent.click(screen.getByTestId('package-close-btn'))
+      expect(defaultProps.onClose).toHaveBeenCalledTimes(1)
     })
 
     it('should show installed successfully title for package when installed', async () => {

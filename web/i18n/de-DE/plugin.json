@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "Freigaben können nicht abgerufen werden. Bitte versuchen Sie es später erneut.",
   "error.inValidGitHubUrl": "Ungültige GitHub-URL. Bitte geben Sie eine gültige URL im Format ein: https://github.com/owner/repo",
   "error.noReleasesFound": "Keine Veröffentlichungen gefunden. Bitte überprüfen Sie das GitHub-Repository oder die Eingabe-URL.",
+  "errors.plugin_package_too_large.hint": "Schließen Sie dieses Dialogfeld, wählen Sie ein kleineres Plugin-Paket aus und versuchen Sie es erneut.",
+  "errors.plugin_package_too_large.message": "Plugin-Paket ist zu groß",
   "findMoreInMarketplace": "Weitere Informationen finden Sie im Marketplace",
   "from": "Von",
   "fromMarketplace": "Aus dem Marketplace",

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from flask import Flask
+from flask_restx import Resource
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import Forbidden
 
@@ -47,6 +48,7 @@ from core.plugin.entities.plugin import PluginDeclaration, PluginEntity, PluginI
 from core.plugin.entities.plugin_daemon import PluginInstallTask
 from core.plugin.impl.exc import PluginDaemonClientSideError
 from core.plugin.plugin_service import PluginService
+from libs.external_api import ExternalApi
 from models.account import (
     Account,
     TenantAccountRole,
@@ -558,23 +560,36 @@ class TestPluginUploadFromPkgApi:
 
         assert result["ok"] is True
 
-    def test_upload_pkg_too_large(self, app: Flask):
-        api = PluginUploadFromPkgApi()
-        method = unwrap(api.post)
+    def test_upload_pkg_too_large(self):
+        test_app = Flask(__name__)
+        api = ExternalApi(test_app)
+        method = unwrap(PluginUploadFromPkgApi.post)
+
+        @api.route("/workspaces/current/plugin/upload/pkg")
+        class PluginPackageUploadApi(Resource):
+            def post(self):
+                return method(PluginUploadFromPkgApi(), "t1")
 
         data = {
             "pkg": (io.BytesIO(b"x"), "test.pkg"),
         }
 
         with (
-            app.test_request_context("/", data=data, content_type="multipart/form-data"),
             patch("controllers.console.workspace.plugin.dify_config.PLUGIN_MAX_PACKAGE_SIZE", 0),
             patch("controllers.console.workspace.plugin.PluginService.upload_pkg") as upload_pkg_mock,
         ):
-            with pytest.raises(ValueError) as exc_info:
-                method(api, "t1")
-            assert "File size exceeds the maximum allowed size" in str(exc_info.value)
+            response = test_app.test_client().post(
+                "/workspaces/current/plugin/upload/pkg",
+                data=data,
+                content_type="multipart/form-data",
+            )
 
+        assert response.status_code == 413
+        assert response.get_json() == {
+            "code": "plugin_package_too_large",
+            "message": "The plugin package exceeds the maximum allowed size.",
+            "status": 413,
+        }
         upload_pkg_mock.assert_not_called()
 
 

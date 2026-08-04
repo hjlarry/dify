@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "Nie można pobrać wydań. Spróbuj ponownie później.",
   "error.inValidGitHubUrl": "Nieprawidłowy adres URL usługi GitHub. Podaj prawidłowy adres URL w formacie: https://github.com/owner/repo",
   "error.noReleasesFound": "Nie znaleziono wydań. Sprawdź repozytorium GitHub lub wejściowy adres URL.",
+  "errors.plugin_package_too_large.hint": "Zamknij to okno dialogowe, wybierz mniejszy pakiet wtyczki i spróbuj ponownie.",
+  "errors.plugin_package_too_large.message": "Pakiet wtyczki jest zbyt duży",
   "findMoreInMarketplace": "Więcej informacji w Marketplace",
   "from": "Z",
   "fromMarketplace": "Z Marketplace",

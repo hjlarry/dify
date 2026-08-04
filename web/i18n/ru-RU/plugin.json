@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "Не удается получить релизы. Пожалуйста, повторите попытку позже.",
   "error.inValidGitHubUrl": "Недопустимый URL-адрес GitHub. Пожалуйста, введите действительный URL-адрес в формате: https://github.com/owner/repo",
   "error.noReleasesFound": "Релизы не найдены. Пожалуйста, проверьте репозиторий GitHub или входной URL.",
+  "errors.plugin_package_too_large.hint": "Закройте это окно, выберите пакет плагина меньшего размера и повторите попытку.",
+  "errors.plugin_package_too_large.message": "Пакет плагина слишком большой",
   "findMoreInMarketplace": "Узнайте больше в Marketplace",
   "from": "От",
   "fromMarketplace": "Из маркетплейса",

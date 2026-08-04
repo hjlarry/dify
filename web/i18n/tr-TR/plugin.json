@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "Sürümler alınamıyor. Lütfen daha sonra tekrar deneyin.",
   "error.inValidGitHubUrl": "Geçersiz GitHub URL'si. Lütfen şu biçimde geçerli bir URL girin: https://github.com/owner/repo",
   "error.noReleasesFound": "Yayın bulunamadı. Lütfen GitHub deposunu veya giriş URL'sini kontrol edin.",
+  "errors.plugin_package_too_large.hint": "Bu iletişim kutusunu kapatın, daha küçük bir eklenti paketi seçin ve tekrar deneyin.",
+  "errors.plugin_package_too_large.message": "Eklenti paketi çok büyük",
   "findMoreInMarketplace": "Pazar Yeri'nde daha fazla bilgi edinin",
   "from": "Kaynak",
   "fromMarketplace": "Pazar Yeri'nden",

@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "امکان بازیابی نسخه ها وجود ندارد. لطفا بعدا دوباره امتحان کنید.",
   "error.inValidGitHubUrl": "URL GitHub نامعتبر است. لطفا یک URL معتبر را در قالب وارد کنید: https://github.com/owner/repo",
   "error.noReleasesFound": "هیچ نسخه ای یافت نشد. لطفا مخزن GitHub یا URL ورودی را بررسی کنید.",
+  "errors.plugin_package_too_large.hint": "این پنجره را ببندید، سپس یک بسته افزونه کوچک‌تر انتخاب کنید و دوباره تلاش کنید.",
+  "errors.plugin_package_too_large.message": "بسته افزونه بیش از حد بزرگ است",
   "findMoreInMarketplace": "اطلاعات بیشتر در Marketplace",
   "from": "از",
   "fromMarketplace": "از بازار",

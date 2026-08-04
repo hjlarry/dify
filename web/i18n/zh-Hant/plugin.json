@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "無法檢索發行版。請稍後重試。",
   "error.inValidGitHubUrl": "GitHub URL 無效。請輸入有效的 URL，格式為：https://github.com/owner/repo",
   "error.noReleasesFound": "未找到版本。請檢查 GitHub 儲存庫或輸入 URL。",
+  "errors.plugin_package_too_large.hint": "請關閉此對話框，選擇較小的插件套件後再試一次。",
+  "errors.plugin_package_too_large.message": "插件套件過大",
   "findMoreInMarketplace": "在 Marketplace 中查找更多內容",
   "from": "從",
   "fromMarketplace": "從 Marketplace",

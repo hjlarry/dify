@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "Unable to retrieve releases. Please try again later.",
   "error.inValidGitHubUrl": "Invalid GitHub URL. Please enter a valid URL in the format: https://github.com/owner/repo",
   "error.noReleasesFound": "No releases found. Please check the GitHub repository or the input URL.",
+  "errors.plugin_package_too_large.hint": "Sluit dit dialoogvenster, selecteer een kleiner pluginpakket en probeer het opnieuw.",
+  "errors.plugin_package_too_large.message": "Pluginpakket is te groot",
   "findMoreInMarketplace": "Vind meer in Marketplace",
   "from": "Van",
   "fromMarketplace": "Van Marketplace",

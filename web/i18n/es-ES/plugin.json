@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "No se pueden recuperar las versiones. Por favor, inténtelo de nuevo más tarde.",
   "error.inValidGitHubUrl": "URL de GitHub no válida. Introduzca una URL válida en el formato: https://github.com/owner/repo",
   "error.noReleasesFound": "No se han encontrado versiones. Compruebe el repositorio de GitHub o la URL de entrada.",
+  "errors.plugin_package_too_large.hint": "Cierra este cuadro de diálogo, selecciona un paquete de plugin más pequeño e inténtalo de nuevo.",
+  "errors.plugin_package_too_large.message": "El paquete del plugin es demasiado grande",
   "findMoreInMarketplace": "Más información en Marketplace",
   "from": "De",
   "fromMarketplace": "De Marketplace",

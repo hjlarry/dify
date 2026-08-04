@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "Ne morem pridobiti izdaj. Prosim, poskusite znova pozneje.",
   "error.inValidGitHubUrl": "Neveljavna GitHub povezava. Vnesite veljavno povezavo v formatu: https://github.com/lastnik/repo",
   "error.noReleasesFound": "Ni najdenih izdaj. Prosimo preverite GitHub repozitorij ali vhodni URL.",
+  "errors.plugin_package_too_large.hint": "Zaprite to pogovorno okno, izberite manjši paket vtičnika in poskusite znova.",
+  "errors.plugin_package_too_large.message": "Paket vtičnika je prevelik",
   "findMoreInMarketplace": "Poiščite več v Tržnici",
   "from": "Iz",
   "fromMarketplace": "Iz tržnice",

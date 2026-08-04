@@ -19,6 +19,7 @@ from controllers.common.schema import (
 )
 from controllers.console import console_ns
 from controllers.console.workspace import plugin_permission_required
+from controllers.console.workspace.plugin_error import PluginConsoleError
 from controllers.console.wraps import (
     RBACPermission,
     RBACResourceScope,
@@ -40,6 +41,7 @@ from core.plugin.entities.plugin import (
     PluginInstallationSource,
 )
 from core.plugin.entities.plugin_daemon import PluginDecodeResponse, PluginInstallTask, PluginInstallTaskStartResponse
+from core.plugin.errors import PluginUploadContentTooLargeError, map_plugin_package_upload_error
 from core.plugin.impl.exc import PluginDaemonClientSideError
 from core.plugin.plugin_service import PluginService
 from core.tools.builtin_tool.providers._positions import BuiltinToolProviderSort
@@ -473,7 +475,10 @@ def _read_upload_content(file: FileStorage, max_size: int) -> bytes:
     """
     content = file.stream.read()
     if len(content) > max_size:
-        raise ValueError("File size exceeds the maximum allowed size")
+        raise PluginUploadContentTooLargeError(
+            actual_size_bytes=len(content),
+            max_size_bytes=max_size,
+        )
 
     return content
 
@@ -655,6 +660,7 @@ class PluginAssetApi(Resource):
 class PluginUploadFromPkgApi(Resource):
     @console_ns.doc(consumes=["multipart/form-data"], params=_PLUGIN_PACKAGE_UPLOAD_PARAMS)
     @console_ns.response(200, "Success", console_ns.models[PluginDecodeResponse.__name__])
+    @console_ns.response(413, "Plugin package exceeds the maximum allowed size")
     @setup_required
     @login_required
     @account_initialization_required
@@ -663,7 +669,10 @@ class PluginUploadFromPkgApi(Resource):
     @with_current_tenant_id
     def post(self, tenant_id: str):
         file = request.files["pkg"]
-        content = _read_upload_content(file, dify_config.PLUGIN_MAX_PACKAGE_SIZE)
+        try:
+            content = _read_upload_content(file, dify_config.PLUGIN_MAX_PACKAGE_SIZE)
+        except PluginUploadContentTooLargeError as e:
+            raise PluginConsoleError(map_plugin_package_upload_error(e)) from e
         try:
             response = PluginService.upload_pkg(tenant_id, content)
         except PluginDaemonClientSideError as e:

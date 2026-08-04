@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "रिलीज़ प्राप्त करने में असमर्थ। कृपया बाद में फिर से प्रयास करें।",
   "error.inValidGitHubUrl": "अमान्य GitHub URL। कृपया निम्नलिखित प्रारूप में एक मान्य URL दर्ज करें: https://github.com/owner/repo",
   "error.noReleasesFound": "कोई रिलीज़ नहीं मिली। कृपया GitHub रिपॉजिटरी या इनपुट URL की जांच करें।",
+  "errors.plugin_package_too_large.hint": "यह डायलॉग बंद करें, फिर छोटा प्लगइन पैकेज चुनें और दोबारा कोशिश करें।",
+  "errors.plugin_package_too_large.message": "प्लगइन पैकेज बहुत बड़ा है",
   "findMoreInMarketplace": "मार्केटप्लेस में और खोजें",
   "from": "से",
   "fromMarketplace": "मार्केटप्लेस से",

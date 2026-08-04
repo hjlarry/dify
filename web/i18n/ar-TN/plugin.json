@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "غير قادر على استرجاع الإصدارات. يرجى المحاولة مرة أخرى لاحقًا.",
   "error.inValidGitHubUrl": "عنوان URL لـ GitHub غير صالح. يرجى إدخال عنوان URL صالح بالتنسيق: https://github.com/owner/repo",
   "error.noReleasesFound": "لم يتم العثور على إصدارات. يرجى التحقق من مستودع GitHub أو عنوان URL المدخل.",
+  "errors.plugin_package_too_large.hint": "أغلق مربع الحوار هذا، ثم اختر حزمة إضافة أصغر وحاول مرة أخرى.",
+  "errors.plugin_package_too_large.message": "حزمة الإضافة كبيرة جدًا",
   "findMoreInMarketplace": "ابحث عن المزيد في السوق",
   "from": "من",
   "fromMarketplace": "من السوق",

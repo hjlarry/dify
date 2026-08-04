@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "ไม่สามารถดึงข้อมูลการเผยแพร่ได้ โปรดลองอีกครั้งในภายหลัง",
   "error.inValidGitHubUrl": "URL GitHub ไม่ถูกต้อง โปรดป้อน URL ที่ถูกต้องในรูปแบบ: https://github.com/owner/repo",
   "error.noReleasesFound": "ไม่พบข่าวประชาสัมพันธ์ โปรดตรวจสอบที่เก็บ GitHub หรือ URL ที่ป้อนข้อมูล",
+  "errors.plugin_package_too_large.hint": "ปิดกล่องโต้ตอบนี้ จากนั้นเลือกแพ็กเกจปลั๊กอินที่มีขนาดเล็กกว่าแล้วลองอีกครั้ง",
+  "errors.plugin_package_too_large.message": "แพ็กเกจปลั๊กอินมีขนาดใหญ่เกินไป",
   "findMoreInMarketplace": "ค้นหาเพิ่มเติมใน Marketplace",
   "from": "จาก",
   "fromMarketplace": "จาก Marketplace",

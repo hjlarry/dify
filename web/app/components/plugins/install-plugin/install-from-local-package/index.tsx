@@ -1,5 +1,6 @@
 'use client'
 
+import type { PluginAppError } from '../../error'
 import type { Dependency, PluginCategoryEnum, PluginDeclaration } from '../../types'
 import { cn } from '@langgenius/dify-ui/cn'
 import { Dialog, DialogCloseButton, DialogContent } from '@langgenius/dify-ui/dialog'
@@ -8,6 +9,7 @@ import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import useGetIcon from '@/app/components/plugins/install-plugin/base/use-get-icon'
 import { InstallStep } from '../../types'
+import { resolvePluginErrorPresentation } from '../error-presentation'
 import useHideLogic from '../hooks/use-hide-logic'
 import ReadyToInstallBundle from '../install-bundle/ready-to-install'
 import ReadyToInstallPackage from './ready-to-install'
@@ -27,21 +29,29 @@ const InstallFromLocalPackage: React.FC<InstallFromLocalPackageProps> = ({
   installContextCategory,
   onClose,
 }) => {
-  const { t } = useTranslation()
+  const { t } = useTranslation('plugin')
   // uploading -> !uploadFailed -> readyToInstall -> installed/failed
   const [step, setStep] = useState<InstallStep>(InstallStep.uploading)
   const [uniqueIdentifier, setUniqueIdentifier] = useState<string | null>(null)
   const [manifest, setManifest] = useState<PluginDeclaration | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [uploadFailure, setUploadFailure] = useState<PluginAppError | null>(null)
   const isBundle = file.name.endsWith('.difybndl')
   const [dependencies, setDependencies] = useState<Dependency[]>([])
 
   const { modalClassName, foldAnimInto, setIsInstalling, handleStartToInstall } =
     useHideLogic(onClose)
 
+  const uploadFailurePresentation = uploadFailure
+    ? resolvePluginErrorPresentation(uploadFailure, t, {
+        message: t(($) => $[`${i18nPrefix}.uploadFailed`]),
+        action: 'close',
+      })
+    : null
+
   const getTitle = useCallback(() => {
     if (step === InstallStep.uploadFailed)
-      return t(($) => $[`${i18nPrefix}.uploadFailed`], { ns: 'plugin' })
+      return uploadFailurePresentation?.message ?? t(($) => $[`${i18nPrefix}.uploadFailed`])
     if (isBundle && step === InstallStep.installed)
       return t(($) => $[`${i18nPrefix}.installedSuccessfully`], { ns: 'plugin' })
     if (step === InstallStep.installed)
@@ -50,7 +60,7 @@ const InstallFromLocalPackage: React.FC<InstallFromLocalPackageProps> = ({
       return t(($) => $[`${i18nPrefix}.installFailed`], { ns: 'plugin' })
 
     return t(($) => $[`${i18nPrefix}.installPlugin`], { ns: 'plugin' })
-  }, [isBundle, step, t])
+  }, [isBundle, step, t, uploadFailurePresentation?.message])
 
   const { getIconUrl } = useGetIcon()
 
@@ -75,10 +85,13 @@ const InstallFromLocalPackage: React.FC<InstallFromLocalPackageProps> = ({
     setStep(InstallStep.readyToInstall)
   }, [])
 
-  const handleUploadFail = useCallback((errorMsg: string) => {
-    setErrorMsg(errorMsg)
+  const handleUploadFail = useCallback((failure: PluginAppError) => {
+    setUploadFailure(failure)
     setStep(InstallStep.uploadFailed)
   }, [])
+
+  const uploadFailureMessage =
+    uploadFailurePresentation?.hint ?? uploadFailurePresentation?.message ?? null
 
   return (
     <Dialog
@@ -130,7 +143,7 @@ const InstallFromLocalPackage: React.FC<InstallFromLocalPackageProps> = ({
             onClose={onClose}
             uniqueIdentifier={uniqueIdentifier}
             manifest={manifest}
-            errorMsg={errorMsg}
+            errorMsg={step === InstallStep.uploadFailed ? uploadFailureMessage : errorMsg}
             installContextCategory={installContextCategory}
             onError={setErrorMsg}
           />

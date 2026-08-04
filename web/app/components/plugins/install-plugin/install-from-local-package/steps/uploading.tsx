@@ -1,9 +1,11 @@
 'use client'
 import type { FC } from 'react'
 import type { Dependency, Plugin, PluginDeclaration } from '../../../types'
+import type { PluginAppError } from '@/app/components/plugins/error'
 import { Button } from '@langgenius/dify-ui/button'
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
+import { normalizePluginError } from '@/app/components/plugins/error'
 import { uploadFile } from '@/service/plugins'
 import Card from '../../../card'
 
@@ -12,10 +14,6 @@ const i18nPrefix = 'installModal'
 type PackageUploadResponse = {
   unique_identifier: string
   manifest: PluginDeclaration
-}
-
-type UploadFailureResponse = {
-  message?: string
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -34,19 +32,13 @@ function getRejectedResponse(error: unknown): unknown {
   return error.response
 }
 
-function getUploadFailureMessage(response: unknown): string | undefined {
-  if (!isObject(response)) return undefined
-
-  return (response as UploadFailureResponse).message
-}
-
 type Props = Readonly<{
   isBundle: boolean
   file: File
   onCancel: () => void
   onPackageUploaded: (result: { uniqueIdentifier: string; manifest: PluginDeclaration }) => void
   onBundleUploaded: (result: Dependency[]) => void
-  onFailed: (errorMsg: string) => void
+  onFailed: (failure: PluginAppError) => void
 }>
 
 const Uploading: FC<Props> = ({
@@ -66,12 +58,16 @@ const Uploading: FC<Props> = ({
           onBundleUploaded(response as Dependency[])
           return
         }
-        onFailed(t(($) => $[`${i18nPrefix}.uploadFailed`], { ns: 'plugin' }))
+        onFailed({
+          message: t(($) => $[`${i18nPrefix}.uploadFailed`], { ns: 'plugin' }),
+        })
         return
       }
 
       if (!isPackageUploadResponse(response)) {
-        onFailed(t(($) => $[`${i18nPrefix}.uploadFailed`], { ns: 'plugin' }))
+        onFailed({
+          message: t(($) => $[`${i18nPrefix}.uploadFailed`], { ns: 'plugin' }),
+        })
         return
       }
 
@@ -87,13 +83,12 @@ const Uploading: FC<Props> = ({
     try {
       handleUploadedResponse(await uploadFile(file, isBundle))
     } catch (error: unknown) {
-      const response = getRejectedResponse(error)
-      const message = getUploadFailureMessage(response)
-      if (message) {
-        onFailed(message)
+      const failure = await normalizePluginError(error)
+      if (failure) {
+        onFailed(failure)
         return
       }
-      handleUploadedResponse(response)
+      handleUploadedResponse(getRejectedResponse(error))
     }
   }, [file, handleUploadedResponse, isBundle, onFailed])
 

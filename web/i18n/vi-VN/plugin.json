@@ -165,6 +165,8 @@
   "error.fetchReleasesError": "Không thể truy xuất bản phát hành. Vui lòng thử lại sau.",
   "error.inValidGitHubUrl": "URL GitHub không hợp lệ. Vui lòng nhập URL hợp lệ theo định dạng: https://github.com/owner/repo",
   "error.noReleasesFound": "Không tìm thấy bản phát hành. Vui lòng kiểm tra kho lưu trữ GitHub hoặc URL đầu vào.",
+  "errors.plugin_package_too_large.hint": "Đóng hộp thoại này, sau đó chọn gói plugin nhỏ hơn và thử lại.",
+  "errors.plugin_package_too_large.message": "Gói plugin quá lớn",
   "findMoreInMarketplace": "Tìm thêm trong Marketplace",
   "from": "Từ",
   "fromMarketplace": "Từ Marketplace",
