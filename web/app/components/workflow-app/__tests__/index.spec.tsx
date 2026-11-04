@@ -196,11 +196,14 @@ describe('WorkflowApp', () => {
     mockFetchRunDetail.mockReset().mockResolvedValue({ inputs: null })
   })
 
-  it.each([false, true])('initializes the editor with collaboration capability %s', async (enabled) => {
-    render(<WorkflowApp />, { cloud: true, collaboration: enabled })
-    expect(await screen.findByRole('region', { name: 'Workflow canvas' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent(String(enabled))
-  })
+  it.each([false, true])(
+    'initializes the editor with collaboration capability %s',
+    async (enabled) => {
+      render(<WorkflowApp />, { cloud: true, collaboration: enabled })
+      expect(await screen.findByRole('region', { name: 'Workflow canvas' })).toBeInTheDocument()
+      expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent(String(enabled))
+    },
+  )
 
   it.each([false, true])(
     'keeps the initial editor mode when workspace capability changes from %s',
