@@ -53,7 +53,6 @@ const render = (
   ui: ReactElement,
   options?: {
     cloud?: boolean
-    plan?: 'sandbox' | 'professional' | 'team'
     collaboration?: boolean | null
   },
 ) => {
@@ -62,7 +61,6 @@ const render = (
   if (options?.collaboration !== null) {
     const features = seedFeatures(queryClient, {
       workflow_collaboration_enabled: options?.collaboration ?? true,
-      ...(options?.plan ? { billing: { subscription: { plan: options.plan } } } : {}),
     })
     fetchFeatures.mockResolvedValue(features)
   }
@@ -198,14 +196,10 @@ describe('WorkflowApp', () => {
     mockFetchRunDetail.mockReset().mockResolvedValue({ inputs: null })
   })
 
-  it.each([
-    ['sandbox', 'false'],
-    ['professional', 'true'],
-    ['team', 'true'],
-  ] as const)('initializes a Cloud %s workspace with collaboration %s', async (plan, expected) => {
-    render(<WorkflowApp />, { cloud: true, plan, collaboration: expected === 'true' })
+  it.each([false, true])('initializes the editor with collaboration capability %s', async (enabled) => {
+    render(<WorkflowApp />, { cloud: true, collaboration: enabled })
     expect(await screen.findByRole('region', { name: 'Workflow canvas' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent(expected)
+    expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent(String(enabled))
   })
 
   it.each([false, true])(
