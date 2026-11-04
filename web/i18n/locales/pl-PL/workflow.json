@@ -114,6 +114,8 @@
   "collaboration.draftSaveBlocked": "Inne osoby wspólnie edytują ten przepływ pracy. Twoje zmiany nie zostały zapisane.",
   "collaboration.joinDenied": "Nie można dołączyć do współpracy. Sprawdź dostęp i plan obszaru roboczego, a następnie otwórz edytor ponownie.",
   "collaboration.availableAfterReopen": "Wspólna edycja jest już dostępna. Otwórz edytor ponownie, aby ją włączyć.",
+  "collaboration.joinUnavailable": "Nie udało się połączyć ze współpracą. Zmiany na tym obszarze roboczym mogły nie zostać zapisane.",
+  "collaboration.openSavedWorkflow": "Otwórz zapisany workflow w nowej karcie",
   "collaboration.joinRetrying": "Współpraca jest tymczasowo niedostępna. Ponawianie próby…",
   "common.accessAPIReference": "Uzyskaj dostęp do dokumentacji API",
   "common.accessPointDescription": "Skonfiguruj aplikację internetową, API, MCP i wyzwalacze",

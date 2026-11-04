@@ -114,6 +114,8 @@
   "collaboration.draftSaveBlocked": "Alte persoane editează acest flux de lucru în colaborare. Modificările tale nu au fost salvate.",
   "collaboration.joinDenied": "Nu te poți alătura colaborării. Verifică accesul și abonamentul spațiului de lucru, apoi redeschide editorul.",
   "collaboration.availableAfterReopen": "Editarea colaborativă este acum disponibilă. Redeschide editorul pentru a o activa.",
+  "collaboration.joinUnavailable": "Nu s-a putut conecta la colaborare. Modificările de pe acest spațiu de lucru ar putea să nu fie salvate.",
+  "collaboration.openSavedWorkflow": "Deschide fluxul salvat într-o filă nouă",
   "collaboration.joinRetrying": "Colaborarea este temporar indisponibilă. Se reîncearcă…",
   "common.accessAPIReference": "Accesează referința API",
   "common.accessPointDescription": "Configurează aplicația web, API, MCP și declanșatoarele",

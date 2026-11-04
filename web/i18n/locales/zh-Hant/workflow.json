@@ -114,6 +114,8 @@
   "collaboration.draftSaveBlocked": "其他人正在協作編輯此工作流程，您的變更未儲存。",
   "collaboration.joinDenied": "無法加入協作。請檢查存取權限和工作區方案，然後重新開啟編輯器。",
   "collaboration.availableAfterReopen": "協作編輯現已可用，重新開啟編輯器即可啟用。",
+  "collaboration.joinUnavailable": "無法連線至協作編輯，此畫布上的變更可能尚未儲存。",
+  "collaboration.openSavedWorkflow": "在新分頁開啟已儲存的工作流程",
   "collaboration.joinRetrying": "協作暫時無法使用，正在重試…",
   "common.accessAPIReference": "訪問 API",
   "common.accessPointDescription": "設定 Web 應用、API、MCP 和觸發器",

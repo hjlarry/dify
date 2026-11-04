@@ -114,6 +114,8 @@
   "collaboration.draftSaveBlocked": "Drugi skupaj urejajo ta potek dela. Vaše spremembe niso bile shranjene.",
   "collaboration.joinDenied": "Pridružitev sodelovanju ni uspela. Preverite dostop in paket delovnega prostora ter znova odprite urejevalnik.",
   "collaboration.availableAfterReopen": "Sodelovalno urejanje je zdaj na voljo. Za vklop znova odprite urejevalnik.",
+  "collaboration.joinUnavailable": "Povezava za sodelovanje ni uspela. Spremembe na tem platnu morda niso shranjene.",
+  "collaboration.openSavedWorkflow": "Odpri shranjeni potek dela v novem zavihku",
   "collaboration.joinRetrying": "Sodelovanje začasno ni na voljo. Ponovni poskus…",
   "common.accessAPIReference": "Dostop do referenčnega API-ja",
   "common.accessPointDescription": "Nastavi spletno aplikacijo, API, MCP in sprožilce",

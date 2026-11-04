@@ -114,6 +114,8 @@
   "collaboration.draftSaveBlocked": "Andere bearbeiten den Workflow gemeinsam. Deine Änderungen wurden nicht gespeichert.",
   "collaboration.joinDenied": "Die Verbindung zur Zusammenarbeit konnte nicht hergestellt werden. Prüfe deine Zugriffsrechte und den Tarif des Arbeitsbereichs und öffne den Editor erneut.",
   "collaboration.availableAfterReopen": "Die gemeinsame Bearbeitung ist jetzt verfügbar. Öffne den Editor erneut, um sie zu aktivieren.",
+  "collaboration.joinUnavailable": "Verbindung zur Zusammenarbeit fehlgeschlagen. Änderungen auf dieser Arbeitsfläche sind möglicherweise nicht gespeichert.",
+  "collaboration.openSavedWorkflow": "Gespeicherten Workflow in neuem Tab öffnen",
   "collaboration.joinRetrying": "Die Zusammenarbeit ist vorübergehend nicht verfügbar. Erneuter Versuch…",
   "common.accessAPIReference": "API-Referenz aufrufen",
   "common.accessPointDescription": "Web-App, API, MCP und Trigger konfigurieren",

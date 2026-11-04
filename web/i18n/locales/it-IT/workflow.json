@@ -114,6 +114,8 @@
   "collaboration.draftSaveBlocked": "Altre persone stanno modificando il workflow in collaborazione. Le modifiche non sono state salvate.",
   "collaboration.joinDenied": "Impossibile partecipare alla collaborazione. Controlla i permessi di accesso e il piano dell’area di lavoro, quindi riapri l’editor.",
   "collaboration.availableAfterReopen": "La modifica collaborativa è ora disponibile. Riapri l’editor per attivarla.",
+  "collaboration.joinUnavailable": "Impossibile connettersi alla collaborazione. Le modifiche a questa area di lavoro potrebbero non essere salvate.",
+  "collaboration.openSavedWorkflow": "Apri il workflow salvato in una nuova scheda",
   "collaboration.joinRetrying": "La collaborazione è temporaneamente non disponibile. Nuovo tentativo in corso…",
   "common.accessAPIReference": "Accedi alla Riferimento API",
   "common.accessPointDescription": "Configura app web, API, MCP e trigger",

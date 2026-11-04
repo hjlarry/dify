@@ -114,6 +114,8 @@
   "collaboration.draftSaveBlocked": "Başqaları iş axınını birlikdə redaktə edir. Dəyişiklikləriniz yadda saxlanılmadı.",
   "collaboration.joinDenied": "Birgə redaktəyə qoşulmaq mümkün olmadı. Giriş icazənizi və iş sahəsinin planını yoxlayın, sonra redaktoru yenidən açın.",
   "collaboration.availableAfterReopen": "Birgə redaktə artıq əlçatandır. Aktivləşdirmək üçün redaktoru yenidən açın.",
+  "collaboration.joinUnavailable": "Birgə redaktəyə qoşulmaq olmadı. Bu lövhədəki dəyişikliklər saxlanmamış ola bilər.",
+  "collaboration.openSavedWorkflow": "Saxlanmış iş axınını yeni vərəqdə aç",
   "collaboration.joinRetrying": "Birgə redaktə müvəqqəti əlçatan deyil. Yenidən cəhd edilir…",
   "common.accessAPIReference": "API istinad sənədlərinə keç",
   "common.accessPointDescription": "Veb tətbiqini, API-ni, MCP-ni və tətikləyiciləri konfiqurasiya edin",

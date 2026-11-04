@@ -114,6 +114,8 @@
   "collaboration.draftSaveBlocked": "ຜູ້ອື່ນກຳລັງແກ້ໄຂເວີກໂຟລວນີ້ຮ່ວມກັນ. ການປ່ຽນແປງຂອງທ່ານບໍ່ໄດ້ຖືກບັນທຶກ.",
   "collaboration.joinDenied": "ບໍ່ສາມາດເຂົ້າຮ່ວມການແກ້ໄຂຮ່ວມກັນໄດ້. ກວດສອບສິດເຂົ້າເຖິງ ແລະ ແພັກເກັດຂອງພື້ນທີ່ເຮັດວຽກ ແລ້ວເປີດໂຕແກ້ໄຂອີກຄັ້ງ.",
   "collaboration.availableAfterReopen": "ຕອນນີ້ສາມາດແກ້ໄຂຮ່ວມກັນໄດ້ແລ້ວ. ເປີດຕົວແກ້ໄຂຄືນໃໝ່ເພື່ອເປີດໃຊ້.",
+  "collaboration.joinUnavailable": "ບໍ່ສາມາດເຊື່ອມຕໍ່ການແກ້ໄຂຮ່ວມກັນໄດ້. ການປ່ຽນແປງໃນກະດານນີ້ອາດຍັງບໍ່ຖືກບັນທຶກ.",
+  "collaboration.openSavedWorkflow": "ເປີດເວີກໂຟລທີ່ບັນທຶກແລ້ວໃນແຖບໃໝ່",
   "collaboration.joinRetrying": "ການແກ້ໄຂຮ່ວມກັນບໍ່ພ້ອມໃຊ້ຊົ່ວຄາວ. ກຳລັງລອງໃໝ່…",
   "common.accessAPIReference": "ເບິ່ງເອກະສານອ້າງອີງ API",
   "common.accessPointDescription": "ຕັ້ງຄ່າເວັບແອັບ, API, MCP ແລະ ຕົວກະຕຸ້ນ",

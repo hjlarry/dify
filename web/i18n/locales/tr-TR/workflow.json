@@ -114,6 +114,8 @@
   "collaboration.draftSaveBlocked": "Diğer kullanıcılar bu iş akışını birlikte düzenliyor. Değişiklikleriniz kaydedilmedi.",
   "collaboration.joinDenied": "Ortak düzenlemeye katılamadınız. Erişim izninizi ve çalışma alanı planını kontrol edip düzenleyiciyi yeniden açın.",
   "collaboration.availableAfterReopen": "Ortak düzenleme artık kullanılabilir. Etkinleştirmek için düzenleyiciyi yeniden açın.",
+  "collaboration.joinUnavailable": "Ortak düzenlemeye bağlanılamadı. Bu tuvaldeki değişiklikler kaydedilmemiş olabilir.",
+  "collaboration.openSavedWorkflow": "Kaydedilmiş iş akışını yeni sekmede aç",
   "collaboration.joinRetrying": "Ortak düzenleme geçici olarak kullanılamıyor. Yeniden deneniyor…",
   "common.accessAPIReference": "API Referansına Eriş",
   "common.accessPointDescription": "Web uygulamasını, API'yi, MCP'yi ve tetikleyicileri yapılandır",
