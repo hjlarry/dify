@@ -2,7 +2,6 @@ import type { AppDetailWithSite } from '@dify/contracts/api/console/apps/types.g
 import type { ReactElement } from 'react'
 import { zGetFeaturesResponse } from '@dify/contracts/api/console/features/zod.gen'
 import { act, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { StrictMode } from 'react'
 import { createEdge, createNode } from '@/app/components/workflow/__tests__/fixtures'
 import { WorkflowInitializationProbe } from '@/app/components/workflow/__tests__/workflow-initialization-probe'
@@ -238,20 +237,19 @@ describe('WorkflowApp', () => {
     expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent('false')
   })
 
-  it('blocks the editor when the subscription cannot be loaded and retries in place', async () => {
-    const user = userEvent.setup()
+  it('opens without collaboration when features fail and preserves the editor if the query recovers', async () => {
     fetchFeatures
       .mockRejectedValueOnce(new Error('billing unavailable'))
       .mockResolvedValueOnce(zGetFeaturesResponse.parse({ workflow_collaboration_enabled: true }))
 
-    render(<WorkflowApp />, { cloud: true, collaboration: null })
-    const retry = await screen.findByRole('button', { name: 'common.errorBoundary.tryAgain' })
-    expect(screen.getByRole('alert')).toHaveTextContent('common.errorBoundary.message')
-    expect(screen.queryByRole('region', { name: 'Workflow canvas' })).not.toBeInTheDocument()
-
-    await user.click(retry)
-    expect(await screen.findByRole('region', { name: 'Workflow canvas' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent('true')
+    const { queryClient } = render(<WorkflowApp />, { cloud: true, collaboration: null })
+    const canvas = await screen.findByRole('region', { name: 'Workflow canvas' })
+    expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent('false')
+    await act(async () =>
+      queryClient.refetchQueries({ queryKey: consoleQuery.features.get.queryKey() }),
+    )
+    expect(screen.getByRole('region', { name: 'Workflow canvas' })).toBe(canvas)
+    expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent('false')
     expect(fetchFeatures).toHaveBeenCalledTimes(2)
   })
 
