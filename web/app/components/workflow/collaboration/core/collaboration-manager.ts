@@ -227,7 +227,7 @@ export class CollaborationManager {
     return webSocketClient.getSocket(this.currentAppId)
   }
 
-  private clearJoinTimer(): void {
+  private cancelJoinAttempt(): void {
     this.joinAttempt += 1
     if (this.joinTimer) clearTimeout(this.joinTimer)
     this.joinTimer = null
@@ -238,7 +238,7 @@ export class CollaborationManager {
 
   private completeJoinIfReady(): void {
     if (!this.joinAcknowledged || !this.joinStatusReceived) return
-    this.clearJoinTimer()
+    this.cancelJoinAttempt()
     this.joinRetryCount = 0
     this.rejoinInProgress = false
     this.hasJoinedRoom = true
@@ -254,7 +254,7 @@ export class CollaborationManager {
 
   private joinWorkflow(socket: Socket): void {
     if (!this.currentAppId || !socket.connected) return
-    this.clearJoinTimer()
+    this.cancelJoinAttempt()
     const attempt = this.joinAttempt
     this.joinPending = true
     this.joinTimer = setTimeout(() => {
@@ -271,7 +271,7 @@ export class CollaborationManager {
         if (attempt !== this.joinAttempt || this.getActiveSocket() !== socket) return
         const message = body && typeof body === 'object' && 'msg' in body ? body.msg : undefined
         if (status === 503 || message === 'collaboration_unavailable') {
-          this.clearJoinTimer()
+          this.cancelJoinAttempt()
           this.setJoinFailure('retrying')
           const delay = Math.min(1000 * 2 ** this.joinRetryCount, 30_000)
           this.joinRetryCount += 1
@@ -280,11 +280,11 @@ export class CollaborationManager {
             delay * (0.5 + Math.random() * 0.5),
           )
         } else if (status === 401 || message === 'unauthorized') {
-          this.clearJoinTimer()
+          this.cancelJoinAttempt()
           this.rejoinInProgress = false
           this.setJoinFailure('denied')
         } else if (typeof status === 'number' && status >= 400) {
-          this.clearJoinTimer()
+          this.cancelJoinAttempt()
           this.rejoinInProgress = false
           this.setJoinFailure('unavailable')
         } else if (message === 'connected') {
@@ -791,7 +791,7 @@ export class CollaborationManager {
     if (this.currentAppId) webSocketClient.disconnect(this.currentAppId)
 
     this.clearInitialSyncRetry()
-    this.clearJoinTimer()
+    this.cancelJoinAttempt()
     this.joinRetryCount = 0
     this.setJoinFailure(null)
     this.hasJoinedRoom = false
@@ -2029,7 +2029,7 @@ export class CollaborationManager {
 
     socket.on('disconnect', (reason) => {
       this.clearInitialSyncRetry()
-      this.clearJoinTimer()
+      this.cancelJoinAttempt()
       this.joinRetryCount = 0
       this.setJoinFailure(null)
       this.cursors = {}
