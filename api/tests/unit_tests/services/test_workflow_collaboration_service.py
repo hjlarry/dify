@@ -15,12 +15,14 @@ from extensions.ext_redis import RedisClientWrapper
 from models.account import Account, Tenant
 from models.base import TypeBase
 from models.model import App, AppMode
+from models.workflow import Workflow, WorkflowType
 from repositories.workflow_collaboration_repository import WorkflowCollaborationRepository
 from services.enterprise.rbac_service import RBACService
 from services.workflow_collaboration_service import (
     SYNC_REQUEST_TIMEOUT_SECONDS,
     WorkflowCollaborationNotEntitledError,
     WorkflowCollaborationService,
+    WorkflowCollaborationUnavailableError,
 )
 from tests.helpers.unit.config_override import config_overrides_context
 from tests.helpers.unit.model_factories import make_app
@@ -51,8 +53,21 @@ def real_service(collaboration_redis: RedisClientWrapper) -> ServiceFixture:
 def db_session(sqlite_engine: Engine) -> Iterator[Session]:
     """Provide a real session for tenant-scoped workflow app access checks."""
 
-    TypeBase.metadata.create_all(sqlite_engine, tables=[App.__table__])
+    TypeBase.metadata.create_all(sqlite_engine, tables=[App.__table__, Workflow.__table__])
     with Session(sqlite_engine, expire_on_commit=False) as session:
+        session.add(
+            Workflow(
+                id="draft-1",
+                tenant_id="t-1",
+                app_id="wf-1",
+                type=WorkflowType.WORKFLOW,
+                version=Workflow.VERSION_DRAFT,
+                graph=json.dumps({"nodes": [], "edges": []}),
+                _features=json.dumps({}),
+                created_by="u-1",
+            )
+        )
+        session.commit()
         yield session
 
 
@@ -70,6 +85,95 @@ def _app(*, app_id: str, tenant_id: str, maintainer: str | None = None) -> App:
 
 
 class TestWorkflowCollaborationService:
+    def test_join_requires_an_existing_draft(self, real_service: ServiceFixture, db_session: Session) -> None:
+        service, repository, socketio = real_service
+        socketio.get_session.return_value = {"user_id": "u-1", "tenant_id": "t-1"}
+        db_session.delete(db_session.get(Workflow, "draft-1"))
+        db_session.add(_app(app_id="wf-1", tenant_id="t-1"))
+        db_session.commit()
+
+        with config_overrides_context(ENABLE_COLLABORATION_MODE=True, RBAC_ENABLED=False):
+            with pytest.raises(WorkflowCollaborationUnavailableError):
+                service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session)
+
+        assert repository.get_session_sids("wf-1") == []
+        assert repository.get_current_leader("wf-1") is None
+        socketio.enter_room.assert_not_called()
+
+    def test_join_after_socket_disconnect_creates_no_session(
+        self, real_service: ServiceFixture, db_session: Session
+    ) -> None:
+        service, repository, socketio = real_service
+        socketio.get_session.return_value = {"user_id": "u-1", "tenant_id": "t-1"}
+        socketio.manager.is_connected.return_value = False
+        db_session.add(_app(app_id="wf-1", tenant_id="t-1"))
+        db_session.commit()
+
+        with config_overrides_context(ENABLE_COLLABORATION_MODE=True, RBAC_ENABLED=False):
+            with pytest.raises(WorkflowCollaborationUnavailableError):
+                service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session)
+
+        assert repository.get_session_sids("wf-1") == []
+        socketio.enter_room.assert_not_called()
+
+    def test_disconnect_during_session_write_is_cleaned_up(
+        self,
+        real_service: ServiceFixture,
+        db_session: Session,
+        redis_transport: tuple[RedisClientWrapper, MagicMock],
+        collaboration_redis: RedisClientWrapper,
+    ) -> None:
+        service, repository, socketio = real_service
+        _, commands = redis_transport
+        redis_state = RedisState()
+        disconnected = False
+
+        def execute(command: str, *args: object, **kwargs: object) -> object:
+            nonlocal disconnected
+            result = redis_state.execute(command, *args, **kwargs)
+            if command == "HSET" and "workflow_online_users:wf-1" in str(args[0]) and not disconnected:
+                disconnected = True
+                socketio.manager.is_connected.return_value = False
+                service.disconnect_session("sid-1")
+            return result
+
+        commands.side_effect = execute
+        socketio.get_session.return_value = {"user_id": "u-1", "tenant_id": "t-1"}
+        db_session.add(_app(app_id="wf-1", tenant_id="t-1"))
+        db_session.commit()
+
+        with config_overrides_context(ENABLE_COLLABORATION_MODE=True, RBAC_ENABLED=False):
+            with pytest.raises(WorkflowCollaborationUnavailableError):
+                service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session)
+
+        assert disconnected
+        assert repository.get_sid_mapping("sid-1") is None
+        assert repository.get_session_sids("wf-1") == []
+        assert repository.get_current_leader("wf-1") is None
+        assert collaboration_redis.hgetall(repository.server_sessions_key("server-1")) == {}
+
+    @pytest.mark.parametrize("already_joined", [False, True])
+    def test_failed_enter_room_preserves_existing_sessions(
+        self, real_service: ServiceFixture, db_session: Session, already_joined: bool
+    ) -> None:
+        service, repository, socketio = real_service
+        socketio.get_session.return_value = {"user_id": "u-1", "tenant_id": "t-1"}
+        socketio.enter_room.side_effect = RuntimeError("enter room failed")
+        seed_session(repository, "sid-other", user_id="other-user")
+        repository.set_leader("wf-1", "sid-other")
+        if already_joined:
+            seed_session(repository, "sid-1")
+        db_session.add(_app(app_id="wf-1", tenant_id="t-1"))
+        db_session.commit()
+
+        with config_overrides_context(ENABLE_COLLABORATION_MODE=True, RBAC_ENABLED=False):
+            with pytest.raises(RuntimeError, match="enter room failed"):
+                service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session)
+
+        assert repository.session_exists("wf-1", "sid-other")
+        assert repository.get_current_leader("wf-1") == "sid-other"
+        assert repository.session_exists("wf-1", "sid-1") is already_joined
+
     def test_existing_room_session_can_continue_after_downgrade(
         self, real_service: ServiceFixture, db_session: Session, monkeypatch: pytest.MonkeyPatch
     ) -> None:

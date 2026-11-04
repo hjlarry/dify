@@ -16,6 +16,7 @@ from configs import dify_config
 from core.rbac import RBACPermission, RBACResourceScope
 from models.account import Account
 from models.model import App
+from models.workflow import Workflow
 from repositories.workflow_collaboration_repository import WorkflowCollaborationRepository, WorkflowSessionInfo
 from services.enterprise.rbac_service import RBACService
 from services.feature_service import FeatureService
@@ -30,6 +31,10 @@ _PROCESS_SERVER_ID_PID: int | None = None
 
 class WorkflowCollaborationNotEntitledError(Exception):
     """The workspace cannot start a new collaboration session."""
+
+
+class WorkflowCollaborationUnavailableError(Exception):
+    """The draft or socket is unavailable for a collaboration join."""
 
 
 def _get_process_server_id() -> str:
@@ -116,6 +121,9 @@ class WorkflowCollaborationService:
         The Socket.IO payload still calls the room key `workflow_id`, but the identifier is the workflow app's
         `App.id`. A missing identity or app permission returns `None`; an unavailable entitlement raises
         `WorkflowCollaborationNotEntitledError` before any Redis or room state is created.
+
+        A join requires a connected socket and an existing draft. Registration holds the draft row lock shared
+        with full console saves. A disconnected or interrupted new join has its room state cleaned up.
         """
         socket_session = self._socketio.get_session(sid)
         user_id = socket_session.get("user_id")
@@ -149,8 +157,6 @@ class WorkflowCollaborationService:
         if not already_joined and not FeatureService.can_use_workflow_collaboration(str(tenant_id)):
             raise WorkflowCollaborationNotEntitledError
 
-        self._ensure_server_heartbeat_started()
-
         session_info: WorkflowSessionInfo = {
             "user_id": str(user_id),
             "username": str(socket_session.get("username", "Unknown")),
@@ -163,19 +169,64 @@ class WorkflowCollaborationService:
             "graph_active": True,
         }
 
-        if already_joined:
-            # Rejoining must not reset visibility or its sequence on the existing session.
-            self._repository.refresh_session_state(workflow_id, sid)
-        else:
-            self._repository.set_session_info(workflow_id, session_info)
+        wrote_session = False
+        try:
+            # A full console save checks room membership while holding this same draft row lock.
+            with session.begin():
+                draft_id = session.scalar(
+                    select(Workflow.id)
+                    .where(
+                        Workflow.tenant_id == str(tenant_id),
+                        Workflow.app_id == workflow_id,
+                        Workflow.version == Workflow.VERSION_DRAFT,
+                    )
+                    .limit(1)
+                    .with_for_update()
+                )
+                if draft_id is None or not self._is_socket_connected_locally(sid):
+                    raise WorkflowCollaborationUnavailableError
 
-        leader_sid = self.get_or_set_leader(workflow_id, sid)
-        is_leader = leader_sid == sid
+                current_mapping = self._repository.get_sid_mapping(sid)
+                current_member = self._repository.get_session_info(workflow_id, sid)
+                current_joined = (
+                    current_mapping is not None
+                    and current_mapping.get("workflow_id") == workflow_id
+                    and current_mapping.get("user_id") == str(user_id)
+                    and current_member is not None
+                    and current_member.get("sid") == sid
+                    and current_member.get("user_id") == str(user_id)
+                )
+                if already_joined and not current_joined:
+                    raise WorkflowCollaborationUnavailableError
+                if current_mapping is not None and current_mapping.get("workflow_id") != workflow_id:
+                    return None
 
-        self._socketio.enter_room(sid, workflow_id)
-        self.broadcast_online_users(workflow_id)
+                already_joined = current_joined
+                self._ensure_server_heartbeat_started()
+                if already_joined:
+                    # Rejoining must not reset visibility or its sequence on the existing session.
+                    self._repository.refresh_session_state(workflow_id, sid)
+                else:
+                    wrote_session = True
+                    self._repository.set_session_info(workflow_id, session_info)
 
-        self._socketio.emit("status", {"isLeader": is_leader}, room=sid)
+                leader_sid = self.get_or_set_leader(workflow_id, sid)
+                is_leader = leader_sid == sid
+                self._socketio.enter_room(sid, workflow_id)
+                if not self._is_socket_connected_locally(sid):
+                    raise WorkflowCollaborationUnavailableError
+
+                self.broadcast_online_users(workflow_id)
+                self._socketio.emit("status", {"isLeader": is_leader}, room=sid)
+        except Exception:
+            if wrote_session or (already_joined and not self._is_socket_connected_locally(sid)):
+                try:
+                    self._repository.delete_session(workflow_id, sid, server_id=self.server_id)
+                    self.handle_leader_disconnect(workflow_id, sid)
+                    self.broadcast_online_users(workflow_id)
+                except Exception:
+                    logger.exception("Failed to clean up interrupted collaboration join (workflow_id=%s)", workflow_id)
+            raise
 
         return str(user_id), is_leader
 

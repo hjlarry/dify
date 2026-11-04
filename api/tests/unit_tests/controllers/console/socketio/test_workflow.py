@@ -18,7 +18,10 @@ from extensions.ext_redis import RedisClientWrapper
 from extensions.otel import workflow_collaboration
 from extensions.otel.workflow_collaboration import WorkflowCollaborationMetrics
 from services.errors.billing import BillingUpstreamUnavailableError
-from services.workflow_collaboration_service import WorkflowCollaborationNotEntitledError
+from services.workflow_collaboration_service import (
+    WorkflowCollaborationNotEntitledError,
+    WorkflowCollaborationUnavailableError,
+)
 
 
 @pytest.fixture
@@ -106,11 +109,13 @@ def test_connect_without_auth_payload_records_one_rejection(
     _assert_single_event(_read_metrics(reader), "connect", "rejected")
 
 
-def test_user_connect_returns_ack_when_billing_is_unavailable(
+@pytest.mark.parametrize("error_type", [BillingUpstreamUnavailableError, WorkflowCollaborationUnavailableError])
+def test_user_connect_returns_ack_when_collaboration_is_unavailable(
     collaboration_server: tuple[socketio.Server, WorkflowCollaborationMetrics, InMemoryMetricReader],
     monkeypatch: pytest.MonkeyPatch,
+    error_type: type[Exception],
 ) -> None:
-    """Billing failures return a 503 ACK to the client."""
+    """Billing, draft and socket availability failures return a 503 ACK."""
     server, _, reader = collaboration_server
     eio_sid = "billing-unavailable"
     transport = Socket(server.eio, eio_sid)
@@ -118,7 +123,7 @@ def test_user_connect_returns_ack_when_billing_is_unavailable(
     sid = server.manager.connect(eio_sid, "/")
 
     def billing_unavailable(*_args: object, **_kwargs: object) -> None:
-        raise BillingUpstreamUnavailableError("billing unavailable")
+        raise error_type("collaboration unavailable")
 
     monkeypatch.setattr(workflow.session_factory, "create_session", Session)
     monkeypatch.setattr(workflow.collaboration_service, "authorize_and_join_workflow_room", billing_unavailable)

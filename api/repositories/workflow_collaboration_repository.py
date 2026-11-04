@@ -131,10 +131,11 @@ class WorkflowCollaborationRepository:
         except (TypeError, json.JSONDecodeError):
             return None
 
-    def delete_session(self, workflow_id: str, sid: str) -> None:
+    def delete_session(self, workflow_id: str, sid: str, *, server_id: str | None = None) -> None:
         mapping = self.get_sid_mapping(sid)
-        if mapping and (server_id := mapping.get("server_id")):
-            self._redis.hdel(self.server_sessions_key(server_id), sid)
+        owner_server_id = (mapping.get("server_id") if mapping else None) or server_id
+        if owner_server_id:
+            self._redis.hdel(self.server_sessions_key(owner_server_id), sid)
         self._redis.hdel(self.workflow_key(workflow_id), sid)
         self._redis.delete(self.sid_key(sid))
 
