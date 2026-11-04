@@ -73,9 +73,62 @@ it('reports an unanswered first join without sending a duplicate', async () => {
   const failures = vi.fn()
   manager.onJoinFailure(failures)
   receive('connect')
-  await vi.advanceTimersByTimeAsync(60_000)
+  await vi.advanceTimersByTimeAsync(14_999)
+  expect(failures).toHaveBeenLastCalledWith(null)
+  await vi.advanceTimersByTimeAsync(1)
   expect(failures).toHaveBeenLastCalledWith('unavailable')
   expect(emit.mock.calls.filter(([event]) => event === 'user_connect')).toHaveLength(1)
+  expect(manager.canPersistLocalGraph()).toBe(false)
+})
+
+it.each(['status-first', 'ack-first'] as const)(
+  'accepts a late successful join when %s after a timeout',
+  async (order) => {
+    vi.useFakeTimers()
+    const { manager, receive, acknowledge } = await createSession({
+      connected: false,
+      role: 'pending',
+    })
+    const failures = vi.fn()
+    manager.onJoinFailure(failures)
+    receive('connect')
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(failures).toHaveBeenLastCalledWith('unavailable')
+    if (order === 'status-first') {
+      receive('status', { isLeader: true })
+      acknowledge('user_connect', { msg: 'connected' })
+    } else {
+      acknowledge('user_connect', { msg: 'connected' })
+      receive('status', { isLeader: true })
+    }
+    expect(failures).toHaveBeenLastCalledWith(null)
+    expect(manager.canPersistLocalGraph()).toBe(true)
+  },
+)
+
+it('retries when billing responds after the join timeout', async () => {
+  vi.useFakeTimers()
+  const { receive, acknowledge, emit } = await createSession({ connected: false, role: 'pending' })
+  receive('connect')
+  await vi.advanceTimersByTimeAsync(15_000)
+  acknowledge('user_connect', { msg: 'collaboration_unavailable' }, 503)
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(emit.mock.calls.filter(([event]) => event === 'user_connect')).toHaveLength(2)
+})
+
+it('ignores the timed-out join acknowledgement after the socket disconnects', async () => {
+  vi.useFakeTimers()
+  const { manager, receive, emit } = await createSession({ connected: false, role: 'pending' })
+  const failures = vi.fn()
+  manager.onJoinFailure(failures)
+  receive('connect')
+  const oldAck = emit.mock.calls.find(([event]) => event === 'user_connect')?.[2]
+  await vi.advanceTimersByTimeAsync(15_000)
+  receive('disconnect', 'transport close')
+  receive('connect')
+  if (typeof oldAck !== 'function') throw new Error('Missing join acknowledgement')
+  oldAck({ msg: 'connected' })
+  expect(failures).toHaveBeenLastCalledWith(null)
   expect(manager.canPersistLocalGraph()).toBe(false)
 })
 

@@ -182,6 +182,7 @@ export class CollaborationManager {
   private joinAttempt = 0
   private joinRetryCount = 0
   private joinTimer: ReturnType<typeof setTimeout> | null = null
+  private joinPending = false
   private joinFailure: JoinFailure | null = null
   private hasJoinedRoom = false
   private joinAcknowledged = false
@@ -230,6 +231,7 @@ export class CollaborationManager {
     this.joinAttempt += 1
     if (this.joinTimer) clearTimeout(this.joinTimer)
     this.joinTimer = null
+    this.joinPending = false
     this.joinAcknowledged = false
     this.joinStatusReceived = false
   }
@@ -254,9 +256,10 @@ export class CollaborationManager {
     if (!this.currentAppId || !socket.connected) return
     this.clearJoinTimer()
     const attempt = this.joinAttempt
+    this.joinPending = true
     this.joinTimer = setTimeout(() => {
       if (attempt !== this.joinAttempt) return
-      this.clearJoinTimer()
+      this.joinTimer = null
       this.rejoinInProgress = false
       this.setJoinFailure('unavailable')
     }, 15_000)
@@ -1959,7 +1962,7 @@ export class CollaborationManager {
           return
         }
 
-        if (this.joinTimer) {
+        if (this.joinPending) {
           this.joinStatusReceived = true
           this.completeJoinIfReady()
         }
