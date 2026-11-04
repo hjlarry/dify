@@ -374,14 +374,12 @@ export function AppListCatalog(props: AppListCatalogProps) {
   } = props
   const systemFeaturesQuery = useQuery(systemFeaturesQueryOptions())
   const systemFeatures = systemFeaturesQuery.data
-  const isCloud = systemFeatures?.deployment_edition === 'CLOUD'
-  const { data: plan } = useQuery(consoleQuery.features.get.queryOptions({
-    enabled: !!systemFeatures?.enable_collaboration_mode && isCloud,
-    retry: false,
-    select: features => features.billing.subscription.plan,
-  }))
-  const isCollaborationEnabled = !!systemFeatures?.enable_collaboration_mode
-    && (!isCloud || plan === 'professional' || plan === 'team')
+  const { data: isCollaborationEnabled = false } = useQuery(
+    consoleQuery.features.get.queryOptions({
+      retry: false,
+      select: (features) => features.workflow_collaboration_enabled,
+    }),
+  )
   const appList = useInfiniteQuery(
     consoleQuery.apps.get.infiniteOptions({
       input: (pageParam) => ({

@@ -52,12 +52,19 @@ let searchParamsValue: string | null = null
 
 const render = (
   ui: ReactElement,
-  options?: { cloud?: boolean; plan?: 'sandbox' | 'professional' | 'team' },
+  options?: {
+    cloud?: boolean
+    plan?: 'sandbox' | 'professional' | 'team'
+    collaboration?: boolean | null
+  },
 ) => {
   const queryClient = createAccountProfileQueryClient(consoleState.userProfile)
   seedSystemFeatures(queryClient, options?.cloud ? { deployment_edition: 'CLOUD' } : {})
-  if (options?.plan)
-    seedFeatures(queryClient, { billing: { subscription: { plan: options.plan } } })
+  if (options?.collaboration !== null)
+    seedFeatures(queryClient, {
+      workflow_collaboration_enabled: options?.collaboration ?? true,
+      ...(options?.plan ? { billing: { subscription: { plan: options.plan } } } : {}),
+    })
   seedAppDetail(queryClient, appDetail)
   queryClient.setQueryData(
     consoleQuery.apps.byAppId.triggers.get.queryKey({
@@ -74,9 +81,10 @@ const render = (
       })),
     },
   )
-  return renderWithConsoleState(ui, {
-    wrapper: createQueryClientWrapper(queryClient),
-  })
+  return {
+    ...renderWithConsoleState(ui, { wrapper: createQueryClientWrapper(queryClient) }),
+    queryClient,
+  }
 }
 
 vi.mock('@/context/workspace-state', async () => {
@@ -194,10 +202,20 @@ describe('WorkflowApp', () => {
     ['professional', 'true'],
     ['team', 'true'],
   ] as const)('initializes a Cloud %s workspace with collaboration %s', async (plan, expected) => {
-    render(<WorkflowApp />, { cloud: true, plan })
+    render(<WorkflowApp />, { cloud: true, plan, collaboration: expected === 'true' })
     expect(await screen.findByRole('region', { name: 'Workflow canvas' })).toBeInTheDocument()
     expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent(expected)
   })
+
+  it.each([false, true])(
+    'keeps the initial editor mode when workspace capability changes from %s',
+    async (initial) => {
+      const { queryClient } = render(<WorkflowApp />, { cloud: true, collaboration: initial })
+      expect(await screen.findByRole('region', { name: 'Workflow canvas' })).toBeInTheDocument()
+      act(() => seedFeatures(queryClient, { workflow_collaboration_enabled: !initial }))
+      expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent(String(initial))
+    },
+  )
 
   it('waits for the Cloud subscription before starting the editor', async () => {
     let resolveFeatures!: (features: ReturnType<typeof zGetFeaturesResponse.parse>) => void
@@ -208,15 +226,13 @@ describe('WorkflowApp', () => {
     )
     fetchDraft.mockClear()
 
-    render(<WorkflowApp />, { cloud: true })
+    render(<WorkflowApp />, { cloud: true, collaboration: null })
     expect(screen.getByLabelText('common.loading')).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Workflow canvas' })).not.toBeInTheDocument()
     expect(fetchDraft).not.toHaveBeenCalled()
 
     await act(async () =>
-      resolveFeatures(
-        zGetFeaturesResponse.parse({ billing: { subscription: { plan: 'sandbox' } } }),
-      ),
+      resolveFeatures(zGetFeaturesResponse.parse({ workflow_collaboration_enabled: false })),
     )
     expect(await screen.findByRole('region', { name: 'Workflow canvas' })).toBeInTheDocument()
     expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent('false')
@@ -226,11 +242,9 @@ describe('WorkflowApp', () => {
     const user = userEvent.setup()
     fetchFeatures
       .mockRejectedValueOnce(new Error('billing unavailable'))
-      .mockResolvedValueOnce(
-        zGetFeaturesResponse.parse({ billing: { subscription: { plan: 'team' } } }),
-      )
+      .mockResolvedValueOnce(zGetFeaturesResponse.parse({ workflow_collaboration_enabled: true }))
 
-    render(<WorkflowApp />, { cloud: true })
+    render(<WorkflowApp />, { cloud: true, collaboration: null })
     const retry = await screen.findByRole('button', { name: 'common.errorBoundary.tryAgain' })
     expect(screen.getByRole('alert')).toHaveTextContent('common.errorBoundary.message')
     expect(screen.queryByRole('region', { name: 'Workflow canvas' })).not.toBeInTheDocument()

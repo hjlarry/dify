@@ -20,7 +20,6 @@ import { initialEdges, initialNodes } from '@/app/components/workflow/utils'
 import { workspacePermissionKeysAtom } from '@/context/permission-state'
 import { currentWorkspaceAtom, currentWorkspaceLoadingAtom } from '@/context/workspace-state'
 import { userProfileQueryOptions } from '@/features/account-profile/client'
-import { useWorkspaceCollaborationEnabled } from '@/features/system-features/use-collaboration-enabled'
 import { useParams, useSearchParams } from '@/next/navigation'
 import { consoleQuery } from '@/service/console'
 import { fetchRunDetail } from '@/service/log'
@@ -148,7 +147,11 @@ const WorkflowAppWithAdditionalContext = () => {
 const WorkflowAppWrapper = () => {
   const { appId } = useParams<{ appId: string }>()
   const { t } = useTranslation('common')
-  const collaboration = useWorkspaceCollaborationEnabled()
+  const collaboration = useQuery({
+    ...consoleQuery.features.get.queryOptions(),
+    retry: false,
+    select: (features) => features.workflow_collaboration_enabled,
+  })
   const { data: mode } = useSuspenseQuery(
     consoleQuery.apps.byAppId.get.queryOptions({
       input: { params: { app_id: appId } },
@@ -157,20 +160,20 @@ const WorkflowAppWrapper = () => {
   )
   if (!isWorkflowAppMode(mode)) throw new Error('This app does not have a workflow editor')
 
-  if (collaboration.status === 'loading') {
+  if (collaboration.data === undefined && (collaboration.isPending || collaboration.isFetching)) {
     return (
       <div className="relative flex size-full items-center justify-center">
         <LoadingPlaceholder />
       </div>
     )
   }
-  if (collaboration.status === 'error') {
+  if (collaboration.data === undefined) {
     return (
       <div className="flex size-full flex-col items-center justify-center gap-4">
         <div role="alert" className="system-sm-regular text-text-tertiary">
           {t(($) => $['errorBoundary.message'])}
         </div>
-        <Button size="small" variant="secondary" onClick={() => void collaboration.retry()}>
+        <Button size="small" variant="secondary" onClick={() => void collaboration.refetch()}>
           {t(($) => $['errorBoundary.tryAgain'])}
         </Button>
       </div>
@@ -180,7 +183,7 @@ const WorkflowAppWrapper = () => {
   return (
     <EditorResourceScope resource={{ kind: 'app', appId, mode }}>
       <WorkflowContextProvider
-        isCollaborationEnabled={collaboration.enabled}
+        isCollaborationEnabled={collaboration.data}
         injectWorkflowStoreSliceFn={createWorkflowSlice as InjectWorkflowStoreSliceFn}
       >
         <WorkflowAppWithAdditionalContext />
