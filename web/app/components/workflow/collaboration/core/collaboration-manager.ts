@@ -1962,6 +1962,8 @@ export class CollaborationManager {
           return
         }
 
+        if (this.joinFailure && !this.joinPending) return
+
         if (this.joinPending) {
           this.joinStatusReceived = true
           this.completeJoinIfReady()

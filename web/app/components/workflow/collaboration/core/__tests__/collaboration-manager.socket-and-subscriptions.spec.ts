@@ -67,6 +67,21 @@ it('notifies subscribers when disconnect clears a join failure', async () => {
   expect(failures).toHaveBeenLastCalledWith(null)
 })
 
+it('does not apply leader status after a join is rejected', async () => {
+  const { manager, receive, acknowledge } = await createSession({
+    connected: false,
+    role: 'pending',
+  })
+  const leader = vi.fn()
+  manager.onLeaderChange(leader)
+  receive('connect')
+  acknowledge('user_connect', { msg: 'unauthorized' }, 401)
+  receive('status', { isLeader: true })
+  expect(manager.getIsLeader()).toBe(false)
+  expect(leader).not.toHaveBeenCalled()
+  expect(manager.canPersistLocalGraph()).toBe(false)
+})
+
 it('reports an unanswered first join without sending a duplicate', async () => {
   vi.useFakeTimers()
   const { manager, receive, emit } = await createSession({ connected: false, role: 'pending' })
