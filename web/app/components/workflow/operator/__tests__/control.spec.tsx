@@ -145,5 +145,4 @@ describe('Control', () => {
       screen.queryByRole('button', { name: 'workflow.common.commentMode' }),
     ).not.toBeInTheDocument()
   })
-
 })
