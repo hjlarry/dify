@@ -34,7 +34,7 @@ const WorkflowAppWithAdditionalContext = ({
 }: {
   collaborationAvailable: boolean
 }) => {
-  const { t } = useTranslation('workflow')
+  const { t } = useTranslation(['workflow'] as const)
   const [initialCollaborationAvailable] = useState(collaborationAvailable)
   const { data, isLoading, fileUploadConfigResponse } = useWorkflowInit()
   const workflowStore = useWorkflowStore()
