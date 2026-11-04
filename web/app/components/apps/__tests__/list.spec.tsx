@@ -25,6 +25,7 @@ const api = vi.hoisted(() => ({
   delete: vi.fn<typeof consoleClient.apps.byAppId.delete>(),
   starred: vi.fn<typeof consoleClient.apps.starred.get>(),
   online: vi.fn<typeof consoleClient.apps.workflows.onlineUsers.post>(),
+  features: vi.fn<typeof consoleClient.features.get>(),
   learn: vi.fn<typeof consoleClient.explore.apps.learnDify.get>(),
   push: vi.fn(),
   replace: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock('@/service/console', async (importOriginal) => {
       'apps.byAppId.delete': api.delete,
       'apps.starred.get': api.starred,
       'apps.workflows.onlineUsers.post': api.online,
+      'features.get': api.features,
       'explore.apps.learnDify.get': api.learn,
       'explore.apps.get': async () => ({ recommended_apps: [], categories: [] }),
       'tags.get': async () => [{ id: 'tag-1', name: 'Research', type: 'app' }],
@@ -176,6 +178,7 @@ beforeEach(() => {
   api.delete.mockReset().mockResolvedValue(undefined)
   api.starred.mockReset().mockResolvedValue(page([]))
   api.online.mockReset().mockResolvedValue({ data: [] })
+  api.features.mockReset()
   api.learn.mockReset().mockResolvedValue({ recommended_apps: [learnApp] })
   api.push.mockReset()
   api.replace.mockReset()
@@ -249,6 +252,18 @@ it('waits for both initial requests before announcing results', async () => {
 it('queries collaborators only for workflow apps when collaboration is enabled', async () => {
   await setup('', { systemFeatures: { enable_collaboration_mode: true } })
   await waitFor(() => expect(api.online).toHaveBeenCalledWith({ body: { app_ids: ['app-2'] } }))
+})
+
+it('keeps the catalog available when Cloud billing features cannot be loaded', async () => {
+  api.features.mockRejectedValue(new Error('billing unavailable'))
+  await setup('', {
+    features: undefined,
+    systemFeatures: { deployment_edition: 'CLOUD', enable_collaboration_mode: true },
+  })
+
+  expect(await screen.findByRole('link', { name: 'Workflow app' })).toBeInTheDocument()
+  await waitFor(() => expect(api.features).toHaveBeenCalled())
+  expect(api.online).not.toHaveBeenCalled()
 })
 
 it('combines real creator and tag selections with URL filters for both catalogs', async () => {
