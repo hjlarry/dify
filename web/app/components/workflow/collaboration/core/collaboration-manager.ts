@@ -790,7 +790,7 @@ export class CollaborationManager {
     this.clearInitialSyncRetry()
     this.clearJoinTimer()
     this.joinRetryCount = 0
-    this.joinFailure = null
+    this.setJoinFailure(null)
     this.hasJoinedRoom = false
     this.detachVisibilityListener()
     this.graphViewActive = null
