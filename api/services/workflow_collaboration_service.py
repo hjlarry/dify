@@ -28,6 +28,10 @@ _PROCESS_SERVER_ID: str | None = None
 _PROCESS_SERVER_ID_PID: int | None = None
 
 
+class WorkflowCollaborationNotEntitledError(Exception):
+    """The workspace cannot start a new collaboration session."""
+
+
 def _get_process_server_id() -> str:
     global _PROCESS_SERVER_ID, _PROCESS_SERVER_ID_PID  # pylint: disable=global-statement
 
@@ -110,7 +114,8 @@ class WorkflowCollaborationService:
         An existing room session may continue after a downgrade, but only for the same authenticated user and app.
 
         The Socket.IO payload still calls the room key `workflow_id`, but the identifier is the workflow app's
-        `App.id`. Returning `None` lets the controller reject the join before any Redis or room state is created.
+        `App.id`. A missing identity or app permission returns `None`; an unavailable entitlement raises
+        `WorkflowCollaborationNotEntitledError` before any Redis or room state is created.
         """
         socket_session = self._socketio.get_session(sid)
         user_id = socket_session.get("user_id")
@@ -129,7 +134,7 @@ class WorkflowCollaborationService:
             return None
 
         if not dify_config.ENABLE_COLLABORATION_MODE:
-            return None
+            raise WorkflowCollaborationNotEntitledError
 
         mapping = self._repository.get_sid_mapping(sid)
         member = self._repository.get_session_info(workflow_id, sid)
@@ -142,7 +147,7 @@ class WorkflowCollaborationService:
             and member.get("user_id") == str(user_id)
         )
         if not already_joined and not FeatureService.can_use_workflow_collaboration(str(tenant_id)):
-            return None
+            raise WorkflowCollaborationNotEntitledError
 
         self._ensure_server_heartbeat_started()
 

@@ -17,7 +17,11 @@ from models.base import TypeBase
 from models.model import App, AppMode
 from repositories.workflow_collaboration_repository import WorkflowCollaborationRepository
 from services.enterprise.rbac_service import RBACService
-from services.workflow_collaboration_service import SYNC_REQUEST_TIMEOUT_SECONDS, WorkflowCollaborationService
+from services.workflow_collaboration_service import (
+    SYNC_REQUEST_TIMEOUT_SECONDS,
+    WorkflowCollaborationNotEntitledError,
+    WorkflowCollaborationService,
+)
 from tests.helpers.unit.config_override import config_overrides_context
 from tests.helpers.unit.model_factories import make_app
 from tests.helpers.unit.services.workflow_collaboration_fixtures import RedisState, seed_session, seed_sessions
@@ -91,7 +95,8 @@ class TestWorkflowCollaborationService:
             assert existing is not None
             assert existing["graph_active"] is False
             assert lookups == ["t-1"]
-            assert service.authorize_and_join_workflow_room("wf-1", "sid-2", session=db_session) is None
+            with pytest.raises(WorkflowCollaborationNotEntitledError):
+                service.authorize_and_join_workflow_room("wf-1", "sid-2", session=db_session)
 
         assert lookups == ["t-1", "t-1"]
         assert repository.session_exists("wf-1", "sid-1")
@@ -143,7 +148,8 @@ class TestWorkflowCollaborationService:
         with config_overrides_context(
             DEPLOYMENT_EDITION=DeploymentEdition.CLOUD, ENABLE_COLLABORATION_MODE=True, RBAC_ENABLED=False
         ):
-            assert service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session) is None
+            with pytest.raises(WorkflowCollaborationNotEntitledError):
+                service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session)
 
         assert lookups == ["t-1"]
         socketio.enter_room.assert_not_called()
@@ -182,7 +188,8 @@ class TestWorkflowCollaborationService:
         seed_session(repository, "sid-1")
 
         with config_overrides_context(ENABLE_COLLABORATION_MODE=False, RBAC_ENABLED=False):
-            assert service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session) is None
+            with pytest.raises(WorkflowCollaborationNotEntitledError):
+                service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session)
 
         socketio.enter_room.assert_not_called()
 
@@ -218,13 +225,17 @@ class TestWorkflowCollaborationService:
                 "services.workflow_collaboration_service.FeatureService.get_workspace_plan", return_value=plan
             ) as get_plan,
         ):
-            result = service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session)
+            if allowed:
+                result = service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session)
+                assert result is not None
+            else:
+                with pytest.raises(WorkflowCollaborationNotEntitledError):
+                    service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session)
 
         if edition == DeploymentEdition.CLOUD and enabled:
             get_plan.assert_called_once_with("t-1")
         else:
             get_plan.assert_not_called()
-        assert (result is not None) is allowed
         assert bool(repository.list_sessions("wf-1")) is allowed
         assert socketio.enter_room.called is allowed
         assert socketio.start_background_task.called is allowed
