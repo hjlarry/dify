@@ -53,6 +53,18 @@ it('reports an initial permission rejection without retrying or allowing a save'
   expect(manager.canPersistLocalGraph()).toBe(false)
 })
 
+it('recognizes a permission rejection in the first acknowledgement argument', async () => {
+  const { manager, receive, acknowledge } = await createSession({
+    connected: false,
+    role: 'pending',
+  })
+  const failures = vi.fn()
+  manager.onJoinFailure(failures)
+  receive('connect')
+  acknowledge('user_connect', 401)
+  expect(failures).toHaveBeenLastCalledWith('denied')
+})
+
 it('notifies subscribers when disconnect clears a join failure', async () => {
   const { manager, receive, acknowledge, connectionId } = await createSession({
     connected: false,

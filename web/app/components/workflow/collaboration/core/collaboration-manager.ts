@@ -22,7 +22,12 @@ import type { CRDTProvider } from './crdt-provider'
 import { cloneDeep } from 'es-toolkit/object'
 import { isEqual } from 'es-toolkit/predicate'
 import { EventEmitter } from './event-emitter'
-import { emitWithAuthGuard, isDefaultSocketUrl, webSocketClient } from './websocket-manager'
+import {
+  emitWithAuthGuard,
+  isDefaultSocketUrl,
+  isUnauthorizedAck,
+  webSocketClient,
+} from './websocket-manager'
 
 type CrdtRuntime = (typeof import('./crdt-runtime'))['crdtRuntime']
 
@@ -136,6 +141,9 @@ const GRAPH_SYNC_DIAGNOSTIC_LOG_LIMIT = 400
 const WORKFLOW_SYNC_REQUEST_TIMEOUT = 20_000
 const GRAPH_RESYNC_RETRY_BASE_DELAY = 1000
 const GRAPH_RESYNC_RETRY_MAX_DELAY = 10_000
+const JOIN_TIMEOUT = 15_000
+const JOIN_RETRY_BASE_DELAY = 1000
+const JOIN_RETRY_MAX_DELAY = 30_000
 
 const toLoroValue = (value: unknown): Value => cloneDeep(value) as Value
 const toLoroRecord = (value: unknown): Record<string, Value> =>
@@ -262,7 +270,7 @@ export class CollaborationManager {
       this.joinTimer = null
       this.rejoinInProgress = false
       this.setJoinFailure('unavailable')
-    }, 15_000)
+    }, JOIN_TIMEOUT)
     this.emitGraphReadyState()
     socket.emit(
       'user_connect',
@@ -273,13 +281,16 @@ export class CollaborationManager {
         if (status === 503 || message === 'collaboration_unavailable') {
           this.cancelJoinAttempt()
           this.setJoinFailure('retrying')
-          const delay = Math.min(1000 * 2 ** this.joinRetryCount, 30_000)
+          const delay = Math.min(
+            JOIN_RETRY_BASE_DELAY * 2 ** this.joinRetryCount,
+            JOIN_RETRY_MAX_DELAY,
+          )
           this.joinRetryCount += 1
           this.joinTimer = setTimeout(
             () => this.joinWorkflow(socket),
             delay * (0.5 + Math.random() * 0.5),
           )
-        } else if (status === 401 || message === 'unauthorized') {
+        } else if (isUnauthorizedAck(body, status)) {
           this.cancelJoinAttempt()
           this.rejoinInProgress = false
           this.setJoinFailure('denied')
