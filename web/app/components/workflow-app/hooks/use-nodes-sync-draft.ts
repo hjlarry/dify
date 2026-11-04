@@ -148,7 +148,9 @@ const useNodesSyncDraftBase = (getNodesReadOnly: () => boolean) => {
         features: featuresPayload,
         conversation_variables: conversationVariables,
         hash: syncWorkflowDraftHash,
-        ...(isCollaborationEnabled ? { _is_collaborative: true } : {}),
+        ...(isCollaborationEnabled && !collaborationManager.canUseLocalDraftFallback()
+          ? { _is_collaborative: true }
+          : {}),
       },
     }
   }, [store, featuresStore, workflowStore, appMode, appId])
@@ -287,7 +289,11 @@ const useNodesSyncDraftBase = (getNodesReadOnly: () => boolean) => {
               }
             : {}),
         }
-        if (!workflowStore.getState().isCollaborationEnabled) delete body._is_collaborative
+        if (
+          !workflowStore.getState().isCollaborationEnabled ||
+          collaborationManager.canUseLocalDraftFallback()
+        )
+          delete body._is_collaborative
 
         const [error, res, isDefined] = await safe(
           consoleClient.apps.byAppId.workflows.draft.post(
