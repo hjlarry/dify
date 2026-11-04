@@ -1,18 +1,29 @@
 import { act, screen, waitFor } from '@testing-library/react'
-import { Suspense } from 'react'
 import { WorkflowContextProvider } from '@/app/components/workflow/context'
 import { useStore } from '@/app/components/workflow/store'
 import { renderWithConsoleQuery, seedFeatures } from '@/test/console/query-data'
 import { useWorkspaceCollaborationEnabled } from '../use-collaboration-enabled'
 
 function WorkspaceState() {
-  return <div>{useWorkspaceCollaborationEnabled() ? 'enabled' : 'disabled'}</div>
+  const collaboration = useWorkspaceCollaborationEnabled()
+  return (
+    <div>
+      {collaboration.status === 'ready'
+        ? collaboration.enabled
+          ? 'enabled'
+          : 'disabled'
+        : collaboration.status}
+    </div>
+  )
 }
 
 function SessionOwner({ children }: { children: React.ReactNode }) {
-  const enabled = useWorkspaceCollaborationEnabled()
+  const collaboration = useWorkspaceCollaborationEnabled()
+  if (collaboration.status !== 'ready') return null
   return (
-    <WorkflowContextProvider isCollaborationEnabled={enabled}>{children}</WorkflowContextProvider>
+    <WorkflowContextProvider isCollaborationEnabled={collaboration.enabled}>
+      {children}
+    </WorkflowContextProvider>
   )
 }
 
@@ -41,13 +52,10 @@ describe('collaboration availability', () => {
 
   it('waits for the Cloud subscription before selecting an editing mode', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}))
-    renderWithConsoleQuery(
-      <Suspense fallback={<div>loading subscription</div>}>
-        <WorkspaceState />
-      </Suspense>,
-      { systemFeatures: { deployment_edition: 'CLOUD', enable_collaboration_mode: true } },
-    )
-    expect(screen.getByText('loading subscription')).toBeInTheDocument()
+    renderWithConsoleQuery(<WorkspaceState />, {
+      systemFeatures: { deployment_edition: 'CLOUD', enable_collaboration_mode: true },
+    })
+    expect(screen.getByText('loading')).toBeInTheDocument()
     expect(screen.queryByText('enabled')).not.toBeInTheDocument()
     expect(screen.queryByText('disabled')).not.toBeInTheDocument()
     await waitFor(() => expect(fetch).toHaveBeenCalled())

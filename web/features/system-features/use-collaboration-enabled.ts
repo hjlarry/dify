@@ -1,5 +1,4 @@
-import type { GetFeaturesResponse } from '@dify/contracts/api/console/features/types.gen'
-import { useSuspenseQueries, useSuspenseQuery } from '@tanstack/react-query'
+import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { consoleQuery } from '@/service/console'
 import { systemFeaturesQueryOptions } from './client'
 
@@ -7,13 +6,22 @@ export const useWorkspaceCollaborationEnabled = () => {
   const { data: systemFeatures } = useSuspenseQuery(systemFeaturesQueryOptions())
   const needsPlan =
     systemFeatures.enable_collaboration_mode && systemFeatures.deployment_edition === 'CLOUD'
-  const [features] = useSuspenseQueries<{ queryFnData: GetFeaturesResponse }[]>({
-    queries: needsPlan ? [consoleQuery.features.get.queryOptions()] : [],
+  const {
+    data: plan,
+    error,
+    isFetching,
+    refetch,
+  } = useQuery({
+    ...consoleQuery.features.get.queryOptions(),
+    enabled: needsPlan,
+    retry: false,
+    select: (features) => features.billing.subscription.plan,
   })
 
-  if (!systemFeatures.enable_collaboration_mode) return false
-  if (!needsPlan) return true
+  if (!systemFeatures.enable_collaboration_mode) return { status: 'ready' as const, enabled: false }
+  if (!needsPlan) return { status: 'ready' as const, enabled: true }
+  if (plan) return { status: 'ready' as const, enabled: plan === 'professional' || plan === 'team' }
+  if (error && !isFetching) return { status: 'error' as const, retry: refetch }
 
-  const plan = features?.data.billing.subscription.plan
-  return plan === 'professional' || plan === 'team'
+  return { status: 'loading' as const }
 }

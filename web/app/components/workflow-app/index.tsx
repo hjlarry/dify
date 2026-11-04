@@ -2,9 +2,11 @@
 
 import type { Features as FeaturesData } from '@/app/components/base/features/types'
 import type { InjectWorkflowStoreSliceFn } from '@/app/components/workflow/store'
+import { Button } from '@langgenius/dify-ui/button'
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { useAtomValue } from 'jotai'
 import { useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { isWorkflowAppMode } from '@/app/components/apps/app-type'
 import { FeaturesProvider } from '@/app/components/base/features'
 import { LoadingPlaceholder } from '@/app/components/base/loading-placeholder'
@@ -145,7 +147,8 @@ const WorkflowAppWithAdditionalContext = () => {
 
 const WorkflowAppWrapper = () => {
   const { appId } = useParams<{ appId: string }>()
-  const isCollaborationEnabled = useWorkspaceCollaborationEnabled()
+  const { t } = useTranslation('common')
+  const collaboration = useWorkspaceCollaborationEnabled()
   const { data: mode } = useSuspenseQuery(
     consoleQuery.apps.byAppId.get.queryOptions({
       input: { params: { app_id: appId } },
@@ -154,10 +157,30 @@ const WorkflowAppWrapper = () => {
   )
   if (!isWorkflowAppMode(mode)) throw new Error('This app does not have a workflow editor')
 
+  if (collaboration.status === 'loading') {
+    return (
+      <div className="relative flex size-full items-center justify-center">
+        <LoadingPlaceholder />
+      </div>
+    )
+  }
+  if (collaboration.status === 'error') {
+    return (
+      <div className="flex size-full flex-col items-center justify-center gap-4">
+        <div role="alert" className="system-sm-regular text-text-tertiary">
+          {t(($) => $['errorBoundary.message'])}
+        </div>
+        <Button size="small" variant="secondary" onClick={() => void collaboration.retry()}>
+          {t(($) => $['errorBoundary.tryAgain'])}
+        </Button>
+      </div>
+    )
+  }
+
   return (
     <EditorResourceScope resource={{ kind: 'app', appId, mode }}>
       <WorkflowContextProvider
-        isCollaborationEnabled={isCollaborationEnabled}
+        isCollaborationEnabled={collaboration.enabled}
         injectWorkflowStoreSliceFn={createWorkflowSlice as InjectWorkflowStoreSliceFn}
       >
         <WorkflowAppWithAdditionalContext />
