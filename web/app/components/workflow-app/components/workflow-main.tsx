@@ -561,7 +561,7 @@ const WorkflowMain = ({ nodes, edges, viewport }: WorkflowMainProps) => {
         (collaborationGraphState.appId !== appId || !collaborationGraphState.isReady) && (
           <div
             data-testid="collaboration-graph-loading"
-            className="absolute inset-0 z-50 flex cursor-wait items-center justify-center"
+            className={`absolute inset-0 z-50 flex items-center justify-center ${!joinFailure || joinFailure === 'retrying' ? 'cursor-wait' : ''}`}
           >
             <div
               role="status"
@@ -570,7 +570,7 @@ const WorkflowMain = ({ nodes, edges, viewport }: WorkflowMainProps) => {
             >
               {joinFailure ? (
                 <>
-                  <span role="alert">
+                  <span>
                     {joinFailure === 'denied'
                       ? t(($) => $['collaboration.joinDenied'], { ns: 'workflow' })
                       : joinFailure === 'retrying'

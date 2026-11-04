@@ -295,12 +295,16 @@ it('shows a retry message and access guidance when the initial join is rejected'
     events.ready.forEach((handler) => handler(false))
     events.joinFailure.forEach((handler) => handler('retrying'))
   })
-  expect(screen.getByRole('alert')).toHaveTextContent('workflow.collaboration.joinRetrying')
+  expect(
+    within(screen.getByTestId('collaboration-graph-loading')).getByRole('status'),
+  ).toHaveTextContent('workflow.collaboration.joinRetrying')
   expect(
     screen.queryByRole('button', { name: 'common.errorBoundary.reloadPage' }),
   ).not.toBeInTheDocument()
   act(() => events.joinFailure.forEach((handler) => handler('denied')))
-  expect(screen.getByRole('alert')).toHaveTextContent('workflow.collaboration.joinDenied')
+  expect(
+    within(screen.getByTestId('collaboration-graph-loading')).getByRole('status'),
+  ).toHaveTextContent('workflow.collaboration.joinDenied')
   expect(screen.getByRole('button', { name: 'common.errorBoundary.reloadPage' })).toBeVisible()
 })
 
@@ -311,7 +315,9 @@ it('shows an error without a reload button after an established session is rejec
     events.ready.forEach((handler) => handler(false))
     events.joinFailure.forEach((handler) => handler('denied'))
   })
-  expect(screen.getByRole('alert')).toHaveTextContent('workflow.collaboration.joinDenied')
+  expect(
+    within(screen.getByTestId('collaboration-graph-loading')).getByRole('status'),
+  ).toHaveTextContent('workflow.collaboration.joinDenied')
   expect(
     screen.queryByRole('button', { name: 'common.errorBoundary.reloadPage' }),
   ).not.toBeInTheDocument()
