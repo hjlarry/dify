@@ -110,6 +110,7 @@
   "chatVariable.tips": "Nasveti",
   "chatVariable.updatedAt": "Posodobljeno ob",
   "collaboration.historyAction.generic": "Sodelavec je izvedel razveljavitev/ponovitev",
+  "collaboration.draftOutdated": "Shranjeni osnutek se je spremenil. Vaše trenutno platno je ohranjeno tukaj.",
   "collaboration.draftSaveBlocked": "Drugi skupaj urejajo ta potek dela. Vaše spremembe niso bile shranjene.",
   "collaboration.joinDenied": "Pridružitev sodelovanju ni uspela. Preverite dostop in paket delovnega prostora ter znova odprite urejevalnik.",
   "collaboration.availableAfterReopen": "Sodelovalno urejanje je zdaj na voljo. Za vklop znova odprite urejevalnik.",

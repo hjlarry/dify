@@ -110,6 +110,7 @@
   "chatVariable.tips": "İpuçları",
   "chatVariable.updatedAt": "Güncellenme zamanı: ",
   "collaboration.historyAction.generic": "Bir işbirlikçi geri alma/yeniden yapma gerçekleştirdi",
+  "collaboration.draftOutdated": "Kaydedilen taslak değişti. Mevcut çalışma alanınız burada korunuyor.",
   "collaboration.draftSaveBlocked": "Diğer kullanıcılar bu iş akışını birlikte düzenliyor. Değişiklikleriniz kaydedilmedi.",
   "collaboration.joinDenied": "Ortak düzenlemeye katılamadınız. Erişim izninizi ve çalışma alanı planını kontrol edip düzenleyiciyi yeniden açın.",
   "collaboration.availableAfterReopen": "Ortak düzenleme artık kullanılabilir. Etkinleştirmek için düzenleyiciyi yeniden açın.",

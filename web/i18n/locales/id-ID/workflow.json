@@ -110,6 +110,7 @@
   "chatVariable.tips": "Tips",
   "chatVariable.updatedAt": "Diperbarui pada",
   "collaboration.historyAction.generic": "Seorang kolaborator melakukan urungkan/ulang",
+  "collaboration.draftOutdated": "Draf yang tersimpan telah berubah. Kanvas Anda saat ini tetap tersedia di sini.",
   "collaboration.draftSaveBlocked": "Orang lain sedang mengedit alur kerja ini bersama. Perubahan Anda tidak disimpan.",
   "collaboration.joinDenied": "Tidak dapat bergabung dalam kolaborasi. Periksa akses dan paket ruang kerja Anda, lalu buka kembali editor.",
   "collaboration.availableAfterReopen": "Kolaborasi kini tersedia. Buka kembali editor untuk mengaktifkannya.",

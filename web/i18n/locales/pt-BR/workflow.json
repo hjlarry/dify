@@ -110,6 +110,7 @@
   "chatVariable.tips": "Dicas",
   "chatVariable.updatedAt": "Atualizado em ",
   "collaboration.historyAction.generic": "Um colaborador realizou desfazer/refazer",
+  "collaboration.draftOutdated": "O rascunho salvo foi alterado. Sua tela atual está preservada aqui.",
   "collaboration.draftSaveBlocked": "Outras pessoas estão editando este fluxo de trabalho em conjunto. Suas alterações não foram salvas.",
   "collaboration.joinDenied": "Não foi possível entrar na colaboração. Verifique seu acesso e o plano do espaço de trabalho e abra o editor novamente.",
   "collaboration.availableAfterReopen": "A edição colaborativa está disponível. Abra o editor novamente para ativá-la.",

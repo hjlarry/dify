@@ -115,6 +115,62 @@ it('does not apply leader status after a join is rejected', async () => {
   expect(manager.canPersistLocalGraph()).toBe(false)
 })
 
+it('never seeds or saves an outdated initial draft', async () => {
+  const node = createNode('local')
+  const { manager, receive, acknowledge, state } = await createSession({
+    connected: false,
+    role: 'pending',
+    nodes: [node],
+  })
+  const failures = vi.fn()
+  const fallback = vi.fn()
+  manager.onJoinFailure(failures)
+  manager.onInitialPlainDraftFallback(fallback)
+  receive('connect')
+  acknowledge('user_connect', { msg: 'draft_outdated' }, 409)
+  receive('status', { isLeader: true })
+  expect(failures).toHaveBeenLastCalledWith('draft_outdated')
+  expect(manager.getNodes()).toEqual([])
+  expect(state.getNodes()).toEqual([node])
+  expect(manager.canPersistLocalGraph()).toBe(false)
+  expect(fallback).not.toHaveBeenCalled()
+})
+
+it('sends the latest editor draft hash on reconnect', async () => {
+  const { manager, receive, emit } = await createSession()
+  let hash = 'first-hash'
+  await connect(manager, 'app-1', undefined, () => hash)
+  hash = 'latest-hash'
+  receive('disconnect', 'transport close')
+  receive('connect')
+  expect(emit).toHaveBeenCalledWith(
+    'user_connect',
+    {
+      workflow_id: 'app-1',
+      draft_hash: 'latest-hash',
+    },
+    expect.any(Function),
+  )
+})
+
+it('blocks saving while a rejoin waits for the editor draft hash', async () => {
+  const { manager, acknowledge, emit, receive } = await createSession()
+  let hash = ''
+  await connect(manager, 'app-1', undefined, () => hash)
+  manager.emitCursorMove({ x: 1, y: 2, userId: 'user-1', timestamp: 1 })
+  acknowledge('mouse_move', { msg: 'unauthorized' }, 401)
+  expect(emit.mock.calls.filter(([event]) => event === 'user_connect')).toHaveLength(0)
+  expect(manager.canPersistLocalGraph()).toBe(false)
+  expect(manager.canFlushGraphOnPageClose()).toBe(false)
+  expect(manager.canRestoreGraphFromCrdt()).toBe(false)
+  hash = 'loaded-hash'
+  manager.resumeJoinWhenDraftReady('app-1')
+  expect(emit.mock.calls.filter(([event]) => event === 'user_connect')).toHaveLength(1)
+  receive('status', { isLeader: true })
+  acknowledge('user_connect', { msg: 'connected' })
+  expect(manager.canPersistLocalGraph()).toBe(true)
+})
+
 it('reports an unanswered first join without sending a duplicate', async () => {
   vi.useFakeTimers()
   const { manager, receive, emit } = await createSession({ connected: false, role: 'pending' })

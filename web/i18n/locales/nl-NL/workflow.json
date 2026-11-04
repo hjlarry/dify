@@ -110,6 +110,7 @@
   "chatVariable.tips": "Tips",
   "chatVariable.updatedAt": "Updated at ",
   "collaboration.historyAction.generic": "Een medewerker heeft een ongedaan maken/opnieuw uitvoeren-actie uitgevoerd",
+  "collaboration.draftOutdated": "Het opgeslagen concept is gewijzigd. Je huidige canvas blijft hier behouden.",
   "collaboration.draftSaveBlocked": "Anderen bewerken deze workflow samen. Je wijzigingen zijn niet opgeslagen.",
   "collaboration.joinDenied": "Deelname aan de samenwerking is niet gelukt. Controleer je toegangsrechten en het abonnement van de werkruimte en open de editor opnieuw.",
   "collaboration.availableAfterReopen": "Samenwerken is nu beschikbaar. Open de editor opnieuw om dit in te schakelen.",

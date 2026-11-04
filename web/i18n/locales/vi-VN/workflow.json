@@ -110,6 +110,7 @@
   "chatVariable.tips": "Mẹo",
   "chatVariable.updatedAt": "Cập nhật lúc ",
   "collaboration.historyAction.generic": "Một cộng tác viên đã thực hiện hoàn tác/làm lại",
+  "collaboration.draftOutdated": "Bản nháp đã lưu đã thay đổi. Nội dung trên bảng hiện tại của bạn vẫn được giữ ở đây.",
   "collaboration.draftSaveBlocked": "Những người khác đang cùng chỉnh sửa quy trình này. Các thay đổi của bạn chưa được lưu.",
   "collaboration.joinDenied": "Không thể tham gia chỉnh sửa cộng tác. Hãy kiểm tra quyền truy cập và gói của không gian làm việc, sau đó mở lại trình chỉnh sửa.",
   "collaboration.availableAfterReopen": "Tính năng cộng tác hiện đã khả dụng. Mở lại trình chỉnh sửa để bật tính năng này.",

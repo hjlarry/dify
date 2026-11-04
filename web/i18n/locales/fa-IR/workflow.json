@@ -110,6 +110,7 @@
   "chatVariable.tips": "نکات",
   "chatVariable.updatedAt": "به‌روزرسانی شده در ",
   "collaboration.historyAction.generic": "یک همکار عملیات برگرداندن/انجام مجدد را انجام داد",
+  "collaboration.draftOutdated": "پیش‌نویس ذخیره‌شده تغییر کرده است. بوم فعلی شما در اینجا حفظ شده است.",
   "collaboration.draftSaveBlocked": "دیگران در حال ویرایش مشارکتی گردش کار هستند. تغییرات شما ذخیره نشد.",
   "collaboration.joinDenied": "پیوستن به ویرایش مشارکتی ممکن نشد. دسترسی خود و طرح فضای کاری را بررسی کنید و ویرایشگر را دوباره باز کنید.",
   "collaboration.availableAfterReopen": "ویرایش مشارکتی اکنون در دسترس است. برای فعال‌کردن آن، ویرایشگر را دوباره باز کنید.",
