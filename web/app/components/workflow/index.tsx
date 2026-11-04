@@ -410,14 +410,27 @@ export const Workflow: FC<WorkflowProps> = memo(
         // receiving remote edits. Restore from the CRDT instead of the DB draft — the DB may
         // hold the stale snapshot this very tab saved while hidden, and re-importing it would
         // broadcast a rollback to everyone. A trusted CRDT remains authoritative when empty.
+        const canRefresh = () => {
+          const { isCollaborationEnabled, isCollaborationFallback } = workflowStore.getState()
+          if (isCollaborationFallback) return false
+          return (
+            !isCollaborationEnabled ||
+            (collaborationManager.isConnected() && collaborationManager.canRestoreGraphFromCrdt())
+          )
+        }
+        if (!canRefresh()) return
+
         const collaborationConnected = collaborationManager.isConnected()
-        if (collaborationConnected && !collaborationManager.canRestoreGraphFromCrdt()) return
 
         if (collaborationConnected) {
           collaborationManager.refreshGraphSynchronously()
-          setTimeout(() => handleRefreshWorkflowDraft(true), 500)
+          setTimeout(() => {
+            if (canRefresh()) handleRefreshWorkflowDraft(true, { shouldApply: canRefresh })
+          }, 500)
         } else {
-          setTimeout(() => handleRefreshWorkflowDraft(), 500)
+          setTimeout(() => {
+            if (canRefresh()) handleRefreshWorkflowDraft()
+          }, 500)
         }
       }
     }, [syncWorkflowDraftWhenPageClose, handleRefreshWorkflowDraft, workflowStore])
