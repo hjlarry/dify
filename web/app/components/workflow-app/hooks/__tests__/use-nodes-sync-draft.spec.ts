@@ -12,6 +12,7 @@ import { createEdge, createNode } from '@/app/components/workflow/__tests__/fixt
 import { renderWorkflowCanvasHook } from '@/app/components/workflow/__tests__/workflow-test-env'
 import { ChatVarType } from '@/app/components/workflow/panel/chat-variable-panel/type'
 import { BlockEnum } from '@/app/components/workflow/types'
+import { toast } from '@/app/notifications'
 import { markAppDeletionFailed, markAppDeletionStarted } from '@/service/app-deletion'
 import { createHttpError } from '@/service/http-error'
 import { createConsoleQueryWrapper, seedAppDetail } from '@/test/console/query-data'
@@ -21,6 +22,10 @@ import { createWorkflowResponseFixture } from '@/test/fixtures/workflow-response
 import { useNodesSyncDraft } from '../use-nodes-sync-draft'
 
 const mockPostWithKeepalive = vi.fn()
+vi.mock('@/app/notifications', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/app/notifications')>()
+  return { ...actual, toast: { ...actual.toast, error: vi.fn() } }
+})
 const mockCollaborationIsConnected = vi.fn()
 const mockCollaborationGetIsLeader = vi.fn()
 const mockCollaborationRequestWorkflowSync = vi.fn()
@@ -957,6 +962,32 @@ describe('useNodesSyncDraft', () => {
   })
 
   describe('failures and skipped saves', () => {
+    it('reports an active collaboration without refreshing or discarding the local graph', async () => {
+      const error = createHttpError(new Response(null, { status: 409 }), {
+        code: 'draft_workflow_collaboration_active',
+        message: 'The workflow is being edited collaboratively.',
+        status: 409,
+      })
+      mockSyncWorkflowDraft.mockRejectedValue(error)
+      const callbacks = { onError: vi.fn() }
+      const { result } = renderUseNodesSyncDraft()
+
+      await act(async () => {
+        await result.current.doSyncWorkflowDraft(false, callbacks)
+        await result.current.doSyncWorkflowDraft(false, callbacks)
+      })
+
+      expect(mockHandleRefreshWorkflowDraft).not.toHaveBeenCalled()
+      expect(callbacks.onError).toHaveBeenCalledTimes(2)
+      expect(toast.error).toHaveBeenCalledOnce()
+      expect(toast.error).toHaveBeenCalledWith('workflow.collaboration.draftSaveBlocked')
+      expect(mockSyncWorkflowDraft).toHaveBeenLastCalledWith(
+        draftRequest(
+          expect.objectContaining({ graph: expect.objectContaining({ nodes: [savedStartNode] }) }),
+        ),
+      )
+    })
+
     it.each([
       {
         scenario: 'an out-of-date draft',

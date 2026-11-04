@@ -110,6 +110,7 @@
   "chatVariable.tips": "Tips",
   "chatVariable.updatedAt": "Diperbarui pada",
   "collaboration.historyAction.generic": "Seorang kolaborator melakukan urungkan/ulang",
+  "collaboration.draftSaveBlocked": "Orang lain sedang mengedit alur kerja ini bersama. Perubahan Anda tidak disimpan.",
   "collaboration.joinDenied": "Tidak dapat bergabung dalam kolaborasi. Periksa akses dan paket ruang kerja Anda, lalu buka kembali editor.",
   "collaboration.joinRetrying": "Kolaborasi sementara tidak tersedia. Mencoba lagi…",
   "common.accessAPIReference": "Referensi API Akses",

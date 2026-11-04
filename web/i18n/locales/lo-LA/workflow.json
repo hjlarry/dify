@@ -110,6 +110,7 @@
   "chatVariable.tips": "ຄຳແນະນຳ",
   "chatVariable.updatedAt": "ອັບເດດເມື່ອ ",
   "collaboration.historyAction.generic": "ຜູ້ຮ່ວມງານໄດ້ເຮັດການ Undo/Redo",
+  "collaboration.draftSaveBlocked": "ຜູ້ອື່ນກຳລັງແກ້ໄຂເວີກໂຟລວນີ້ຮ່ວມກັນ. ການປ່ຽນແປງຂອງທ່ານບໍ່ໄດ້ຖືກບັນທຶກ.",
   "collaboration.joinDenied": "ບໍ່ສາມາດເຂົ້າຮ່ວມການແກ້ໄຂຮ່ວມກັນໄດ້. ກວດສອບສິດເຂົ້າເຖິງ ແລະ ແພັກເກັດຂອງພື້ນທີ່ເຮັດວຽກ ແລ້ວເປີດໂຕແກ້ໄຂອີກຄັ້ງ.",
   "collaboration.joinRetrying": "ການແກ້ໄຂຮ່ວມກັນບໍ່ພ້ອມໃຊ້ຊົ່ວຄາວ. ກຳລັງລອງໃໝ່…",
   "common.accessAPIReference": "ເບິ່ງເອກະສານອ້າງອີງ API",

@@ -110,6 +110,7 @@
   "chatVariable.tips": "Советы",
   "chatVariable.updatedAt": "Обновлено в ",
   "collaboration.historyAction.generic": "Участник выполнил отмену/повтор",
+  "collaboration.draftSaveBlocked": "Другие пользователи совместно редактируют этот рабочий процесс. Ваши изменения не сохранены.",
   "collaboration.joinDenied": "Не удалось присоединиться к совместному редактированию. Проверьте права доступа и тариф рабочего пространства, затем откройте редактор снова.",
   "collaboration.joinRetrying": "Совместное редактирование временно недоступно. Повторная попытка…",
   "common.accessAPIReference": "Доступ к справочнику API",

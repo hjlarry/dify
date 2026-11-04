@@ -110,6 +110,7 @@
   "chatVariable.tips": "提示",
   "chatVariable.updatedAt": "更新时间 ",
   "collaboration.historyAction.generic": "协作者执行了撤销/重做操作",
+  "collaboration.draftSaveBlocked": "其他人正在协作编辑此工作流，你的修改未保存。",
   "collaboration.joinDenied": "无法加入协作。请检查访问权限和工作区套餐，然后重新打开编辑器。",
   "collaboration.joinRetrying": "协作暂时不可用，正在重试…",
   "common.accessAPIReference": "访问 API",

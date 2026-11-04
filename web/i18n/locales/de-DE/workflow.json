@@ -110,6 +110,7 @@
   "chatVariable.tips": "Tipps",
   "chatVariable.updatedAt": "Aktualisiert am ",
   "collaboration.historyAction.generic": "Ein Mitbearbeiter hat Rückgängig/Wiederholen ausgeführt",
+  "collaboration.draftSaveBlocked": "Andere bearbeiten den Workflow gemeinsam. Deine Änderungen wurden nicht gespeichert.",
   "collaboration.joinDenied": "Die Verbindung zur Zusammenarbeit konnte nicht hergestellt werden. Prüfe deine Zugriffsrechte und den Tarif des Arbeitsbereichs und öffne den Editor erneut.",
   "collaboration.joinRetrying": "Die Zusammenarbeit ist vorübergehend nicht verfügbar. Erneuter Versuch…",
   "common.accessAPIReference": "API-Referenz aufrufen",

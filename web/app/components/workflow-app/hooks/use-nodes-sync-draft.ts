@@ -26,6 +26,7 @@ import {
 import { useWorkflowStore } from '@/app/components/workflow/store'
 import { BlockEnum } from '@/app/components/workflow/types'
 import { normalizeWorkflowNodes } from '@/app/components/workflow/utils/normalize-workflow-nodes'
+import { toast } from '@/app/notifications'
 import { API_PREFIX } from '@/config'
 import { isAppDeletingOrDeleted } from '@/service/app-deletion'
 import { consoleClient, consoleQuery } from '@/service/console'
@@ -54,6 +55,7 @@ const useNodesSyncDraftBase = (getNodesReadOnly: () => boolean) => {
   const isMountedRef = useRef(false)
   const emptySyncPendingRef = useRef(false)
   const cancelConfirmationRef = useRef<(() => void) | undefined>(undefined)
+  const collaborationConflictReportedRef = useRef(false)
 
   useEffect(() => {
     isMountedRef.current = true
@@ -297,12 +299,22 @@ const useNodesSyncDraftBase = (getNodesReadOnly: () => boolean) => {
           const { isWorkflowDataLoaded } = workflowStore.getState()
           if (shouldSkipDraftSync(appId, isWorkflowDataLoaded)) return null
 
-          if (isDefined && error.code === 'draft_workflow_not_sync' && !notRefreshWhenSyncError)
+          if (isDefined && error.code === 'draft_workflow_collaboration_active') {
+            if (!collaborationConflictReportedRef.current) {
+              collaborationConflictReportedRef.current = true
+              toast.error(t(($) => $['collaboration.draftSaveBlocked'], { ns: 'workflow' }))
+            }
+          } else if (
+            isDefined &&
+            error.code === 'draft_workflow_not_sync' &&
+            !notRefreshWhenSyncError
+          )
             handleRefreshWorkflowDraft(true)
           callback?.onError?.()
           return null
         }
 
+        collaborationConflictReportedRef.current = false
         setSyncWorkflowDraftHash(res.hash, baseParams.params.graph)
         setDraftUpdatedAt(res.updated_at)
         callback?.onSuccess?.()
