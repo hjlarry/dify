@@ -37,6 +37,10 @@ class WorkflowCollaborationUnavailableError(Exception):
     """The draft or socket is unavailable for a collaboration join."""
 
 
+class WorkflowCollaborationDraftOutdatedError(Exception):
+    """A new collaboration session was opened from an outdated draft."""
+
+
 def _get_process_server_id() -> str:
     global _PROCESS_SERVER_ID, _PROCESS_SERVER_ID_PID  # pylint: disable=global-statement
 
@@ -111,7 +115,7 @@ class WorkflowCollaborationService:
         )
 
     def authorize_and_join_workflow_room(
-        self, workflow_id: str, sid: str, *, session: Session
+        self, workflow_id: str, sid: str, *, session: Session, draft_hash: str | None = None
     ) -> tuple[str, bool] | None:
         """
         Join a collaboration room only after validating the socket session, app access, and workspace entitlement.
@@ -124,6 +128,7 @@ class WorkflowCollaborationService:
 
         A join requires a connected socket and an existing draft. Registration holds the draft row lock shared
         with full console saves. A disconnected or interrupted new join has its room state cleaned up.
+        When provided, a new session's draft hash must match the locked draft; established sessions may rejoin.
         """
         socket_session = self._socketio.get_session(sid)
         user_id = socket_session.get("user_id")
@@ -173,8 +178,8 @@ class WorkflowCollaborationService:
         try:
             # A full console save checks room membership while holding this same draft row lock.
             with session.begin():
-                draft_id = session.scalar(
-                    select(Workflow.id)
+                draft = session.scalar(
+                    select(Workflow)
                     .where(
                         Workflow.tenant_id == str(tenant_id),
                         Workflow.app_id == workflow_id,
@@ -183,7 +188,7 @@ class WorkflowCollaborationService:
                     .limit(1)
                     .with_for_update()
                 )
-                if draft_id is None or not self._is_socket_connected_locally(sid):
+                if draft is None or not self._is_socket_connected_locally(sid):
                     raise WorkflowCollaborationUnavailableError
 
                 current_mapping = self._repository.get_sid_mapping(sid)
@@ -202,6 +207,9 @@ class WorkflowCollaborationService:
                     return None
 
                 already_joined = current_joined
+                if not already_joined and draft_hash is not None and draft_hash != draft.unique_hash:
+                    raise WorkflowCollaborationDraftOutdatedError
+
                 self._ensure_server_heartbeat_started()
                 if already_joined:
                     # Rejoining must not reset visibility or its sequence on the existing session.
