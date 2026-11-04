@@ -156,18 +156,60 @@ it('sends the draft hash on the first join but not on reconnect', async () => {
   expect(emit).toHaveBeenCalledWith('user_connect', { workflow_id: 'app-1' }, expect.any(Function))
 })
 
-it('revalidates an established session without waiting for a draft hash', async () => {
-  const { manager, acknowledge, emit, receive } = await createSession()
-  await connect(manager, 'app-1', undefined, () => '')
+it('retries a reconnect without a draft hash while the graph is being recovered', async () => {
+  vi.useFakeTimers()
+  const { manager, receive, acknowledge, emit } = await createSession()
+  await connect(manager, 'app-1', undefined, () => 'old-hash')
+  receive('disconnect', 'transport close')
+  receive('connect')
+  acknowledge('user_connect', { msg: 'collaboration_unavailable' }, 503)
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(emit.mock.calls.filter(([event]) => event === 'user_connect')).toHaveLength(2)
+  expect(emit).toHaveBeenLastCalledWith(
+    'user_connect',
+    { workflow_id: 'app-1' },
+    expect.any(Function),
+  )
+  expect(manager.canPersistLocalGraph()).toBe(false)
+})
+
+it('checks the draft before rejoining on the same socket and blocks an outdated graph', async () => {
+  const { manager, acknowledge, emit } = await createSession({ nodes: [createNode('old')] })
+  const failures = vi.fn()
+  manager.onJoinFailure(failures)
+  await connect(manager, 'app-1', undefined, () => 'old-hash')
+  emit.mockClear()
   manager.emitCursorMove({ x: 1, y: 2, userId: 'user-1', timestamp: 1 })
   acknowledge('mouse_move', { msg: 'unauthorized' }, 401)
-  expect(emit).toHaveBeenCalledWith('user_connect', { workflow_id: 'app-1' }, expect.any(Function))
+  expect(emit).toHaveBeenCalledWith(
+    'user_connect',
+    { workflow_id: 'app-1', draft_hash: 'old-hash' },
+    expect.any(Function),
+  )
   expect(manager.canPersistLocalGraph()).toBe(false)
   expect(manager.canFlushGraphOnPageClose()).toBe(false)
   expect(manager.canRestoreGraphFromCrdt()).toBe(false)
-  receive('status', { isLeader: true })
-  acknowledge('user_connect', { msg: 'connected' })
-  expect(manager.canPersistLocalGraph()).toBe(true)
+  acknowledge('user_connect', { msg: 'draft_outdated' }, 409)
+  expect(failures).toHaveBeenLastCalledWith('draft_outdated')
+  expect(manager.getNodes()[0]?.id).toBe('old')
+  expect(manager.canPersistLocalGraph()).toBe(false)
+})
+
+it('waits for a draft hash before rejoining on the same socket', async () => {
+  const { manager, acknowledge, emit } = await createSession()
+  let draftHash = ''
+  await connect(manager, 'app-1', undefined, () => draftHash)
+  manager.emitCursorMove({ x: 1, y: 2, userId: 'user-1', timestamp: 1 })
+  acknowledge('mouse_move', { msg: 'unauthorized' }, 401)
+  expect(emit.mock.calls.filter(([event]) => event === 'user_connect')).toHaveLength(0)
+  expect(manager.canPersistLocalGraph()).toBe(false)
+  draftHash = 'current-hash'
+  manager.resumeJoinWhenDraftReady('app-1')
+  expect(emit).toHaveBeenCalledWith(
+    'user_connect',
+    { workflow_id: 'app-1', draft_hash: 'current-hash' },
+    expect.any(Function),
+  )
 })
 
 it('still checks the draft hash after disconnecting before the first join completes', async () => {
@@ -429,6 +471,16 @@ it.each(['status-first', 'ack-first'] as const)('completes rejoin when %s', asyn
   state.setNodes([createNode('latest')])
   expect(manager.replaceGraphFromReactFlow(reload.mock.calls[0]![0])).toBe(true)
   expect(manager.canPersistLocalGraph()).toBe(true)
+  emit.mockClear()
+  manager.emitCursorMove({ x: 1, y: 2, userId: 'user-1', timestamp: 1 })
+  acknowledge('mouse_move', { msg: 'unauthorized' }, 401)
+  expect(emit).toHaveBeenCalledWith(
+    'user_connect',
+    { workflow_id: 'app-1', draft_hash: 'old-hash' },
+    expect.any(Function),
+  )
+  acknowledge('user_connect', { msg: 'draft_outdated' }, 409)
+  expect(manager.canPersistLocalGraph()).toBe(false)
 })
 
 it.each(['status-first', 'ack-first'] as const)(

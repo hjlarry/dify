@@ -267,10 +267,10 @@ export class CollaborationManager {
     return this.waitingForDraftHash || this.joinPending || !!this.joinTimer || !!this.joinFailure
   }
 
-  private joinWorkflow(socket: Socket): void {
+  private joinWorkflow(socket: Socket, skipDraftHash = false): void {
     if (!this.currentAppId || !socket.connected) return
-    const draftHash = this.hasJoinedRoom ? undefined : this.getDraftHash?.()
-    if (!this.hasJoinedRoom && this.getDraftHash && !draftHash) {
+    const draftHash = skipDraftHash ? undefined : this.getDraftHash?.()
+    if (!skipDraftHash && this.getDraftHash && !draftHash) {
       this.waitingForDraftHash = true
       this.emitGraphReadyState()
       return
@@ -315,7 +315,7 @@ export class CollaborationManager {
           )
           this.joinRetryCount += 1
           this.joinTimer = setTimeout(
-            () => this.joinWorkflow(socket),
+            () => this.joinWorkflow(socket, skipDraftHash),
             delay * (0.5 + Math.random() * 0.5),
           )
         } else if (isUnauthorizedAck(body, status)) {
@@ -2082,7 +2082,7 @@ export class CollaborationManager {
     socket.on('connect', () => {
       if (this.getActiveSocket() !== socket) return
       this.hasEstablishedConnection = true
-      this.joinWorkflow(socket)
+      const skipDraftHash = this.hasJoinedRoom && this.rebuildCrdtOnNextConnect
       if (this.rebuildCrdtOnNextConnect) {
         this.initializeCrdt(socket)
         this.rebuildCrdtOnNextConnect = false
@@ -2090,6 +2090,7 @@ export class CollaborationManager {
         this.awaitingSnapshotImport = false
         this.crdtTrusted = false
       }
+      this.joinWorkflow(socket, skipDraftHash)
       this.emitGraphReadyState()
       this.eventEmitter.emit('stateChange', { isConnected: true })
       this.pendingInitialSync = true
