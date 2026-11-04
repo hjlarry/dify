@@ -136,39 +136,67 @@ it('never seeds or saves an outdated initial draft', async () => {
   expect(fallback).not.toHaveBeenCalled()
 })
 
-it('sends the latest editor draft hash on reconnect', async () => {
-  const { manager, receive, emit } = await createSession()
-  let hash = 'first-hash'
-  await connect(manager, 'app-1', undefined, () => hash)
-  hash = 'latest-hash'
+it('sends the draft hash on the first join but not on reconnect', async () => {
+  const { manager, receive, acknowledge, emit } = await createSession({
+    connected: false,
+    role: 'pending',
+  })
+  await connect(manager, 'app-1', undefined, () => 'first-hash')
+  receive('connect')
+  expect(emit).toHaveBeenLastCalledWith(
+    'user_connect',
+    { workflow_id: 'app-1', draft_hash: 'first-hash' },
+    expect.any(Function),
+  )
+  receive('status', { isLeader: true })
+  acknowledge('user_connect', { msg: 'connected' })
+  emit.mockClear()
   receive('disconnect', 'transport close')
   receive('connect')
-  expect(emit).toHaveBeenCalledWith(
+  expect(emit).toHaveBeenCalledWith('user_connect', { workflow_id: 'app-1' }, expect.any(Function))
+})
+
+it('revalidates an established session without waiting for a draft hash', async () => {
+  const { manager, acknowledge, emit, receive } = await createSession()
+  await connect(manager, 'app-1', undefined, () => '')
+  manager.emitCursorMove({ x: 1, y: 2, userId: 'user-1', timestamp: 1 })
+  acknowledge('mouse_move', { msg: 'unauthorized' }, 401)
+  expect(emit).toHaveBeenCalledWith('user_connect', { workflow_id: 'app-1' }, expect.any(Function))
+  expect(manager.canPersistLocalGraph()).toBe(false)
+  expect(manager.canFlushGraphOnPageClose()).toBe(false)
+  expect(manager.canRestoreGraphFromCrdt()).toBe(false)
+  receive('status', { isLeader: true })
+  acknowledge('user_connect', { msg: 'connected' })
+  expect(manager.canPersistLocalGraph()).toBe(true)
+})
+
+it('still checks the draft hash after disconnecting before the first join completes', async () => {
+  const { manager, receive, emit } = await createSession({ connected: false, role: 'pending' })
+  await connect(manager, 'app-1', undefined, () => 'first-hash')
+  receive('connect')
+  receive('status', { isLeader: true })
+  receive('disconnect', 'transport close')
+  receive('connect')
+  expect(emit.mock.calls.filter(([event]) => event === 'user_connect')).toHaveLength(2)
+  expect(emit).toHaveBeenLastCalledWith(
     'user_connect',
-    {
-      workflow_id: 'app-1',
-      draft_hash: 'latest-hash',
-    },
+    { workflow_id: 'app-1', draft_hash: 'first-hash' },
     expect.any(Function),
   )
 })
 
-it('blocks saving while a rejoin waits for the editor draft hash', async () => {
-  const { manager, acknowledge, emit, receive } = await createSession()
-  let hash = ''
-  await connect(manager, 'app-1', undefined, () => hash)
-  manager.emitCursorMove({ x: 1, y: 2, userId: 'user-1', timestamp: 1 })
-  acknowledge('mouse_move', { msg: 'unauthorized' }, 401)
-  expect(emit.mock.calls.filter(([event]) => event === 'user_connect')).toHaveLength(0)
+it('checks the draft hash again when switching to another app', async () => {
+  const { manager, store } = await createSession()
+  const next = createSocket('socket-next')
+  transports.set('app-2', next)
+  await connect(manager, 'app-2', store, () => 'new-app-hash')
+  expect(next.emit).toHaveBeenCalledWith(
+    'user_connect',
+    { workflow_id: 'app-2', draft_hash: 'new-app-hash' },
+    expect.any(Function),
+  )
+  next.acknowledge('user_connect', { msg: 'draft_outdated' }, 409)
   expect(manager.canPersistLocalGraph()).toBe(false)
-  expect(manager.canFlushGraphOnPageClose()).toBe(false)
-  expect(manager.canRestoreGraphFromCrdt()).toBe(false)
-  hash = 'loaded-hash'
-  manager.resumeJoinWhenDraftReady('app-1')
-  expect(emit.mock.calls.filter(([event]) => event === 'user_connect')).toHaveLength(1)
-  receive('status', { isLeader: true })
-  acknowledge('user_connect', { msg: 'connected' })
-  expect(manager.canPersistLocalGraph()).toBe(true)
 })
 
 it('reports an unanswered first join without sending a duplicate', async () => {
@@ -382,9 +410,11 @@ it('times out when a successful rejoin acknowledgement is not followed by status
 })
 
 it.each(['status-first', 'ack-first'] as const)('completes rejoin when %s', async (order) => {
-  const { manager, receive, acknowledge, state } = await createSession()
+  const { manager, receive, acknowledge, state, emit } = await createSession()
+  await connect(manager, 'app-1', undefined, () => 'old-hash')
   receive('disconnect', 'transport close')
   receive('connect')
+  expect(emit).toHaveBeenCalledWith('user_connect', { workflow_id: 'app-1' }, expect.any(Function))
   if (order === 'status-first') {
     receive('status', { isLeader: true })
     acknowledge('user_connect', { msg: 'connected' })
@@ -405,9 +435,15 @@ it.each(['status-first', 'ack-first'] as const)(
   'restores follower synchronization when %s',
   async (order) => {
     const remote = await createSession({ appId: 'follower-peer', nodes: [createNode('latest')] })
-    const { manager, receive, acknowledge } = await createSession()
+    const { manager, receive, acknowledge, emit } = await createSession({ appId: 'app-1' })
+    await connect(manager, 'app-1', undefined, () => 'old-hash')
     receive('disconnect', 'transport close')
     receive('connect')
+    expect(emit).toHaveBeenCalledWith(
+      'user_connect',
+      { workflow_id: 'app-1' },
+      expect.any(Function),
+    )
     if (order === 'status-first') {
       receive('status', { isLeader: false })
       acknowledge('user_connect', { msg: 'connected' })

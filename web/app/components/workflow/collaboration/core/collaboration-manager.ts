@@ -269,8 +269,8 @@ export class CollaborationManager {
 
   private joinWorkflow(socket: Socket): void {
     if (!this.currentAppId || !socket.connected) return
-    const draftHash = this.getDraftHash?.()
-    if (this.getDraftHash && !draftHash) {
+    const draftHash = this.hasJoinedRoom ? undefined : this.getDraftHash?.()
+    if (!this.hasJoinedRoom && this.getDraftHash && !draftHash) {
       this.waitingForDraftHash = true
       this.emitGraphReadyState()
       return
