@@ -577,12 +577,16 @@ class TestWorkflowServiceCases:
             assert workflow.updated_by == account.id
 
         @pytest.mark.parametrize(
-            ("active_room", "guard_enabled", "graph_only", "rejected"),
+            ("room", "guard_enabled", "graph_only", "rejected"),
             [
-                (True, True, False, True),
-                (False, True, False, False),
-                (True, False, False, False),
-                (True, True, True, False),
+                ("active", True, False, True),
+                ("empty", True, False, False),
+                ("stale", True, False, False),
+                ("mixed", True, False, True),
+                ("no_mapping", True, False, True),
+                ("no_server_id", True, False, True),
+                ("active", False, False, False),
+                ("active", True, True, False),
             ],
         )
         def test_sync_draft_workflow_guards_console_full_saves_during_collaboration(
@@ -591,7 +595,7 @@ class TestWorkflowServiceCases:
             sqlite_session: Session,
             redis_transport: tuple[RedisClientWrapper, MagicMock],
             monkeypatch: pytest.MonkeyPatch,
-            active_room: bool,
+            room: str,
             guard_enabled: bool,
             graph_only: bool,
             rejected: bool,
@@ -602,11 +606,35 @@ class TestWorkflowServiceCases:
             commands.side_effect = RedisState().execute
             monkeypatch.setattr("repositories.workflow_collaboration_repository.redis_client", client)
             repository = WorkflowCollaborationRepository()
-            if active_room:
+            if room != "empty":
                 repository.set_session_info(
                     "app-123",
-                    {"sid": "sid-1", "user_id": "user-1", "username": "Alice", "avatar": None, "connected_at": 1},
+                    {
+                        "sid": "sid-1",
+                        "user_id": "user-1",
+                        "username": "Alice",
+                        "avatar": None,
+                        "connected_at": 1,
+                        **({} if room == "no_server_id" else {"server_id": "worker-1"}),
+                    },
                 )
+            if room == "active":
+                repository.refresh_server_heartbeat("worker-1")
+            if room == "mixed":
+                repository.set_session_info(
+                    "app-123",
+                    {
+                        "sid": "sid-2",
+                        "user_id": "user-2",
+                        "username": "Bob",
+                        "avatar": None,
+                        "connected_at": 2,
+                        "server_id": "worker-2",
+                    },
+                )
+                repository.refresh_server_heartbeat("worker-2")
+            if room == "no_mapping":
+                client.delete(repository.sid_key("sid-1"))
 
             app = TestWorkflowAssociatedDataFactory.create_app()
             workflow = TestWorkflowAssociatedDataFactory.create_workflow()

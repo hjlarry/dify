@@ -443,7 +443,7 @@ class WorkflowService:
         an explicit per-ID environment patch is merged with the graph.
 
         When requested by the console, a full draft save is rejected under the
-        row lock while a collaboration room has registered sessions.
+        row lock while a collaboration room has sessions owned by live workers, or sessions of unknown ownership.
 
         :raises WorkflowHashNotEqualError
         :raises WorkflowCollaborationActiveError
@@ -457,7 +457,7 @@ class WorkflowService:
         if (
             reject_active_collaboration
             and not graph_only
-            and WorkflowCollaborationRepository().get_session_sids(app_model.id)
+            and WorkflowCollaborationRepository().has_active_sessions(app_model.id)
         ):
             raise WorkflowCollaborationActiveError()
 
