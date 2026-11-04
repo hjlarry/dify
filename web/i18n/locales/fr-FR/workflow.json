@@ -112,6 +112,7 @@
   "collaboration.historyAction.generic": "Un collaborateur a effectué une annulation/une réexécution",
   "collaboration.draftSaveBlocked": "D’autres personnes modifient ce workflow en collaboration. Vos modifications n’ont pas été enregistrées.",
   "collaboration.joinDenied": "Impossible de rejoindre la collaboration. Vérifiez vos droits d’accès et l’offre de l’espace de travail, puis rouvrez l’éditeur.",
+  "collaboration.availableAfterReopen": "La modification collaborative est maintenant disponible. Rouvrez l’éditeur pour l’activer.",
   "collaboration.joinRetrying": "La collaboration est temporairement indisponible. Nouvelle tentative…",
   "common.accessAPIReference": "Accéder à la référence API",
   "common.accessPointDescription": "Configurer l’application web, l’API, MCP et les déclencheurs",

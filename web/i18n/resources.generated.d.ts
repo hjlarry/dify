@@ -5809,6 +5809,7 @@ export default interface Resources {
     'chatVariable.storedContent': 'Stored content'
     'chatVariable.tips': 'Tips'
     'chatVariable.updatedAt': 'Updated at '
+    'collaboration.availableAfterReopen': 'Collaboration is now available. Reopen the editor to enable it.'
     'collaboration.draftSaveBlocked': 'Others are editing this workflow collaboratively. Your changes were not saved.'
     'collaboration.historyAction.generic': 'A collaborator performed an undo/redo action'
     'collaboration.joinDenied': 'Unable to join collaboration. Check your access and workspace plan, then reopen the editor.'

@@ -112,6 +112,7 @@
   "collaboration.historyAction.generic": "Seorang kolaborator melakukan urungkan/ulang",
   "collaboration.draftSaveBlocked": "Orang lain sedang mengedit alur kerja ini bersama. Perubahan Anda tidak disimpan.",
   "collaboration.joinDenied": "Tidak dapat bergabung dalam kolaborasi. Periksa akses dan paket ruang kerja Anda, lalu buka kembali editor.",
+  "collaboration.availableAfterReopen": "Kolaborasi kini tersedia. Buka kembali editor untuk mengaktifkannya.",
   "collaboration.joinRetrying": "Kolaborasi sementara tidak tersedia. Mencoba lagi…",
   "common.accessAPIReference": "Referensi API Akses",
   "common.accessPointDescription": "Konfigurasikan aplikasi web, API, MCP, dan pemicu",

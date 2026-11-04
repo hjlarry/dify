@@ -4,7 +4,8 @@ import type { Features as FeaturesData } from '@/app/components/base/features/ty
 import type { InjectWorkflowStoreSliceFn } from '@/app/components/workflow/store'
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { useAtomValue } from 'jotai'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { isWorkflowAppMode } from '@/app/components/apps/app-type'
 import { FeaturesProvider } from '@/app/components/base/features'
 import { LoadingPlaceholder } from '@/app/components/base/loading-placeholder'
@@ -28,7 +29,13 @@ import { useWorkflowInit } from './hooks/use-workflow-init'
 import { createWorkflowSlice } from './store/workflow/workflow-slice'
 import { buildInitialFeatures, buildTriggerStatusMap, coerceReplayUserInputs } from './utils'
 
-const WorkflowAppWithAdditionalContext = () => {
+const WorkflowAppWithAdditionalContext = ({
+  collaborationAvailable,
+}: {
+  collaborationAvailable: boolean
+}) => {
+  const { t } = useTranslation('workflow')
+  const [initialCollaborationAvailable] = useState(collaborationAvailable)
   const { data, isLoading, fileUploadConfigResponse } = useWorkflowInit()
   const workflowStore = useWorkflowStore()
   const isLoadingCurrentWorkspace = useAtomValue(currentWorkspaceLoadingAtom)
@@ -136,7 +143,19 @@ const WorkflowAppWithAdditionalContext = () => {
   return (
     <WorkflowWithDefaultContext edges={edgesData} nodes={nodesData}>
       <FeaturesProvider features={initialFeatures}>
-        <WorkflowAppMain nodes={nodesData} edges={edgesData} viewport={data.graph.viewport} />
+        <div className="flex size-full flex-col">
+          {collaborationAvailable && !initialCollaborationAvailable && (
+            <div
+              role="status"
+              className="border-b border-divider-subtle bg-background-default px-4 py-2 system-sm-regular text-text-secondary"
+            >
+              {t(($) => $['collaboration.availableAfterReopen'])}
+            </div>
+          )}
+          <div className="relative min-h-0 flex-1">
+            <WorkflowAppMain nodes={nodesData} edges={edgesData} viewport={data.graph.viewport} />
+          </div>
+        </div>
       </FeaturesProvider>
     </WorkflowWithDefaultContext>
   )
@@ -147,6 +166,7 @@ const WorkflowAppWrapper = () => {
   const collaboration = useQuery({
     ...consoleQuery.features.get.queryOptions(),
     retry: false,
+    staleTime: 0,
     select: (features) => features.workflow_collaboration_enabled,
   })
   const { data: mode } = useSuspenseQuery(
@@ -157,20 +177,13 @@ const WorkflowAppWrapper = () => {
   )
   if (!isWorkflowAppMode(mode)) throw new Error('This app does not have a workflow editor')
 
-  if (!collaboration.isFetched) {
-    return (
-      <div className="relative flex size-full items-center justify-center">
-        <LoadingPlaceholder />
-      </div>
-    )
-  }
   return (
     <EditorResourceScope resource={{ kind: 'app', appId, mode }}>
       <WorkflowContextProvider
         isCollaborationEnabled={collaboration.data ?? false}
         injectWorkflowStoreSliceFn={createWorkflowSlice as InjectWorkflowStoreSliceFn}
       >
-        <WorkflowAppWithAdditionalContext />
+        <WorkflowAppWithAdditionalContext collaborationAvailable={collaboration.data === true} />
       </WorkflowContextProvider>
     </EditorResourceScope>
   )

@@ -59,11 +59,13 @@ const render = (
 ) => {
   const queryClient = createAccountProfileQueryClient(consoleState.userProfile)
   seedSystemFeatures(queryClient, options?.cloud ? { deployment_edition: 'CLOUD' } : {})
-  if (options?.collaboration !== null)
-    seedFeatures(queryClient, {
+  if (options?.collaboration !== null) {
+    const features = seedFeatures(queryClient, {
       workflow_collaboration_enabled: options?.collaboration ?? true,
       ...(options?.plan ? { billing: { subscription: { plan: options.plan } } } : {}),
     })
+    fetchFeatures.mockResolvedValue(features)
+  }
   seedAppDetail(queryClient, appDetail)
   queryClient.setQueryData(
     consoleQuery.apps.byAppId.triggers.get.queryKey({
@@ -211,12 +213,32 @@ describe('WorkflowApp', () => {
     async (initial) => {
       const { queryClient } = render(<WorkflowApp />, { cloud: true, collaboration: initial })
       expect(await screen.findByRole('region', { name: 'Workflow canvas' })).toBeInTheDocument()
+      expect(
+        screen.queryByText('workflow.collaboration.availableAfterReopen'),
+      ).not.toBeInTheDocument()
       act(() => seedFeatures(queryClient, { workflow_collaboration_enabled: !initial }))
       expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent(String(initial))
+      if (!initial)
+        expect(
+          await screen.findByText('workflow.collaboration.availableAfterReopen'),
+        ).toBeInTheDocument()
+      else
+        expect(
+          screen.queryByText('workflow.collaboration.availableAfterReopen'),
+        ).not.toBeInTheDocument()
     },
   )
 
-  it('waits for the Cloud subscription before starting the editor', async () => {
+  it('does not report an upgrade if a collaborative session falls back while the capability stays enabled', async () => {
+    render(<WorkflowApp />, { cloud: true, collaboration: true })
+    await screen.findByRole('region', { name: 'Workflow canvas' })
+    act(() => workflowStore.setState({ isCollaborationEnabled: false }))
+    expect(
+      screen.queryByText('workflow.collaboration.availableAfterReopen'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('opens without waiting for workspace features and suggests reopening when collaboration becomes available', async () => {
     let resolveFeatures!: (features: ReturnType<typeof zGetFeaturesResponse.parse>) => void
     fetchFeatures.mockReturnValue(
       new Promise((resolve) => {
@@ -226,15 +248,18 @@ describe('WorkflowApp', () => {
     fetchDraft.mockClear()
 
     render(<WorkflowApp />, { cloud: true, collaboration: null })
-    expect(screen.getByLabelText('common.loading')).toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Workflow canvas' })).not.toBeInTheDocument()
-    expect(fetchDraft).not.toHaveBeenCalled()
+    const canvas = await screen.findByRole('region', { name: 'Workflow canvas' })
+    expect(fetchDraft).toHaveBeenCalled()
+    expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent('false')
 
     await act(async () =>
-      resolveFeatures(zGetFeaturesResponse.parse({ workflow_collaboration_enabled: false })),
+      resolveFeatures(zGetFeaturesResponse.parse({ workflow_collaboration_enabled: true })),
     )
-    expect(await screen.findByRole('region', { name: 'Workflow canvas' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Workflow canvas' })).toBe(canvas)
     expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent('false')
+    expect(
+      await screen.findByText('workflow.collaboration.availableAfterReopen'),
+    ).toBeInTheDocument()
   })
 
   it('opens without collaboration when features fail and preserves the editor if the query recovers', async () => {
@@ -250,6 +275,9 @@ describe('WorkflowApp', () => {
     )
     expect(screen.getByRole('region', { name: 'Workflow canvas' })).toBe(canvas)
     expect(screen.getByLabelText('Collaboration enabled')).toHaveTextContent('false')
+    expect(
+      await screen.findByText('workflow.collaboration.availableAfterReopen'),
+    ).toBeInTheDocument()
     expect(fetchFeatures).toHaveBeenCalledTimes(2)
   })
 

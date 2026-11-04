@@ -112,6 +112,7 @@
   "collaboration.historyAction.generic": "Một cộng tác viên đã thực hiện hoàn tác/làm lại",
   "collaboration.draftSaveBlocked": "Những người khác đang cùng chỉnh sửa quy trình này. Các thay đổi của bạn chưa được lưu.",
   "collaboration.joinDenied": "Không thể tham gia chỉnh sửa cộng tác. Hãy kiểm tra quyền truy cập và gói của không gian làm việc, sau đó mở lại trình chỉnh sửa.",
+  "collaboration.availableAfterReopen": "Tính năng cộng tác hiện đã khả dụng. Mở lại trình chỉnh sửa để bật tính năng này.",
   "collaboration.joinRetrying": "Tính năng cộng tác tạm thời không khả dụng. Đang thử lại…",
   "common.accessAPIReference": "Truy cập tài liệu API",
   "common.accessPointDescription": "Cấu hình ứng dụng web, API, MCP và trình kích hoạt",

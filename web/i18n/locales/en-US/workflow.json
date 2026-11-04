@@ -112,6 +112,7 @@
   "collaboration.historyAction.generic": "A collaborator performed an undo/redo action",
   "collaboration.draftSaveBlocked": "Others are editing this workflow collaboratively. Your changes were not saved.",
   "collaboration.joinDenied": "Unable to join collaboration. Check your access and workspace plan, then reopen the editor.",
+  "collaboration.availableAfterReopen": "Collaboration is now available. Reopen the editor to enable it.",
   "collaboration.joinRetrying": "Collaboration is temporarily unavailable. Retrying…",
   "common.accessAPIReference": "Access API Reference",
   "common.accessPointDescription": "Configure web app, API, MCP, and triggers",

@@ -112,6 +112,7 @@
   "collaboration.historyAction.generic": "Співавтор виконав скасування/повторення",
   "collaboration.draftSaveBlocked": "Інші користувачі спільно редагують цей робочий процес. Ваші зміни не збережено.",
   "collaboration.joinDenied": "Не вдалося приєднатися до спільного редагування. Перевірте доступ і тариф робочого простору, а потім відкрийте редактор знову.",
+  "collaboration.availableAfterReopen": "Спільне редагування тепер доступне. Відкрийте редактор знову, щоб увімкнути його.",
   "collaboration.joinRetrying": "Спільне редагування тимчасово недоступне. Повторна спроба…",
   "common.accessAPIReference": "Доступ до довідника API",
   "common.accessPointDescription": "Налаштувати вебзастосунок, API, MCP і тригери",
