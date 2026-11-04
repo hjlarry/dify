@@ -133,7 +133,6 @@ export class WebSocketClient {
   private setupBaseEventListeners(socket: Socket, appId: string): void {
     socket.on('connect', () => {
       this.connecting.delete(appId)
-      emitWithAuthGuard(socket, 'user_connect', { workflow_id: appId })
     })
 
     socket.on('disconnect', () => {
