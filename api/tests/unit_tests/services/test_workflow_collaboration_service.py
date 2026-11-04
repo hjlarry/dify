@@ -1,3 +1,4 @@
+import json
 import logging
 from collections.abc import Generator, Iterator
 from contextlib import contextmanager
@@ -15,6 +16,7 @@ from models.account import Account, Tenant
 from models.base import TypeBase
 from models.model import App, AppMode
 from repositories.workflow_collaboration_repository import WorkflowCollaborationRepository
+from services.enterprise.rbac_service import RBACService
 from services.workflow_collaboration_service import SYNC_REQUEST_TIMEOUT_SECONDS, WorkflowCollaborationService
 from tests.helpers.unit.config_override import config_overrides_context
 from tests.helpers.unit.model_factories import make_app
@@ -64,6 +66,126 @@ def _app(*, app_id: str, tenant_id: str, maintainer: str | None = None) -> App:
 
 
 class TestWorkflowCollaborationService:
+    def test_existing_room_session_can_continue_after_downgrade(
+        self, real_service: ServiceFixture, db_session: Session, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        service, repository, socketio = real_service
+        socketio.get_session.return_value = {"user_id": "u-1", "tenant_id": "t-1"}
+        db_session.add(_app(app_id="wf-1", tenant_id="t-1"))
+        db_session.commit()
+        plans = iter([CloudPlan.PROFESSIONAL, CloudPlan.SANDBOX])
+        lookups: list[str] = []
+
+        def get_plan(tenant_id: str) -> CloudPlan:
+            lookups.append(tenant_id)
+            return next(plans)
+
+        monkeypatch.setattr("services.feature_service.FeatureService.get_workspace_plan", get_plan)
+        with config_overrides_context(
+            DEPLOYMENT_EDITION=DeploymentEdition.CLOUD, ENABLE_COLLABORATION_MODE=True, RBAC_ENABLED=False
+        ):
+            assert service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session) == ("u-1", True)
+            assert repository.update_session_graph_active("wf-1", "sid-1", False, 1)
+            assert service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session) == ("u-1", True)
+            existing = repository.get_session_info("wf-1", "sid-1")
+            assert existing is not None
+            assert existing["graph_active"] is False
+            assert lookups == ["t-1"]
+            assert service.authorize_and_join_workflow_room("wf-1", "sid-2", session=db_session) is None
+
+        assert lookups == ["t-1", "t-1"]
+        assert repository.session_exists("wf-1", "sid-1")
+        assert not repository.session_exists("wf-1", "sid-2")
+
+    @pytest.mark.parametrize(
+        "invalid_state", ["missing_mapping", "missing_member", "other_app", "other_user", "member_user"]
+    )
+    def test_inconsistent_room_membership_does_not_skip_entitlement(
+        self,
+        real_service: ServiceFixture,
+        collaboration_redis: RedisClientWrapper,
+        db_session: Session,
+        monkeypatch: pytest.MonkeyPatch,
+        invalid_state: str,
+    ) -> None:
+        service, repository, socketio = real_service
+        socketio.get_session.return_value = {"user_id": "u-1", "tenant_id": "t-1"}
+        db_session.add(_app(app_id="wf-1", tenant_id="t-1"))
+        db_session.commit()
+        seed_session(repository, "sid-1")
+        if invalid_state == "missing_mapping":
+            collaboration_redis.delete(repository.sid_key("sid-1"))
+        elif invalid_state == "missing_member":
+            collaboration_redis.hdel(repository.workflow_key("wf-1"), "sid-1")
+        elif invalid_state in {"other_app", "other_user"}:
+            collaboration_redis.set(
+                repository.sid_key("sid-1"),
+                json.dumps(
+                    {
+                        "workflow_id": "wf-2" if invalid_state == "other_app" else "wf-1",
+                        "user_id": "u-2" if invalid_state == "other_user" else "u-1",
+                    }
+                ),
+            )
+        else:
+            collaboration_redis.hset(
+                repository.workflow_key("wf-1"),
+                "sid-1",
+                json.dumps({"sid": "sid-1", "user_id": "u-2", "username": "other"}),
+            )
+        lookups: list[str] = []
+
+        def get_plan(tenant_id: str) -> CloudPlan:
+            lookups.append(tenant_id)
+            return CloudPlan.SANDBOX
+
+        monkeypatch.setattr("services.feature_service.FeatureService.get_workspace_plan", get_plan)
+        with config_overrides_context(
+            DEPLOYMENT_EDITION=DeploymentEdition.CLOUD, ENABLE_COLLABORATION_MODE=True, RBAC_ENABLED=False
+        ):
+            assert service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session) is None
+
+        assert lookups == ["t-1"]
+        socketio.enter_room.assert_not_called()
+
+    @pytest.mark.parametrize("unauthorized", ["tenant", "permission"])
+    def test_existing_room_member_must_still_have_app_access(
+        self,
+        real_service: ServiceFixture,
+        db_session: Session,
+        monkeypatch: pytest.MonkeyPatch,
+        unauthorized: str,
+    ) -> None:
+        service, repository, socketio = real_service
+        socketio.get_session.return_value = {
+            "user_id": "u-1",
+            "tenant_id": "other" if unauthorized == "tenant" else "t-1",
+        }
+        db_session.add(_app(app_id="wf-1", tenant_id="t-1", maintainer="owner-1"))
+        db_session.commit()
+        seed_session(repository, "sid-1")
+        monkeypatch.setattr(RBACService.CheckAccess, "check", lambda *_args, **_kwargs: False)
+        with config_overrides_context(
+            DEPLOYMENT_EDITION=DeploymentEdition.CLOUD, ENABLE_COLLABORATION_MODE=True, RBAC_ENABLED=True
+        ):
+            assert service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session) is None
+
+        socketio.enter_room.assert_not_called()
+
+    def test_existing_room_member_cannot_bypass_disabled_deployment_switch(
+        self, real_service: ServiceFixture, db_session: Session
+    ) -> None:
+        service, repository, socketio = real_service
+        socketio.get_session.return_value = {"user_id": "u-1", "tenant_id": "t-1"}
+        db_session.add(_app(app_id="wf-1", tenant_id="t-1"))
+        db_session.commit()
+        seed_session(repository, "sid-1")
+
+        with config_overrides_context(ENABLE_COLLABORATION_MODE=False, RBAC_ENABLED=False):
+            assert service.authorize_and_join_workflow_room("wf-1", "sid-1", session=db_session) is None
+
+        socketio.enter_room.assert_not_called()
+
     @pytest.mark.parametrize(
         ("edition", "plan", "enabled", "allowed"),
         [

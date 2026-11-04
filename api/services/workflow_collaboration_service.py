@@ -107,6 +107,8 @@ class WorkflowCollaborationService:
         """
         Join a collaboration room only after validating the socket session, app access, and workspace entitlement.
 
+        An existing room session may continue after a downgrade, but only for the same authenticated user and app.
+
         The Socket.IO payload still calls the room key `workflow_id`, but the identifier is the workflow app's
         `App.id`. Returning `None` lets the controller reject the join before any Redis or room state is created.
         """
@@ -126,7 +128,20 @@ class WorkflowCollaborationService:
             )
             return None
 
-        if not FeatureService.can_use_workflow_collaboration(str(tenant_id)):
+        if not dify_config.ENABLE_COLLABORATION_MODE:
+            return None
+
+        mapping = self._repository.get_sid_mapping(sid)
+        member = self._repository.get_session_info(workflow_id, sid)
+        already_joined = (
+            mapping is not None
+            and mapping.get("workflow_id") == workflow_id
+            and mapping.get("user_id") == str(user_id)
+            and member is not None
+            and member.get("sid") == sid
+            and member.get("user_id") == str(user_id)
+        )
+        if not already_joined and not FeatureService.can_use_workflow_collaboration(str(tenant_id)):
             return None
 
         self._ensure_server_heartbeat_started()
@@ -143,7 +158,11 @@ class WorkflowCollaborationService:
             "graph_active": True,
         }
 
-        self._repository.set_session_info(workflow_id, session_info)
+        if already_joined:
+            # Rejoining must not reset visibility or its sequence on the existing session.
+            self._repository.refresh_session_state(workflow_id, sid)
+        else:
+            self._repository.set_session_info(workflow_id, session_info)
 
         leader_sid = self.get_or_set_leader(workflow_id, sid)
         is_leader = leader_sid == sid
