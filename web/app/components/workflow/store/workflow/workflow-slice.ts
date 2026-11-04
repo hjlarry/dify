@@ -27,6 +27,7 @@ type MousePosition = {
 }
 
 export type WorkflowSliceShape = {
+  isCollaborationEnabled: boolean
   workflowRunningData?: PreviewRunningData
   setWorkflowRunningData: (workflowData: PreviewRunningData) => void
   isListening: boolean
@@ -72,7 +73,8 @@ export type WorkflowSliceShape = {
   setFileUploadConfig: (fileUploadConfig: UploadConfig) => void
 }
 
-export const createWorkflowSlice: StateCreator<WorkflowSliceShape> = (set) => ({
+export const createWorkflowSlice = (isCollaborationEnabled: boolean): StateCreator<WorkflowSliceShape> => (set) => ({
+  isCollaborationEnabled,
   workflowRunningData: undefined,
   setWorkflowRunningData: (workflowRunningData) => set(() => ({ workflowRunningData })),
   isListening: false,
