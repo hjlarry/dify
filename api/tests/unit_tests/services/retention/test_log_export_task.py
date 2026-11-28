@@ -43,7 +43,7 @@ from services.retention.log_export_task import (
 )
 from services.retention.log_export_task_cache import RedisLogExportTasks
 from services.retention.workflow_run.log_export_service import WorkflowLogExportTask
-from services.workflow_app_log_query_service import WorkflowLogExportFilters
+from services.workflow_app_log_contracts import WorkflowLogExportFilters
 from tests.helpers.unit.log_export_fixtures import LogExportRedisIo, LogExportStorageIo
 
 

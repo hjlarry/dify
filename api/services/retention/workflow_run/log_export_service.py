@@ -17,7 +17,7 @@ from services.retention.log_export_task import (
     prepare_log_export_task,
     save_and_dispatch_log_export_task,
 )
-from services.workflow_app_log_query_service import WorkflowLogExportFilters, WorkflowLogScope
+from services.workflow_app_log_contracts import WorkflowLogExportFilters, WorkflowLogScope
 
 WorkflowLogExportTask = LogExportTask[WorkflowLogExportFilters]
 

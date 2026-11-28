@@ -28,12 +28,11 @@ from models.workflow import WorkflowAppLog, WorkflowAppLogCreatedFrom, WorkflowR
 from repositories import log_export_queries, workflow_app_log_query_repository
 from repositories.workflow_app_log_query_repository import WorkflowAppLogQueryRepository
 from services.retention.workflow_run.log_export_csv import WorkflowLogCsvWriter
+from services.workflow_app_log_contracts import WorkflowLogExportFilters, WorkflowLogScope
 from services.workflow_app_log_query_service import (
     WorkflowAppLogAccount,
     WorkflowAppLogEndUser,
     WorkflowAppLogQueryService,
-    WorkflowLogExportFilters,
-    WorkflowLogScope,
 )
 
 

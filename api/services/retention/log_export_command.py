@@ -13,7 +13,7 @@ from services.entities.conversation_entities import (
     ConversationAnnotationStatus,
 )
 from services.retention.log_export_csv import CsvRowProgress
-from services.workflow_app_log_query_service import WorkflowLogExportFilters, WorkflowLogScope
+from services.workflow_app_log_contracts import WorkflowLogExportFilters, WorkflowLogScope
 
 if TYPE_CHECKING:
     from services.retention.agent.log_export_csv import AgentLogCsvWriter

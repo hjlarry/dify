@@ -7,10 +7,9 @@ from typing import TextIO
 from libs.datetime_utils import ensure_naive_utc
 from machinery.context import RequestContext
 from services.retention.log_export_csv import CsvRowProgress, write_log_export_csv
+from services.workflow_app_log_contracts import WorkflowLogExportFilters, WorkflowLogScope
 from services.workflow_app_log_query_service import (
     WorkflowAppLogQueryService,
-    WorkflowLogExportFilters,
-    WorkflowLogScope,
 )
 
 _LOG_CSV_COLUMNS = (

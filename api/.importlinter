@@ -1182,6 +1182,7 @@ name = Workflow log controllers reach persistence through the composition root
 type = forbidden
 source_modules =
     controllers.console.app.workflow_app_log
+    controllers.console.app.workflow_log_export
 forbidden_modules =
     extensions.ext_database
     extensions.ext_redis

@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from werkzeug.test import TestResponse
 
 from constants import COOKIE_NAME_CSRF_TOKEN, HEADER_NAME_CSRF_TOKEN
-from controllers.console.app import workflow_app_log
+from controllers.console.app import workflow_app_log, workflow_log_export
 from enums import DeploymentEdition
 from enums.account import TenantAccountRole
 from extensions.ext_database import db
@@ -43,7 +43,8 @@ from services.retention.workflow_run.log_export_service import (
     WorkflowLogExportService,
     WorkflowLogExportTask,
 )
-from services.workflow_app_log_query_service import WorkflowAppLogQueryService, WorkflowLogExportFilters
+from services.workflow_app_log_contracts import WorkflowLogExportFilters
+from services.workflow_app_log_query_service import WorkflowAppLogQueryService
 from tasks.log_export_tasks import prepare_log_export_task
 from tests.helpers.unit.log_export_fixtures import LogExportRedisIo, LogExportStorageIo
 from tests.helpers.unit.model_factories import make_account, make_app
@@ -196,11 +197,11 @@ def export_client(
     logs_path = "/apps/<uuid:app_id>/workflow-app-logs"
     api.add_resource(workflow_app_log.WorkflowAppLogApi, logs_path)
     api.add_resource(workflow_app_log.WorkflowAppLogIdentityOptionsApi, f"{logs_path}/identity-options")
-    api.add_resource(workflow_app_log.WorkflowLogExportApi, path)
-    api.add_resource(workflow_app_log.WorkflowLogExportLatestApi, f"{path}/latest")
-    api.add_resource(workflow_app_log.WorkflowLogExportTaskApi, f"{path}/<uuid:task_id>")
-    api.add_resource(workflow_app_log.WorkflowLogExportCancelApi, f"{path}/<uuid:task_id>/cancel")
-    api.add_resource(workflow_app_log.WorkflowLogExportFileApi, f"/console/api{path}/<uuid:task_id>/file")
+    api.add_resource(workflow_log_export.WorkflowLogExportApi, path)
+    api.add_resource(workflow_log_export.WorkflowLogExportLatestApi, f"{path}/latest")
+    api.add_resource(workflow_log_export.WorkflowLogExportTaskApi, f"{path}/<uuid:task_id>")
+    api.add_resource(workflow_log_export.WorkflowLogExportCancelApi, f"{path}/<uuid:task_id>/cancel")
+    api.add_resource(workflow_log_export.WorkflowLogExportFileApi, f"/console/api{path}/<uuid:task_id>/file")
 
     client = app.test_client()
     with client.session_transaction() as session:
@@ -208,7 +209,7 @@ def export_client(
         session["_fresh"] = True
     token = generate_csrf_token(account.id)
     client.set_cookie(COOKIE_NAME_CSRF_TOKEN, token)
-    with patch.object(workflow_app_log, "is_cloud_edition_billing_paid_plan", return_value=True) as paid:
+    with patch.object(workflow_log_export, "is_cloud_edition_billing_paid_plan", return_value=True) as paid:
         yield _ExportClient(
             client,
             {HEADER_NAME_CSRF_TOKEN: token},

@@ -10,6 +10,7 @@ from machinery.context import RequestContext
 from models.enums import AppTriggerType
 from services.entities.conversation_entities import ConsoleLogIdentity
 from services.workflow.entities import TriggerMetadata
+from services.workflow_app_log_contracts import WorkflowLogExportFilters, WorkflowLogScope
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,26 +63,6 @@ class WorkflowAppLogPage:
     total: int
     has_more: bool
     data: tuple[WorkflowAppLogItem, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class WorkflowLogScope:
-    """A resolved Workflow app and its owning workspace."""
-
-    tenant_id: str
-    app_id: str
-
-
-@dataclass(frozen=True, slots=True)
-class WorkflowLogExportFilters:
-    """Filter published runs by their Logs entries, with time bounds in naive UTC."""
-
-    keyword: str | None = None
-    status: WorkflowExecutionStatus | None = None
-    created_at_before: datetime | None = None
-    created_at_after: datetime | None = None
-    end_user_ids: tuple[str, ...] = ()
-    account_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
