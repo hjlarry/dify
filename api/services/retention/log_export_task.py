@@ -13,8 +13,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from libs.datetime_utils import utc_now
 from machinery.context import RequestContext
-from services.entities.conversation_entities import ConsoleLogIdentitySource
+from services.agent.observability_contracts import AgentLogExportFilters
+from services.entities.conversation_entities import ConsoleConversationLogFilters, ConsoleLogIdentitySource
 from services.retention.log_export_csv import CsvRowProgress
+from services.workflow_app_log_contracts import WorkflowLogExportFilters
 
 _LOG_EXPORT_DOWNLOAD_URL_TTL_SECONDS = 3600
 _LOG_EXPORT_LEASE_RENEW_SECONDS = 30
@@ -144,6 +146,12 @@ class LogExportTask[FiltersT](BaseModel):
         )
 
 
+ConversationLogExportStatus = LogExportStatus
+ConversationLogExportTask = LogExportTask[ConsoleConversationLogFilters]
+WorkflowLogExportTask = LogExportTask[WorkflowLogExportFilters]
+AgentLogExportTask = LogExportTask[AgentLogExportFilters]
+
+
 def open_ready_log_export_csv[FiltersT](
     task: LogExportTask[FiltersT], *, open_csv: OpenLogExportFile, filename: str
 ) -> LogExportDownload:
@@ -201,6 +209,87 @@ class WriteLogExportCsv[FiltersT](Protocol):
     ) -> int:
         """Write matching log rows in this workspace, reporting the cumulative data row count."""
         ...
+
+
+class LogExportTaskService[FiltersT: ConsoleConversationLogFilters | WorkflowLogExportFilters | AgentLogExportFilters]:
+    """Manage a log type's export tasks after the caller admits the workspace, target, and filters."""
+
+    def __init__(
+        self,
+        *,
+        task_type: type[LogExportTask[FiltersT]],
+        tasks: LogExportTaskStore[FiltersT],
+        dispatch: Callable[[str], None],
+        storage_prefix: str,
+        store_csv: StoreLogExportFile,
+        write_csv: WriteLogExportCsv[FiltersT],
+        open_csv: OpenLogExportFile,
+    ) -> None:
+        """Bind the task model, matching store, dispatch, and CSV writer for one log type."""
+        self._task_type = task_type
+        self._tasks = tasks
+        self._dispatch = dispatch
+        self._storage_prefix = storage_prefix
+        self._store_csv = store_csv
+        self._write_csv = write_csv
+        self._open_csv = open_csv
+
+    def create_task(
+        self,
+        *,
+        tenant_id: str,
+        app_id: str,
+        requested_by: str,
+        filters: FiltersT,
+        identity_labels: tuple[LogExportIdentityLabel, ...] = (),
+        estimated_rows: int | None = None,
+    ) -> LogExportTask[FiltersT]:
+        """Persist an admitted export and dispatch it if it is first in the workspace queue."""
+        task = self._task_type.pending(
+            tenant_id=tenant_id,
+            app_id=app_id,
+            requested_by=requested_by,
+            filters=filters,
+            identity_labels=filter_log_export_identity_labels(
+                identity_labels, end_user_ids=filters.end_user_ids, account_ids=filters.account_ids
+            ),
+            estimated_rows=estimated_rows,
+        )
+        save_and_dispatch_log_export_task(task, tasks=self._tasks, dispatch=self._dispatch)
+        return task
+
+    def get_task(self, *, tenant_id: str, app_id: str, task_id: str) -> LogExportTask[FiltersT]:
+        """Read a live task for the admitted workspace and target, or raise if unavailable."""
+        task = self._tasks.get(tenant_id=tenant_id, app_id=app_id, task_id=task_id)
+        if task is None:
+            raise LogExportTaskNotFoundError()
+        return task
+
+    def get_latest_task(self, *, tenant_id: str, app_id: str, requested_by: str) -> LogExportTask[FiltersT] | None:
+        """Read the admitted requester's latest live task in the target scope, if available."""
+        return self._tasks.get_latest(tenant_id=tenant_id, app_id=app_id, requested_by=requested_by)
+
+    def cancel_task(self, *, tenant_id: str, app_id: str, requested_by: str, task_id: str) -> LogExportTask[FiltersT]:
+        """Cancel the requester's pending task in the admitted scope and wake the workspace queue."""
+        task = self.get_task(tenant_id=tenant_id, app_id=app_id, task_id=task_id)
+        return cancel_pending_log_export_task(
+            task, requested_by=requested_by, tasks=self._tasks, dispatch=self._dispatch
+        )
+
+    def download_csv(self, *, tenant_id: str, app_id: str, task_id: str, filename: str) -> LogExportDownload:
+        """Open a ready task's CSV within the admitted target scope."""
+        task = self.get_task(tenant_id=tenant_id, app_id=app_id, task_id=task_id)
+        return open_ready_log_export_csv(task, open_csv=self._open_csv, filename=filename)
+
+    def prepare_task(self, *, tenant_id: str, app_id: str, task_id: str) -> LogExportTask[FiltersT] | None:
+        """Use the persisted workspace and target scope to prepare the task if it is live."""
+        return prepare_log_export_task(
+            self._tasks.get(tenant_id=tenant_id, app_id=app_id, task_id=task_id),
+            tasks=self._tasks,
+            storage_prefix=self._storage_prefix,
+            store_csv=self._store_csv,
+            write_csv=self._write_csv,
+        )
 
 
 def save_and_dispatch_log_export_task[FiltersT](

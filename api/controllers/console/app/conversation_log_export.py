@@ -58,13 +58,14 @@ from services.entities.conversation_entities import (
 )
 from services.errors.base import NoPermissionError
 from services.feature_service import FeatureService
-from services.retention.conversation.log_export_service import (
-    ConversationLogExportStatus,
-    ConversationLogExportTask,
+from services.retention.conversation.log_export_csv import (
     UnsupportedConversationLogExportModeError,
+    require_conversation_log_export_mode,
 )
 from services.retention.log_export_email import LogExportEmailState
 from services.retention.log_export_task import (
+    ConversationLogExportStatus,
+    ConversationLogExportTask,
     LogExportFileNotFoundError,
     LogExportIdentityLabel,
     LogExportKind,
@@ -150,7 +151,7 @@ def _resolve_log_export_scope(request_context: RequestContext, app_id: UUID) -> 
         raise ForbiddenError()
 
     try:
-        scope = application_services().conversation_log_exports.get_scope(request_context, str(app_id))
+        scope = application_services().conversation_queries.get_log_export_scope(request_context, str(app_id))
     except ConsoleAppNotFoundError as exc:
         raise AppNotFoundError(str(exc)) from exc
     except NoPermissionError as exc:
@@ -226,8 +227,10 @@ class ConversationLogExportApi(Resource):
             ) from None
         filters = _log_export_filters(payload, scope.timezone)
         try:
+            require_conversation_log_export_mode(scope.app_mode)
             task = application_services().conversation_log_exports.create_task(
-                scope=scope,
+                tenant_id=scope.tenant_id,
+                app_id=scope.app_id,
                 requested_by=request_context.account_id,
                 filters=filters,
                 identity_labels=payload.identity_labels,
@@ -256,7 +259,7 @@ class ConversationLogExportLatestApi(Resource):
         """Return only the admitted account's latest task, or null if it is missing or expired."""
         scope = _resolve_log_export_scope(request_context, app_id)
         task = application_services().conversation_log_exports.get_latest_task(
-            scope=scope, requested_by=request_context.account_id
+            tenant_id=scope.tenant_id, app_id=scope.app_id, requested_by=request_context.account_id
         )
         return (
             dump_response(ConversationLogExportLatestResponse, {"task": task}),
@@ -271,7 +274,9 @@ class ConversationLogExportTaskApi(Resource):
     def _get_task(request_context: RequestContext, app_id: UUID, task_id: UUID) -> ConversationLogExportTask:
         """Load the export in the caller's admitted app scope."""
         scope = _resolve_log_export_scope(request_context, app_id)
-        return application_services().conversation_log_exports.get_task(scope=scope, task_id=str(task_id))
+        return application_services().conversation_log_exports.get_task(
+            tenant_id=scope.tenant_id, app_id=scope.app_id, task_id=str(task_id)
+        )
 
     @error_responses(
         AppNotFoundError, ConversationLogExportTaskNotFoundHTTPError, ForbiddenError, PaidPlanRequiredError
@@ -352,7 +357,10 @@ class ConversationLogExportCancelApi(Resource):
         scope = _resolve_log_export_scope(request_context, app_id)
         try:
             task = application_services().conversation_log_exports.cancel_task(
-                scope=scope, task_id=str(task_id), requested_by=request_context.account_id
+                tenant_id=scope.tenant_id,
+                app_id=scope.app_id,
+                task_id=str(task_id),
+                requested_by=request_context.account_id,
             )
         except LogExportTaskNotFoundError as exc:
             raise ConversationLogExportTaskNotFoundHTTPError() from exc
@@ -388,7 +396,7 @@ class ConversationLogExportFileApi(Resource):
         filename = f"conversation-logs-{task_id}.csv"
         try:
             download = application_services().conversation_log_exports.download_csv(
-                scope=scope, task_id=str(task_id), filename=filename
+                tenant_id=scope.tenant_id, app_id=scope.app_id, task_id=str(task_id), filename=filename
             )
         except LogExportTaskNotFoundError as exc:
             raise ConversationLogExportTaskNotFoundHTTPError() from exc

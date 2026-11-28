@@ -125,7 +125,7 @@ from services.account.service import AccountSetupProvisioner
 from services.account_password_hasher import DefaultAccountPasswordHasher
 from services.agent.agent_tracing_config_service import AgentTracingConfigService
 from services.agent.invite_options import AgentInviteOptionsService
-from services.agent.observability_contracts import AgentObservability
+from services.agent.observability_contracts import AgentLogExportFilters, AgentObservability
 from services.agent.roster_package_exporter import RosterAgentPackageExporter
 from services.agent.version_service import AgentVersionService
 from services.agent.workflow_composer_gateway import WorkflowComposerGateway
@@ -164,6 +164,7 @@ from services.conversation_variable_command_service import ConversationVariableC
 from services.conversation_variable_query import ConversationVariableQuery
 from services.credentials.query import CredentialQuery
 from services.enterprise.enterprise_service import EnterpriseService
+from services.entities.conversation_entities import ConsoleConversationLogFilters
 from services.entities.file_grant_entities import FileGrantLimits
 from services.errors.enterprise import EnterpriseServiceError
 from services.explore_banner_query_service import ExploreBannerQueryService
@@ -225,12 +226,17 @@ from services.recommended_app_query_service import RecommendedAppQueryService
 from services.remote_file_service import RemoteFileService
 from services.resource_access_token_service import ResourceAccessTokenService
 from services.retention.agent.log_export_csv import AgentLogCsvWriter
-from services.retention.agent.log_export_service import AgentLogExportService, AgentLogExportTask
-from services.retention.conversation.log_export_service import ConversationLogExportService, ConversationLogExportTask
+from services.retention.conversation.log_export_csv import ConversationLogCsvWriter
 from services.retention.log_export_command import LogExportCommandService
 from services.retention.log_export_email import LogExportEmailNotifications
 from services.retention.log_export_notification import LogExportNotificationQueries
 from services.retention.log_export_storage import open_log_export_csv, store_log_export_csv
+from services.retention.log_export_task import (
+    AgentLogExportTask,
+    ConversationLogExportTask,
+    LogExportTaskService,
+    WorkflowLogExportTask,
+)
 from services.retention.log_export_task_cache import RedisLogExportTasks
 from services.retention.workflow_run.archive_download_adapters import (
     dispatch_workflow_run_archive_deletion_task,
@@ -240,7 +246,6 @@ from services.retention.workflow_run.archive_download_adapters import (
 from services.retention.workflow_run.archive_download_task_cache import WorkflowRunArchiveDownloadTaskCache
 from services.retention.workflow_run.archive_log_service import WorkflowRunArchiveService
 from services.retention.workflow_run.log_export_csv import WorkflowLogCsvWriter
-from services.retention.workflow_run.log_export_service import WorkflowLogExportService, WorkflowLogExportTask
 from services.saved_message_service import SavedMessageService
 from services.schema_definition_service import SchemaDefinitionService
 from services.setup_adapters import RedisSetupLock
@@ -268,6 +273,7 @@ from services.web_passport_gateways import (
 from services.web_passport_service import WebPassportService
 from services.webapp_access_adapters import EnterpriseWebAppAccessPolicyGateway
 from services.webapp_access_query_service import WebAppAccessQueryService, WebAppAccessUnavailableError
+from services.workflow_app_log_contracts import WorkflowLogExportFilters
 from services.workflow_app_log_query_service import WorkflowAppLogQueryService
 from services.workflow_run_service import WorkflowRunService
 from services.workflow_statistic_query_service import WorkflowStatisticQueryService
@@ -341,7 +347,7 @@ class ApplicationServices:
     agent_versions: AgentVersionService
     agent_invite_options: AgentInviteOptionsService
     agent_observability: AgentObservability
-    agent_log_exports: AgentLogExportService
+    agent_log_exports: LogExportTaskService[AgentLogExportFilters]
     advanced_prompt_templates: AdvancedPromptTemplateService
     api_based_extensions: APIBasedExtensionApplicationService
     credential_queries: CredentialQuery
@@ -367,7 +373,7 @@ class ApplicationServices:
     conversation_names: ConversationNameService
     conversation_commands: ConversationCommandService
     conversation_queries: ConversationQueryService
-    conversation_log_exports: ConversationLogExportService
+    conversation_log_exports: LogExportTaskService[ConsoleConversationLogFilters]
     log_export_command: LogExportCommandService
     log_export_email_notifications: LogExportEmailNotifications
     log_export_notification_queries: LogExportNotificationQueries
@@ -411,7 +417,7 @@ class ApplicationServices:
     workspaces: WorkspaceServices
     triggers: TriggerServices
     workflow_app_logs: WorkflowAppLogQueryService
-    workflow_log_exports: WorkflowLogExportService
+    workflow_log_exports: LogExportTaskService[WorkflowLogExportFilters]
     workflow_comments: WorkflowCommentService
     inner_mail: InnerMailService
     web_passport: WebPassportService
@@ -694,13 +700,16 @@ def build_application_services(
     agent_observability = build_agent_observability(database_client=database_client)
     agent_log_csv = AgentLogCsvWriter(logs=agent_observability)
     workflow_log_csv = WorkflowLogCsvWriter(logs=workflow_app_logs)
-    conversation_log_exports = ConversationLogExportService(
-        conversations=conversations,
+    conversation_log_csv = ConversationLogCsvWriter(logs=conversations)
+    conversation_log_exports = LogExportTaskService(
+        task_type=ConversationLogExportTask,
         tasks=RedisLogExportTasks(
             redis=redis, task_type=ConversationLogExportTask, key_prefix="conversation_log_export"
         ),
         dispatch=partial(dispatch_log_export_head, redis=redis),
+        storage_prefix="conversation-log-exports",
         store_csv=store_log_export_csv,
+        write_csv=conversation_log_csv.write_csv,
         open_csv=open_log_export_csv,
     )
 
@@ -739,7 +748,7 @@ def build_application_services(
         conversation_log_exports=conversation_log_exports,
         log_export_command=LogExportCommandService(
             apps=console_apps,
-            conversations=conversation_log_exports,
+            conversations=conversation_log_csv,
             write_workflow_csv=workflow_log_csv.write_scoped_csv,
             agents=agent_log_csv,
         ),
@@ -757,10 +766,11 @@ def build_application_services(
             database_client=database_client, rbac_members=rbac.members
         ),
         agent_observability=agent_observability,
-        agent_log_exports=AgentLogExportService(
-            logs=agent_observability,
+        agent_log_exports=LogExportTaskService(
+            task_type=AgentLogExportTask,
             tasks=RedisLogExportTasks(redis=redis, task_type=AgentLogExportTask, key_prefix="agent_log_export"),
             dispatch=partial(dispatch_log_export_head, redis=redis),
+            storage_prefix="agent-log-exports",
             store_csv=store_log_export_csv,
             write_csv=agent_log_csv.write_csv,
             open_csv=open_log_export_csv,
@@ -968,9 +978,11 @@ def build_application_services(
         workspaces=workspace_services,
         triggers=triggers,
         workflow_app_logs=workflow_app_logs,
-        workflow_log_exports=WorkflowLogExportService(
+        workflow_log_exports=LogExportTaskService(
+            task_type=WorkflowLogExportTask,
             tasks=RedisLogExportTasks(redis=redis, task_type=WorkflowLogExportTask, key_prefix="workflow_log_export"),
             dispatch=partial(dispatch_log_export_head, redis=redis),
+            storage_prefix="workflow-log-exports",
             store_csv=store_log_export_csv,
             write_csv=workflow_log_csv.write_csv,
             open_csv=open_log_export_csv,

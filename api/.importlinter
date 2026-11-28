@@ -1135,7 +1135,7 @@ source_modules =
     services.conversation_command_service
     services.conversation_query_service
     services.conversation_variable_command_service
-    services.retention.conversation.log_export_service
+    services.retention.conversation.log_export_csv
 forbidden_modules =
     controllers
     extensions
@@ -1163,10 +1163,8 @@ allow_indirect_imports = True
 name = Log export services are framework and persistence neutral
 type = forbidden
 source_modules =
-    services.retention.agent.log_export_service
     services.retention.log_export_command
     services.retention.log_export_task
-    services.retention.workflow_run.log_export_service
 forbidden_modules =
     celery
     configs

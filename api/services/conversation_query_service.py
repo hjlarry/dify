@@ -35,6 +35,10 @@ class ConversationQueryStore(Protocol):
         self, context: RequestContext, app_id: str, *, kind: ConsoleConversationKind
     ) -> ConsoleConversationScope: ...
 
+    def get_console_log_export_scope(self, context: RequestContext, app_id: str) -> ConsoleConversationScope:
+        """Resolve the owned exportable app and the admitted caller's time zone."""
+        ...
+
     def get_console_page(
         self, *, scope: ConsoleConversationScope, filters: ConsoleConversationFilters
     ) -> ConsoleConversationPage: ...
@@ -100,6 +104,10 @@ class ConversationQueryService:
         self, context: RequestContext, app_id: str, *, kind: ConsoleConversationKind
     ) -> ConsoleConversationScope:
         return self._conversations.get_console_scope(context, app_id, kind=kind)
+
+    def get_log_export_scope(self, context: RequestContext, app_id: str) -> ConsoleConversationScope:
+        """Resolve the owned conversation app's export scope for an admitted caller."""
+        return self._conversations.get_console_log_export_scope(context, app_id)
 
     def get_console_page(
         self, *, scope: ConsoleConversationScope, filters: ConsoleConversationFilters

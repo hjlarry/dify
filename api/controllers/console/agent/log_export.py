@@ -46,9 +46,9 @@ from services.agent.observability_contracts import (
     normalize_agent_log_export_source,
 )
 from services.feature_service import FeatureService
-from services.retention.agent.log_export_service import AgentLogExportTask
 from services.retention.log_export_email import LogExportEmailState
 from services.retention.log_export_task import (
+    AgentLogExportTask,
     LogExportFileNotFoundError,
     LogExportIdentityLabel,
     LogExportKind,
@@ -166,6 +166,15 @@ def _require_agent_log_export_access(context: RequestContext) -> None:
         raise PaidPlanRequiredError()
 
 
+def _require_agent_log_export_scope(context: RequestContext, agent_id: UUID) -> None:
+    """Require export access and an existing runtime App within the caller's workspace."""
+    _require_agent_log_export_access(context)
+    try:
+        application_services().agent_observability.require_log_export_scope(context, str(agent_id))
+    except AgentObservabilityNotFoundError as exc:
+        raise AgentNotFoundError from exc
+
+
 @console_ns.route("/agent/<uuid:agent_id>/log-exports/preview")
 class AgentLogExportPreviewApi(Resource):
     @error_responses(AgentNotFoundError, ForbiddenError, PaidPlanRequiredError, InvalidArgumentError)
@@ -217,10 +226,15 @@ class AgentLogExportApi(Resource):
         _require_agent_log_export_access(context)
         try:
             payload = AgentLogExportCreatePayload.model_validate(request.get_json(silent=True))
-            task = application_services().agent_log_exports.create_task(
-                context,
-                str(agent_id),
-                payload.to_query(),
+            services = application_services()
+            filters = services.agent_observability.resolve_log_export_filters(
+                context, str(agent_id), payload.to_query()
+            )
+            task = services.agent_log_exports.create_task(
+                tenant_id=context.active_workspace_id,
+                app_id=str(agent_id),
+                requested_by=context.account_id,
+                filters=filters,
                 identity_labels=payload.identity_labels,
                 estimated_rows=payload.estimated_rows,
             )
@@ -247,11 +261,10 @@ class AgentLogExportLatestApi(Resource):
     @console_account_admission(rbac_checks=[RBACCheck(RBACPermission.AGENT_LOG_MANAGE, AgentId())])
     def get(self, context: RequestContext, agent_id: UUID) -> tuple[dict[str, object], HTTPStatus, dict[str, str]]:
         """Return the caller's latest live task for an available Agent, or a null task."""
-        _require_agent_log_export_access(context)
-        try:
-            task = application_services().agent_log_exports.get_latest_task(context, str(agent_id))
-        except AgentObservabilityNotFoundError as exc:
-            raise AgentNotFoundError from exc
+        _require_agent_log_export_scope(context, agent_id)
+        task = application_services().agent_log_exports.get_latest_task(
+            tenant_id=context.active_workspace_id, app_id=str(agent_id), requested_by=context.account_id
+        )
         return dump_response(AgentLogExportLatestResponse, {"task": task}), HTTPStatus.OK, {"Cache-Control": "no-store"}
 
 
@@ -260,11 +273,10 @@ class AgentLogExportTaskApi(Resource):
     @staticmethod
     def _get_task(context: RequestContext, agent_id: UUID, task_id: UUID) -> AgentLogExportTask:
         """Load the live export after checking the caller's access to the selected Agent."""
-        _require_agent_log_export_access(context)
-        try:
-            return application_services().agent_log_exports.get_task(context, str(agent_id), task_id=str(task_id))
-        except AgentObservabilityNotFoundError as exc:
-            raise AgentNotFoundError from exc
+        _require_agent_log_export_scope(context, agent_id)
+        return application_services().agent_log_exports.get_task(
+            tenant_id=context.active_workspace_id, app_id=str(agent_id), task_id=str(task_id)
+        )
 
     @error_responses(AgentNotFoundError, AgentLogExportTaskNotFoundHTTPError, ForbiddenError, PaidPlanRequiredError)
     @console_ns.doc("get_agent_log_export_status", description="Get the current status of an Agent log export task")
@@ -323,11 +335,14 @@ class AgentLogExportCancelApi(Resource):
         self, context: RequestContext, agent_id: UUID, task_id: UUID
     ) -> tuple[dict[str, object], HTTPStatus, dict[str, str]]:
         """Cancel the admitted requester's queued Agent task and return its new status."""
-        _require_agent_log_export_access(context)
+        _require_agent_log_export_scope(context, agent_id)
         try:
-            task = application_services().agent_log_exports.cancel_task(context, str(agent_id), task_id=str(task_id))
-        except AgentObservabilityNotFoundError as exc:
-            raise AgentNotFoundError from exc
+            task = application_services().agent_log_exports.cancel_task(
+                tenant_id=context.active_workspace_id,
+                app_id=str(agent_id),
+                requested_by=context.account_id,
+                task_id=str(task_id),
+            )
         except LogExportTaskNotFoundError as exc:
             raise AgentLogExportTaskNotFoundHTTPError() from exc
         except LogExportTaskNotCancelableError as exc:
@@ -358,14 +373,12 @@ class AgentLogExportFileApi(Resource):
     @console_account_admission(rbac_checks=[RBACCheck(RBACPermission.AGENT_LOG_MANAGE, AgentId())])
     def get(self, context: RequestContext, agent_id: UUID, task_id: UUID) -> Response:
         """Authorize the Agent and its ready export before redirecting or streaming the CSV."""
-        _require_agent_log_export_access(context)
+        _require_agent_log_export_scope(context, agent_id)
         filename = f"agent-logs-{task_id}.csv"
         try:
             download = application_services().agent_log_exports.download_csv(
-                context, str(agent_id), task_id=str(task_id), filename=filename
+                tenant_id=context.active_workspace_id, app_id=str(agent_id), task_id=str(task_id), filename=filename
             )
-        except AgentObservabilityNotFoundError as exc:
-            raise AgentNotFoundError from exc
         except LogExportTaskNotFoundError as exc:
             raise AgentLogExportTaskNotFoundHTTPError() from exc
         except LogExportTaskNotReadyError as exc:

@@ -148,8 +148,7 @@ from services.enterprise.enterprise_service import EnterpriseService
 from services.entities.app_entities import AppEvent
 from services.evaluation_service import EvaluationService
 from services.feature_service import FeatureService
-from services.retention.agent.log_export_service import AgentLogExportTask
-from services.retention.log_export_task import LogExportStatus
+from services.retention.log_export_task import AgentLogExportTask, LogExportStatus
 from tasks.log_export_tasks import prepare_log_export_task
 from tests.helpers.unit.config_override import config_overrides_context
 from tests.helpers.unit.log_export_fixtures import LogExportRedisIo, LogExportStorageIo

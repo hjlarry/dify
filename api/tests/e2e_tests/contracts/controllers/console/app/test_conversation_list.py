@@ -54,14 +54,17 @@ from models.model import App, AppMode, Conversation, DifySetup, Message, Message
 from models.utils.file_input_compat import restore_input_files
 from repositories.conversation_repository import ConversationRepository
 from services.conversation_query_service import ConversationQueryService
+from services.entities.conversation_entities import ConsoleConversationLogFilters
 from services.message_query_adapters import MessageFileResolver
-from services.retention.conversation.log_export_service import (
-    ConversationLogExportService,
+from services.retention.conversation.log_export_csv import ConversationLogCsvWriter
+from services.retention.log_export_storage import open_log_export_csv, store_log_export_csv
+from services.retention.log_export_task import (
     ConversationLogExportStatus,
     ConversationLogExportTask,
+    LogExportProgress,
+    LogExportStage,
+    LogExportTaskService,
 )
-from services.retention.log_export_storage import open_log_export_csv, store_log_export_csv
-from services.retention.log_export_task import LogExportProgress, LogExportStage
 from services.retention.log_export_task_cache import RedisLogExportTasks
 from tasks.log_export_tasks import dispatch_log_export_head
 from tests.helpers.unit.log_export_fixtures import LogExportRedisIo, LogExportStorageIo
@@ -74,7 +77,7 @@ _CREATED_AT = datetime(2024, 1, 15, 6, 30, 0)
 @dataclass(frozen=True)
 class _Services:
     conversation_queries: ConversationQueryService
-    conversation_log_exports: ConversationLogExportService
+    conversation_log_exports: LogExportTaskService[ConsoleConversationLogFilters]
 
 
 @dataclass
@@ -224,13 +227,15 @@ def harness(
             conversations=conversations,
             restore_inputs=restore_input_files,
         ),
-        conversation_log_exports=ConversationLogExportService(
-            conversations=conversations,
+        conversation_log_exports=LogExportTaskService(
+            task_type=ConversationLogExportTask,
             tasks=RedisLogExportTasks(
                 redis=state.redis.client, task_type=ConversationLogExportTask, key_prefix="conversation_log_export"
             ),
             dispatch=state.dispatch,
+            storage_prefix="conversation-log-exports",
             store_csv=store_log_export_csv,
+            write_csv=ConversationLogCsvWriter(logs=conversations).write_csv,
             open_csv=open_log_export_csv,
         ),
     )

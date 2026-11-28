@@ -37,13 +37,9 @@ from models.workflow import WorkflowAppLogCreatedFrom, WorkflowType
 from repositories.log_export_queries import LogExportNotificationRepository
 from repositories.workflow_app_log_query_repository import WorkflowAppLogQueryRepository
 from services.retention.log_export_storage import open_log_export_csv, store_log_export_csv
-from services.retention.log_export_task import LogExportStatus
+from services.retention.log_export_task import LogExportStatus, LogExportTaskService, WorkflowLogExportTask
 from services.retention.log_export_task_cache import RedisLogExportTasks
 from services.retention.workflow_run.log_export_csv import WorkflowLogCsvWriter
-from services.retention.workflow_run.log_export_service import (
-    WorkflowLogExportService,
-    WorkflowLogExportTask,
-)
 from services.workflow_app_log_contracts import WorkflowLogExportFilters
 from services.workflow_app_log_query_service import WorkflowAppLogQueryService
 from tasks.log_export_tasks import dispatch_log_export_head, prepare_log_export_task
@@ -55,7 +51,7 @@ from tests.helpers.unit.model_factories import make_account, make_app
 @dataclass(frozen=True)
 class _Services:
     workflow_app_logs: WorkflowAppLogQueryService
-    workflow_log_exports: WorkflowLogExportService
+    workflow_log_exports: LogExportTaskService[WorkflowLogExportFilters]
     log_export_notification_queries: LogExportNotificationRepository
 
 
@@ -186,11 +182,13 @@ def export_client(
     app.extensions["application_services"] = _Services(
         workflow_app_logs=logs,
         log_export_notification_queries=LogExportNotificationRepository(session_factory=sqlite_session_factory),
-        workflow_log_exports=WorkflowLogExportService(
+        workflow_log_exports=LogExportTaskService(
+            task_type=WorkflowLogExportTask,
             tasks=RedisLogExportTasks(
                 redis=redis.client, task_type=WorkflowLogExportTask, key_prefix="workflow_log_export"
             ),
             dispatch=partial(dispatch_log_export_head, redis=redis.client),
+            storage_prefix="workflow-log-exports",
             store_csv=store_log_export_csv,
             write_csv=WorkflowLogCsvWriter(logs=logs).write_csv,
             open_csv=open_log_export_csv,

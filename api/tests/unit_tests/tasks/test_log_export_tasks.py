@@ -10,8 +10,7 @@ from redis.exceptions import AuthenticationError, NoPermissionError, ResponseErr
 from extensions import ext_application_services
 from extensions.ext_application_services import application_services, init_app
 from services.entities.conversation_entities import ConsoleConversationLogFilters
-from services.retention.conversation.log_export_service import ConversationLogExportTask
-from services.retention.log_export_task import LogExportLeaseBusyError, LogExportStatus
+from services.retention.log_export_task import ConversationLogExportTask, LogExportLeaseBusyError, LogExportStatus
 from services.retention.log_export_task_cache import RedisLogExportTasks
 from tasks import log_export_tasks
 from tests.helpers.unit.log_export_fixtures import LogExportRedisIo

@@ -32,12 +32,9 @@ from models.workflow import WorkflowRun, WorkflowType
 from repositories import conversation_repository, log_export_queries
 from repositories.conversation_repository import ConversationRepository
 from services.entities.conversation_entities import ConsoleConversationLogFilters, ConsoleConversationScope
-from services.retention.conversation.log_export_service import (
-    ConversationLogExportService,
-    ConversationLogExportTask,
-)
+from services.retention.conversation.log_export_csv import ConversationLogCsvWriter
 from services.retention.log_export_storage import open_log_export_csv, store_log_export_csv
-from services.retention.log_export_task import LogExportLeaseBusyError
+from services.retention.log_export_task import ConversationLogExportTask, LogExportLeaseBusyError, LogExportTaskService
 from services.retention.log_export_task_cache import RedisLogExportTasks
 from tasks.log_export_tasks import dispatch_log_export_head
 from tests.helpers.unit.log_export_fixtures import LogExportRedisIo, LogExportStorageIo
@@ -50,11 +47,18 @@ _MESSAGE_PAGE_QUERY = "FROM messages JOIN conversations"
 
 
 @pytest.fixture
-def export(
-    sqlite_session_factory: sessionmaker[Session], log_export_redis: LogExportRedisIo
-) -> ConversationLogExportService:
-    return ConversationLogExportService(
-        conversations=ConversationRepository(session_factory=sqlite_session_factory),
+def export(sqlite_session_factory: sessionmaker[Session]) -> ConversationLogCsvWriter:
+    return ConversationLogCsvWriter(logs=ConversationRepository(session_factory=sqlite_session_factory))
+
+
+@pytest.fixture
+def task_service(
+    export: ConversationLogCsvWriter, log_export_redis: LogExportRedisIo
+) -> LogExportTaskService[ConsoleConversationLogFilters]:
+    return LogExportTaskService(
+        task_type=ConversationLogExportTask,
+        storage_prefix="conversation-log-exports",
+        write_csv=export.write_csv,
         tasks=RedisLogExportTasks(
             redis=log_export_redis.client, task_type=ConversationLogExportTask, key_prefix="conversation_log_export"
         ),
@@ -66,7 +70,7 @@ def export(
 
 def test_completion_csv_writes_saved_inputs_and_counts_each_generation_once(
     sqlite_session_factory: sessionmaker[Session],
-    export: ConversationLogExportService,
+    export: ConversationLogCsvWriter,
 ) -> None:
     """Keep variable values and legacy prompts while matching the export row preview."""
     account = make_account(timezone="UTC")
@@ -101,7 +105,7 @@ def test_completion_csv_writes_saved_inputs_and_counts_each_generation_once(
         keyword="result", start=None, end=None, annotation_status="all", sort_by="-created_at"
     )
     repository = ConversationRepository(session_factory=sqlite_session_factory)
-    scope = export.get_scope(context, app.id)
+    scope = repository.get_console_log_export_scope(context, app.id)
     counts = repository.get_console_log_export_counts(scope=scope, filters=filters)
     assert counts is not None
     assert (counts.conversation_count, counts.message_count) == (1, 2)
@@ -134,7 +138,7 @@ def test_completion_csv_writes_saved_inputs_and_counts_each_generation_once(
 
 @pytest.mark.parametrize("mode", [AppMode.CHAT, AppMode.AGENT_CHAT])
 def test_chat_csv_header_includes_conversation_and_message_ids_on_an_empty_export(
-    sqlite_session_factory: sessionmaker[Session], mode: AppMode, export: ConversationLogExportService
+    sqlite_session_factory: sessionmaker[Session], mode: AppMode, export: ConversationLogCsvWriter
 ) -> None:
     account = make_account(timezone="UTC")
     app = make_app(mode=mode)
@@ -156,7 +160,7 @@ def test_chat_csv_header_includes_conversation_and_message_ids_on_an_empty_expor
 def test_prepare_export_records_only_claimed_work(
     outcome: str,
     sqlite_session_factory: sessionmaker[Session],
-    export: ConversationLogExportService,
+    task_service: LogExportTaskService[ConsoleConversationLogFilters],
     log_export_redis: LogExportRedisIo,
     log_export_storage: LogExportStorageIo,
 ) -> None:
@@ -180,7 +184,7 @@ def test_prepare_export_records_only_claimed_work(
     if outcome == "busy":
         assert store.claim(task) is not None
         with pytest.raises(LogExportLeaseBusyError):
-            export.prepare_task(tenant_id=task.tenant_id, app_id=task.app_id, task_id=task.task_id)
+            task_service.prepare_task(tenant_id=task.tenant_id, app_id=task.app_id, task_id=task.task_id)
         log_export_storage.save_from_path.assert_not_called()
         return
     if outcome == "failed":
@@ -188,9 +192,9 @@ def test_prepare_export_records_only_claimed_work(
 
     if outcome == "failed":
         with pytest.raises(OSError, match="upload failed"):
-            export.prepare_task(tenant_id=task.tenant_id, app_id=task.app_id, task_id=task.task_id)
+            task_service.prepare_task(tenant_id=task.tenant_id, app_id=task.app_id, task_id=task.task_id)
     else:
-        export.prepare_task(tenant_id=task.tenant_id, app_id=task.app_id, task_id=task.task_id)
+        task_service.prepare_task(tenant_id=task.tenant_id, app_id=task.app_id, task_id=task.task_id)
 
     storage_key = f"conversation-log-exports/{task.tenant_id}/{task.app_id}/{task.task_id}/1.csv"
     assert log_export_storage.save_from_path.call_args.args[0] == storage_key
@@ -198,7 +202,7 @@ def test_prepare_export_records_only_claimed_work(
     assert current is not None
     assert current.status == outcome
     assert current.storage_key == (storage_key if outcome == "ready" else None)
-    export.prepare_task(tenant_id=task.tenant_id, app_id=task.app_id, task_id=task.task_id)
+    task_service.prepare_task(tenant_id=task.tenant_id, app_id=task.app_id, task_id=task.task_id)
     log_export_storage.save_from_path.assert_called_once()
 
 
@@ -206,7 +210,7 @@ def test_console_log_csv_exports_all_turns_of_matching_conversations_in_batches(
     sqlite_session_factory: sessionmaker[Session],
     sqlite_engine: Engine,
     monkeypatch: pytest.MonkeyPatch,
-    export: ConversationLogExportService,
+    export: ConversationLogCsvWriter,
 ) -> None:
     """Check that CSV uses the Console filters and yields each message once across batch boundaries."""
     monkeypatch.setattr(conversation_repository, "_LOG_EXPORT_BATCH_SIZE", 1)
@@ -452,7 +456,7 @@ def test_chatflow_csv_retries_the_failed_page_without_rewriting_rows(
     fail_rollback: bool,
     rows_before_retry: int,
     paged_chatflow: tuple[ConsoleConversationScope, ConsoleConversationLogFilters],
-    export: ConversationLogExportService,
+    export: ConversationLogCsvWriter,
     sqlite_engine: Engine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -558,7 +562,7 @@ def test_chatflow_csv_propagates_unretryable_or_exhausted_page_errors(
     confirmed_standby: bool,
     expected_attempts: int,
     paged_chatflow: tuple[ConsoleConversationScope, ConsoleConversationLogFilters],
-    export: ConversationLogExportService,
+    export: ConversationLogCsvWriter,
     sqlite_engine: Engine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

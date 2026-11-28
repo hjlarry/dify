@@ -17,7 +17,7 @@ from services.workflow_app_log_contracts import WorkflowLogExportFilters, Workfl
 
 if TYPE_CHECKING:
     from services.retention.agent.log_export_csv import AgentLogCsvWriter
-    from services.retention.conversation.log_export_service import ConversationLogExportService
+    from services.retention.conversation.log_export_csv import ConversationLogCsvWriter
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +71,7 @@ class LogExportCommandService:
         self,
         *,
         apps: LogExportApps,
-        conversations: ConversationLogExportService,
+        conversations: ConversationLogCsvWriter,
         write_workflow_csv: WriteWorkflowLogCsv,
         agents: AgentLogCsvWriter,
     ) -> None:

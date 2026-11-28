@@ -62,8 +62,8 @@ from services.retention.log_export_task import (
     LogExportTaskNotCancelableError,
     LogExportTaskNotFoundError,
     LogExportTaskNotReadyError,
+    WorkflowLogExportTask,
 )
-from services.retention.workflow_run.log_export_service import WorkflowLogExportTask
 from services.workflow_app_log_contracts import WorkflowLogExportFilters, WorkflowLogScope
 
 
@@ -220,7 +220,8 @@ class WorkflowLogExportApi(Resource):
             ) from None
         try:
             task = application_services().workflow_log_exports.create_task(
-                scope=scope,
+                tenant_id=scope.tenant_id,
+                app_id=scope.app_id,
                 requested_by=request_context.account_id,
                 filters=payload.to_filters(),
                 identity_labels=payload.identity_labels,
@@ -245,7 +246,7 @@ class WorkflowLogExportLatestApi(Resource):
         """Return the caller's latest live export for this app, or null if it is unavailable."""
         scope = _resolve_log_export_scope(request_context, app_id)
         task = application_services().workflow_log_exports.get_latest_task(
-            scope=scope, requested_by=request_context.account_id
+            tenant_id=scope.tenant_id, app_id=scope.app_id, requested_by=request_context.account_id
         )
         return (
             dump_response(WorkflowLogExportLatestResponse, {"task": task}),
@@ -260,7 +261,9 @@ class WorkflowLogExportTaskApi(Resource):
     def _get_task(request_context: RequestContext, app_id: UUID, task_id: UUID) -> WorkflowLogExportTask:
         """Load an export in the caller's admitted Workflow scope."""
         scope = _resolve_log_export_scope(request_context, app_id)
-        return application_services().workflow_log_exports.get_task(scope=scope, task_id=str(task_id))
+        return application_services().workflow_log_exports.get_task(
+            tenant_id=scope.tenant_id, app_id=scope.app_id, task_id=str(task_id)
+        )
 
     @error_responses(AppNotFoundError, WorkflowLogExportTaskNotFoundHTTPError, ForbiddenError, PaidPlanRequiredError)
     @console_ns.doc("get_workflow_log_export_status")
@@ -332,7 +335,10 @@ class WorkflowLogExportCancelApi(Resource):
         scope = _resolve_log_export_scope(request_context, app_id)
         try:
             task = application_services().workflow_log_exports.cancel_task(
-                scope=scope, task_id=str(task_id), requested_by=request_context.account_id
+                tenant_id=scope.tenant_id,
+                app_id=scope.app_id,
+                requested_by=request_context.account_id,
+                task_id=str(task_id),
             )
         except LogExportTaskNotFoundError as exc:
             raise WorkflowLogExportTaskNotFoundHTTPError() from exc
@@ -368,7 +374,7 @@ class WorkflowLogExportFileApi(Resource):
         filename = f"workflow-logs-{task_id}.csv"
         try:
             download = application_services().workflow_log_exports.download_csv(
-                scope=scope, task_id=str(task_id), filename=filename
+                tenant_id=scope.tenant_id, app_id=scope.app_id, task_id=str(task_id), filename=filename
             )
         except LogExportTaskNotFoundError as exc:
             raise WorkflowLogExportTaskNotFoundHTTPError() from exc
