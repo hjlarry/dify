@@ -5,7 +5,7 @@ import type { QueryParam } from '../log-filters'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { useCloudSandboxPlanStatus } from '@/features/log-export/cloud-sandbox-retention'
+import { useCloudSandboxPlanStatus } from '@/features/logs/filters/cloud-sandbox-retention'
 import { consoleQuery } from '@/service/console'
 import {
   createConsoleQueryClient,

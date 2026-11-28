@@ -2,12 +2,15 @@ import type {
   GetAppsByAppIdWorkflowAppLogsData,
   WorkflowAppLogPartialResponse,
 } from '@dify/contracts/api/console/apps/types.gen'
-import type { CloudSandboxPlanState } from '@/features/log-export/cloud-sandbox-retention'
-import type { LogIdentity } from '@/features/log-export/log-identity'
-import type { LogCustomDateRange } from '@/features/log-export/log-time-range'
+import type { LogIdentity } from '@/features/logs/filters/log-identity'
+import type {
+  CloudSandboxPlanState,
+  LogCustomDateRange,
+} from '@/features/logs/filters/log-time-range'
 import { useTranslation } from 'react-i18next'
-import { identityKey, logIdentityFilters } from '@/features/log-export/log-identity'
-import { logDateRange, useLogTimeFilterOptions } from '../log/log-filters'
+import { identityKey, logIdentityFilters } from '@/features/logs/filters/log-identity'
+import { logDateRange } from '@/features/logs/filters/log-time-range'
+import { useLogTimeFilterOptions } from '@/features/logs/filters/log-time-range-options'
 
 type WorkflowLogStatus = NonNullable<GetAppsByAppIdWorkflowAppLogsData['query']>['status']
 

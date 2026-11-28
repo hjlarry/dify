@@ -1,12 +1,12 @@
 import type { GetAgentByAgentIdLogExportsPreviewData } from '@dify/contracts/api/console/agent/types.gen'
 import type { SourceFilterValue } from './components/source-picker'
-import type { LogIdentity } from '@/features/log-export/log-identity'
-import type { LogCustomDateRange } from '@/features/log-export/log-time-range'
+import type { LogIdentity } from '@/features/logs/filters/log-identity'
+import type { LogCustomDateRange } from '@/features/logs/filters/log-time-range'
 import dayjs from 'dayjs'
 import timezone from 'dayjs/plugin/timezone'
 import utc from 'dayjs/plugin/utc'
-import { logIdentityFilters } from '@/features/log-export/log-identity'
-import { customLogDateRange } from '@/features/log-export/log-time-range'
+import { logIdentityFilters } from '@/features/logs/filters/log-identity'
+import { customLogDateRange } from '@/features/logs/filters/log-time-range'
 
 dayjs.extend(utc)
 dayjs.extend(timezone)

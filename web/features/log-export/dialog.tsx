@@ -1,7 +1,7 @@
 import type { ConversationLogExportStatusResponse } from '@dify/contracts/api/console/apps/types.gen'
 import type { ComponentProps, ReactNode } from 'react'
-import type { CloudSandboxPlanState } from './cloud-sandbox-retention'
 import type { LogExportPhase } from './use-log-export'
+import type { CloudSandboxPlanState } from '@/features/logs/filters/log-time-range'
 import { Button } from '@langgenius/dify-ui/button'
 import {
   Dialog,
@@ -15,60 +15,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@langgenius/dify-ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectItemIndicator,
-  SelectItemText,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@langgenius/dify-ui/select'
 import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import UpgradeBtn from '@/app/components/billing/upgrade-btn'
 import useTimestamp from '@/hooks/use-timestamp'
 import { downloadUrl } from '@/utils/download'
 import { LogExportProgressDialog } from './progress-dialog'
-
-export function LogExportSelect<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-  disabled,
-}: {
-  label: string
-  value: T
-  options: { value: T; label: string }[]
-  onChange: (value: T) => void
-  disabled: boolean
-}) {
-  return (
-    <Select
-      value={value}
-      items={options}
-      onValueChange={(next) => next && onChange(next)}
-      disabled={disabled}
-    >
-      <div className="flex flex-col gap-1.5">
-        <SelectLabel>{label}</SelectLabel>
-        <SelectTrigger>
-          <SelectValue />
-        </SelectTrigger>
-      </div>
-      <SelectContent>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            <SelectItemText>{option.label}</SelectItemText>
-            <SelectItemIndicator />
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-}
 
 type LastLogExportProps = {
   status: ConversationLogExportStatusResponse['status']

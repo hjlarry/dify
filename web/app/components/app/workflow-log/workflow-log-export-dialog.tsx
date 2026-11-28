@@ -1,15 +1,16 @@
 import type { WorkflowLogFilterOptions, WorkflowLogQuery } from './log-filters'
-import type { CloudSandboxPlanState } from '@/features/log-export/cloud-sandbox-retention'
-import type { LogIdentity } from '@/features/log-export/log-identity'
+import type { LogIdentity } from '@/features/logs/filters/log-identity'
+import type { CloudSandboxPlanState } from '@/features/logs/filters/log-time-range'
 import { skipToken } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { API_PREFIX } from '@/config'
-import { LogExportDialog, LogExportSelect } from '@/features/log-export/dialog'
-import { logIdentityLabels } from '@/features/log-export/log-identity'
-import { LogIdentityField } from '@/features/log-export/log-identity-picker'
-import { LogTimeRangePicker } from '@/features/log-export/log-time-range-picker'
+import { LogExportDialog } from '@/features/log-export/dialog'
 import { useLogExport } from '@/features/log-export/use-log-export'
+import { LogFilterSelect } from '@/features/logs/filters/log-filter-select'
+import { logIdentityLabels } from '@/features/logs/filters/log-identity'
+import { LogIdentityField } from '@/features/logs/filters/log-identity-picker'
+import { LogTimeRangePicker } from '@/features/logs/filters/log-time-range-picker'
 import { consoleClient, consoleQuery } from '@/service/console'
 import { toWorkflowLogFilters } from './log-filters'
 
@@ -114,7 +115,7 @@ export function WorkflowLogExportDialog({
         }
         disabled={disabled}
       />
-      <LogExportSelect
+      <LogFilterSelect
         label={t(($) => $['table.header.status'], { ns: 'appLog' })}
         value={status ?? 'all'}
         options={filterOptions.statuses}

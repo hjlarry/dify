@@ -2,7 +2,7 @@
 
 import type { AgentLogConversationItemResponse } from '@dify/contracts/api/console/agent/types.gen'
 import type { AgentLogsSort } from './components/logs-table'
-import type { LogIdentity } from '@/features/log-export/log-identity'
+import type { LogIdentity } from '@/features/logs/filters/log-identity'
 import {
   Drawer,
   DrawerBackdrop,
@@ -30,12 +30,10 @@ import { Sort } from '@/app/components/base/sort'
 import { useDocLink } from '@/context/i18n'
 import { isCurrentWorkspaceManagerAtom } from '@/context/workspace-state'
 import { userTimezoneQueryOptions } from '@/features/account-profile/client'
-import {
-  isLogTimePeriodRestricted,
-  useCloudSandboxPlanStatus,
-} from '@/features/log-export/cloud-sandbox-retention'
-import { LogIdentityField } from '@/features/log-export/log-identity-picker'
-import { LogTimeRangePicker } from '@/features/log-export/log-time-range-picker'
+import { useCloudSandboxPlanStatus } from '@/features/logs/filters/cloud-sandbox-retention'
+import { LogIdentityField } from '@/features/logs/filters/log-identity-picker'
+import { isLogTimePeriodRestricted } from '@/features/logs/filters/log-time-range'
+import { LogTimeRangePicker } from '@/features/logs/filters/log-time-range-picker'
 import { consoleQuery } from '@/service/console'
 import { AgentDetailSectionSurface } from '../section-surface'
 import { AgentLogDetailPanel } from './components/log-detail-panel'

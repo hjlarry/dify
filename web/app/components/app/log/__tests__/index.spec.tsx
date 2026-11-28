@@ -1,4 +1,4 @@
-import type { CloudSandboxPlanState } from '@/features/log-export/cloud-sandbox-retention'
+import type { CloudSandboxPlanState } from '@/features/logs/filters/log-time-range'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import dayjs from 'dayjs'
@@ -39,9 +39,9 @@ const mockPlanState = vi.hoisted(() => ({
   value: 'unrestricted' as CloudSandboxPlanState,
 }))
 
-vi.mock('@/features/log-export/cloud-sandbox-retention', async (importOriginal) => {
+vi.mock('@/features/logs/filters/cloud-sandbox-retention', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('@/features/log-export/cloud-sandbox-retention')>()
+    await importOriginal<typeof import('@/features/logs/filters/cloud-sandbox-retention')>()
   return {
     ...actual,
     useCloudSandboxPlanStatus: () => mockPlanState.value,

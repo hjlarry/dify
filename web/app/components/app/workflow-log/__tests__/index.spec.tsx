@@ -7,7 +7,7 @@ import type {
   WorkflowRunForLogResponse,
 } from '@dify/contracts/api/console/apps/types.gen'
 import type { ILogsProps } from '../index'
-import type { CloudSandboxPlanState } from '@/features/log-export/cloud-sandbox-retention'
+import type { CloudSandboxPlanState } from '@/features/logs/filters/log-time-range'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import dayjs from 'dayjs'
@@ -31,9 +31,9 @@ type WorkflowLogsInput = {
 const mockedUseWorkflowLogs =
   vi.fn<(input: WorkflowLogsInput) => Promise<WorkflowAppLogPaginationResponse>>()
 
-vi.mock('@/features/log-export/cloud-sandbox-retention', async (importOriginal) => {
+vi.mock('@/features/logs/filters/cloud-sandbox-retention', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('@/features/log-export/cloud-sandbox-retention')>()
+    await importOriginal<typeof import('@/features/logs/filters/cloud-sandbox-retention')>()
   return {
     ...actual,
     useCloudSandboxPlanStatus: () => mockPlanState.value,

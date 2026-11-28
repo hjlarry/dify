@@ -3,7 +3,7 @@
 import type { AppDetailWithSite } from '@dify/contracts/api/console/apps/types.gen'
 import type { FC } from 'react'
 import type { QueryParam } from './log-filters'
-import type { LogIdentity } from '@/features/log-export/log-identity'
+import type { LogIdentity } from '@/features/logs/filters/log-identity'
 import { Pagination } from '@langgenius/dify-ui/pagination'
 import { skipToken, useQuery } from '@tanstack/react-query'
 import { useDebounceFn } from 'ahooks'
@@ -16,10 +16,8 @@ import { APP_PAGE_LIMIT } from '@/config'
 import { useDocLink } from '@/context/i18n'
 import { isCurrentWorkspaceManagerAtom } from '@/context/workspace-state'
 import { userTimezoneQueryOptions } from '@/features/account-profile/client'
-import {
-  resolveLogTimePeriod,
-  useCloudSandboxPlanStatus,
-} from '@/features/log-export/cloud-sandbox-retention'
+import { useCloudSandboxPlanStatus } from '@/features/logs/filters/cloud-sandbox-retention'
+import { resolveLogTimePeriod } from '@/features/logs/filters/log-time-range'
 import { consoleQuery } from '@/service/console'
 import PageTitle from '../log-annotation/page-title'
 import { ConversationLogExportDialog } from './conversation-log-export-dialog'

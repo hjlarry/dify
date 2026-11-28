@@ -13,7 +13,7 @@ import {
   DatePickerValue,
 } from '@/app/components/base/date-time-picker/date-picker'
 import { formatToLocalTime } from '@/utils/format'
-import { LogExportSelect } from './dialog'
+import { LogFilterSelect } from './log-filter-select'
 import './log-time-range'
 
 type LogTimeSelection<T extends string> = { period: T | 'custom'; customRange?: LogCustomDateRange }
@@ -75,7 +75,7 @@ export function LogTimeRangePicker<T extends string>({
       className={clearedPeriod === undefined ? 'space-y-2' : 'flex flex-wrap items-center gap-2'}
     >
       {clearedPeriod === undefined ? (
-        <LogExportSelect
+        <LogFilterSelect
           label={label}
           value={value.period}
           options={items}

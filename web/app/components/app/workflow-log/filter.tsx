@@ -2,13 +2,13 @@
 
 import type { ReactNode } from 'react'
 import type { WorkflowLogFilterOptions, WorkflowLogQuery } from './log-filters'
-import type { LogIdentity } from '@/features/log-export/log-identity'
+import type { LogIdentity } from '@/features/logs/filters/log-identity'
 import { useTranslation } from 'react-i18next'
 import { trackEvent } from '@/app/components/base/amplitude/utils'
 import Chip from '@/app/components/base/chip'
 import { SearchInput } from '@/app/components/base/search-input'
-import { LogIdentityField } from '@/features/log-export/log-identity-picker'
-import { LogTimeRangePicker } from '@/features/log-export/log-time-range-picker'
+import { LogIdentityField } from '@/features/logs/filters/log-identity-picker'
+import { LogTimeRangePicker } from '@/features/logs/filters/log-time-range-picker'
 
 type IFilterProps = {
   appId: string

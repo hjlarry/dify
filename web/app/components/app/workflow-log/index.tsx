@@ -3,7 +3,7 @@
 import type { AppDetailWithSite } from '@dify/contracts/api/console/apps/types.gen'
 import type { FC } from 'react'
 import type { WorkflowLogQuery } from './log-filters'
-import type { LogIdentity } from '@/features/log-export/log-identity'
+import type { LogIdentity } from '@/features/logs/filters/log-identity'
 import { Pagination } from '@langgenius/dify-ui/pagination'
 import { skipToken, useQuery } from '@tanstack/react-query'
 import { useDebounce } from 'ahooks'
@@ -16,15 +16,16 @@ import { LoadingPlaceholder } from '@/app/components/base/loading-placeholder'
 import { APP_PAGE_LIMIT } from '@/config'
 import { isCurrentWorkspaceManagerAtom } from '@/context/workspace-state'
 import { userTimezoneQueryOptions } from '@/features/account-profile/client'
+import { useCloudSandboxPlanStatus } from '@/features/logs/filters/cloud-sandbox-retention'
 import {
+  logDateRange,
   resolveLogTimePeriod,
-  useCloudSandboxPlanStatus,
-} from '@/features/log-export/cloud-sandbox-retention'
+  TIME_PERIOD_MAPPING,
+} from '@/features/logs/filters/log-time-range'
 import { consoleQuery } from '@/service/console'
 import PageTitle from '../log-annotation/page-title'
 import { ArchivedLogsNotice } from '../log/archived-logs-notice'
 import { shouldShowArchivedLogsNotice } from '../log/archived-logs-notice-utils'
-import { logDateRange, TIME_PERIOD_MAPPING } from '../log/log-filters'
 import { RetentionUpgradeNotice } from '../log/retention-upgrade-notice'
 import Filter from './filter'
 import List from './list'
