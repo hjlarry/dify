@@ -3,6 +3,7 @@ import type {
   AgentLogSourceResponse,
 } from '@dify/contracts/api/console/agent/types.gen'
 import type { TFunction } from 'i18next'
+import type { SourceFilterValue } from '../log-filters'
 import { Button } from '@langgenius/dify-ui/button'
 import { cn } from '@langgenius/dify-ui/cn'
 import {
@@ -29,8 +30,6 @@ import {
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LogSourceIcon } from './source-icon'
-
-export type SourceFilterValue = AgentLogSourceResponse['id'][]
 
 const getSourceGroupLabel = (group: AgentLogSourceGroupResponse, t: TFunction<['agentV2']>) => {
   if (group.type === 'webapp') return t(($) => $['agentDetail.logs.filters.source.webapp'])
