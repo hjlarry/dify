@@ -17,6 +17,7 @@ from redis.exceptions import (
     TryAgainError,
 )
 
+from extensions.redis_names import serialize_redis_name
 from libs.datetime_utils import utc_now
 from services.retention.log_export_task import (
     LogExportKind,
@@ -37,7 +38,7 @@ _LEASE_SECONDS = 120
 _DISPATCH_LEASE_SECONDS = 600
 _READY_TASK_TTL = timedelta(days=7)
 _TERMINAL_TASK_TTL = timedelta(days=1)
-LOG_EXPORT_QUEUE_KEY_PREFIX = "log_export_queue:"
+_LOG_EXPORT_QUEUE_KEY_PREFIX = "log_export_queue:"
 
 _SAVE_LOG_EXPORT_TASK = """
 -- The task key identifies a previously admitted submission after a lost Redis response.
@@ -173,12 +174,20 @@ return 1
 
 def _queue_key(tenant_id: str) -> str:
     """Use the same cluster hash tag as the task, lease, and active requester index."""
-    return f"{LOG_EXPORT_QUEUE_KEY_PREFIX}{{{tenant_id}}}"
+    return f"{_LOG_EXPORT_QUEUE_KEY_PREFIX}{{{tenant_id}}}"
 
 
 def _active_key(tenant_id: str) -> str:
     """Share the workspace's requester/app deduplication index across export families."""
     return f"log_export_active:{{{tenant_id}}}"
+
+
+def iter_log_export_queue_tenants(redis: "RedisClientWrapper") -> Generator[str]:
+    """Read workspace IDs from the physical Redis keys for active export queues."""
+    prefix = serialize_redis_name(f"{_LOG_EXPORT_QUEUE_KEY_PREFIX}{{")
+    for raw in redis.scan_iter(match=f"{prefix}*}}", count=500):
+        key = raw.decode() if isinstance(raw, bytes) else raw
+        yield key.removeprefix(prefix).removesuffix("}")
 
 
 def reserve_log_export_dispatch(redis: "RedisClientWrapper", tenant_id: str) -> tuple[LogExportKind, str, str] | None:

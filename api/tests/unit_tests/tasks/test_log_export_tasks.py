@@ -11,7 +11,6 @@ from extensions import ext_application_services
 from extensions.ext_application_services import application_services, init_app
 from services.entities.conversation_entities import ConsoleConversationLogFilters
 from services.retention.conversation.log_export_service import ConversationLogExportTask
-from services.retention.log_export_adapters import dispatch_log_export_head
 from services.retention.log_export_task import LogExportLeaseBusyError, LogExportStatus
 from services.retention.log_export_task_cache import RedisLogExportTasks
 from tasks import log_export_tasks
@@ -48,7 +47,7 @@ def test_conversation_log_export_uses_shared_task(
     )
     store.save(task)
 
-    dispatch_log_export_head(task.tenant_id, redis=log_export_redis.client)
+    log_export_tasks.dispatch_log_export_head(task.tenant_id, redis=log_export_redis.client)
 
     args = {"tenant_id": task.tenant_id, "app_id": task.app_id, "task_id": task.task_id}
     message = {**args, "export_kind": "conversation"}

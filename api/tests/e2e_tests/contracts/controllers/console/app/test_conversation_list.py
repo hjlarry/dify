@@ -55,14 +55,15 @@ from models.utils.file_input_compat import restore_input_files
 from repositories.conversation_repository import ConversationRepository
 from services.conversation_query_service import ConversationQueryService
 from services.message_query_adapters import MessageFileResolver
-from services.retention import log_export_adapters
 from services.retention.conversation.log_export_service import (
     ConversationLogExportService,
     ConversationLogExportStatus,
     ConversationLogExportTask,
 )
+from services.retention.log_export_storage import open_log_export_csv, store_log_export_csv
 from services.retention.log_export_task import LogExportProgress, LogExportStage
 from services.retention.log_export_task_cache import RedisLogExportTasks
+from tasks.log_export_tasks import dispatch_log_export_head
 from tests.helpers.unit.log_export_fixtures import LogExportRedisIo, LogExportStorageIo
 from tests.helpers.unit.model_factories import make_account, make_app, make_conversation, make_end_user, make_message
 
@@ -229,8 +230,8 @@ def harness(
                 redis=state.redis.client, task_type=ConversationLogExportTask, key_prefix="conversation_log_export"
             ),
             dispatch=state.dispatch,
-            store_csv=log_export_adapters.store_log_export_csv,
-            open_csv=log_export_adapters.open_log_export_csv,
+            store_csv=store_log_export_csv,
+            open_csv=open_log_export_csv,
         ),
     )
     api = ExternalApi(app)
@@ -683,7 +684,7 @@ def test_create_conversation_log_export_keeps_queued_task_after_publish_failure(
 ) -> None:
     """Preserve the admitted export for a delivery retry after a broker error."""
     monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _: True)
-    harness.dispatch.side_effect = partial(log_export_adapters.dispatch_log_export_head, redis=harness.redis.client)
+    harness.dispatch.side_effect = partial(dispatch_log_export_head, redis=harness.redis.client)
     log_export_publish.side_effect = OSError("broker unavailable")
 
     response = harness.post_export({})

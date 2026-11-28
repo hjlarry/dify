@@ -1,48 +1,43 @@
-"""Deliver CSV export work, files, and completion notifications."""
+"""Format and send completion notifications for CSV log exports."""
 
 import json
-import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, tzinfo
-from pathlib import Path
 from string import punctuation
-from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, TextIO
+from typing import Protocol
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
 from configs import dify_config
-from extensions.ext_database import db
-from extensions.ext_storage import storage
 from libs.datetime_utils import ensure_naive_utc, utc_now
-from models.account import Account
-from models.agent import WorkflowAgentNodeBinding
-from models.model import App
-from repositories.agent.agent_runtime_app import find_runtime_resolvable_agent
 from services.agent.observability_contracts import AgentLogExportFilters
 from services.billing_client import saas
 from services.entities.conversation_entities import ConsoleConversationLogFilters, ConsoleLogIdentitySource
 from services.retention.agent.log_export_service import AgentLogExportTask
 from services.retention.conversation.log_export_service import ConversationLogExportTask
-from services.retention.log_export_task import (
-    LogExportDownload,
-    LogExportFileNotFoundError,
-    LogExportKind,
-)
-from services.retention.log_export_task_cache import reserve_log_export_dispatch
+from services.retention.log_export_task import LogExportKind
 from services.retention.workflow_run.log_export_service import WorkflowLogExportTask
 from services.system_feature_service import SystemFeatureService
 from services.workflow_app_log_contracts import WorkflowLogExportFilters
 
-if TYPE_CHECKING:
-    from extensions.ext_redis import RedisClientWrapper
-
-logger = logging.getLogger(__name__)
-
 type LogExportNotificationTask = ConversationLogExportTask | WorkflowLogExportTask | AgentLogExportTask
+
+
+class LogExportNotificationQueries(Protocol):
+    def read_app_name(self, *, tenant_id: str, app_id: str, export_kind: LogExportKind) -> str:
+        """Return the saved export's app name within its workspace, or an empty string if gone."""
+        ...
+
+    def read_context(
+        self,
+        *,
+        tenant_id: str,
+        app_id: str,
+        export_kind: LogExportKind,
+        sources: tuple[str, ...],
+        requested_by: str,
+    ) -> tuple[str, list[str], str | None]:
+        """Return scoped app and source labels plus the saved requester's timezone, if available."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,72 +144,6 @@ _MARKDOWN_LITERAL = str.maketrans(
 )
 
 
-def dispatch_log_export_head(tenant_id: str, *, redis: "RedisClientWrapper") -> None:
-    """Wake the workspace's next export; the persisted queue allows recovery after a failed publish."""
-    from tasks.log_export_tasks import prepare_log_export_task
-
-    try:
-        head = reserve_log_export_dispatch(redis, tenant_id)
-        if head is not None:
-            kind, app_id, task_id = head
-            prepare_log_export_task.apply_async(
-                kwargs={"tenant_id": tenant_id, "app_id": app_id, "task_id": task_id, "export_kind": kind.value},
-                task_id=task_id,
-            )
-    except Exception:
-        logger.exception("Could not dispatch the next log export: tenant=%s", tenant_id)
-
-
-def _read_log_export_names(
-    session: Session,
-    *,
-    tenant_id: str,
-    app_id: str,
-    export_kind: LogExportKind,
-    sources: tuple[str, ...] = (),
-) -> tuple[str, list[str]]:
-    """Read display names for the exported app and its selected sources within the task's workspace."""
-    if export_kind is not LogExportKind.AGENT:
-        name = session.scalar(select(App.name).where(App.id == app_id, App.tenant_id == tenant_id))
-        return name or "", []
-
-    agent = find_runtime_resolvable_agent(session, tenant_id=tenant_id, agent_id=app_id)
-    if agent is None:
-        return "", list(sources)
-    if not sources:
-        return agent.name, []
-
-    runtime_id = agent.backing_app_id or agent.app_id
-    webapp_source = f"webapp:{runtime_id}"
-    names: dict[str, str] = {}
-    if runtime_id and webapp_source in sources:
-        runtime_name = session.scalar(select(App.name).where(App.id == runtime_id, App.tenant_id == tenant_id))
-        if runtime_name:
-            names[webapp_source] = runtime_name
-    workflow_ids = {source.split(":", 2)[1] for source in sources if source.startswith("workflow:")}
-    if workflow_ids:
-        statement = (
-            select(App.id, App.name)
-            .join(WorkflowAgentNodeBinding, WorkflowAgentNodeBinding.app_id == App.id)
-            .where(
-                App.tenant_id == tenant_id,
-                App.id.in_(workflow_ids),
-                WorkflowAgentNodeBinding.tenant_id == tenant_id,
-                WorkflowAgentNodeBinding.agent_id == app_id,
-            )
-            .distinct()
-        )
-        names.update({f"workflow:{app_id}": name for app_id, name in session.execute(statement)})
-    return agent.name, [names.get(":".join(source.split(":", 2)[:2]), source) for source in sources]
-
-
-def read_log_export_app_name(*, tenant_id: str, app_id: str, export_kind: LogExportKind) -> str:
-    """Resolve the display name for a saved export within its workspace, or return an empty name if gone."""
-    with Session(db.engine) as session:
-        name, _ = _read_log_export_names(session, tenant_id=tenant_id, app_id=app_id, export_kind=export_kind)
-    return name
-
-
 def _log_export_notice_markdown(
     task: LogExportNotificationTask, *, sources: list[str], timezone: tzinfo, copy: _NoticeCopy
 ) -> str:
@@ -284,22 +213,22 @@ def log_export_download_path(*, app_id: str, task_id: str, export_kind: LogExpor
     return f"/console/api/{scope}/{task_id}/file"
 
 
-def notify_log_export_ready(task: LogExportNotificationTask, *, export_kind: LogExportKind) -> None:
+def notify_log_export_ready(
+    task: LogExportNotificationTask, *, export_kind: LogExportKind, queries: LogExportNotificationQueries
+) -> None:
     """Publish a one-time Cloud notification for the requester of a newly completed export."""
     if task.expires_at is None or not SystemFeatureService.is_log_export_notification_enabled():
         return
 
     path = log_export_download_path(app_id=task.app_id, task_id=task.task_id, export_kind=export_kind)
     url = f"{dify_config.CONSOLE_API_URL.rstrip('/')}{path}"
-    with Session(db.engine) as session:
-        app_name, sources = _read_log_export_names(
-            session,
-            tenant_id=task.tenant_id,
-            app_id=task.app_id,
-            export_kind=export_kind,
-            sources=task.filters.sources if isinstance(task.filters, AgentLogExportFilters) else (),
-        )
-        timezone_name = session.scalar(select(Account.timezone).where(Account.id == task.requested_by))
+    app_name, sources, timezone_name = queries.read_context(
+        tenant_id=task.tenant_id,
+        app_id=task.app_id,
+        export_kind=export_kind,
+        sources=task.filters.sources if isinstance(task.filters, AgentLogExportFilters) else (),
+        requested_by=task.requested_by,
+    )
     try:
         timezone = ZoneInfo(timezone_name) if timezone_name else UTC
     except (ValueError, ZoneInfoNotFoundError):
@@ -347,28 +276,3 @@ def notify_log_export_ready(task: LogExportNotificationTask, *, export_kind: Log
             notification_id=notice.notification_id, account_ids=[task.requested_by]
         ),
     )
-
-
-def store_log_export_csv(storage_key: str, write_csv: Callable[[TextIO], int]) -> int:
-    """Write a UTF-8 CSV to a private temporary file, then upload it and return the row count."""
-    with TemporaryDirectory() as directory:
-        path = Path(directory) / "logs.csv"
-        with path.open("w", encoding="utf-8", newline="") as output:
-            row_count = write_csv(output)
-        storage.save_from_path(storage_key, path)
-        return row_count
-
-
-def open_log_export_csv(storage_key: str, expires_in: int, filename: str) -> LogExportDownload:
-    """Sign the Cloud S3 download or open the CSV through the configured storage."""
-    if SystemFeatureService.use_presigned_log_export_downloads():
-        return storage.generate_presigned_url(
-            storage_key, expires_in=expires_in, content_type="text/csv; charset=utf-8", download_filename=filename
-        )
-
-    # Read the first chunk before sending headers so a missing CSV can return a 404.
-    try:
-        stream = storage.load(storage_key, stream=True)
-        return next(stream), stream
-    except (FileNotFoundError, StopIteration) as exc:
-        raise LogExportFileNotFoundError() from exc

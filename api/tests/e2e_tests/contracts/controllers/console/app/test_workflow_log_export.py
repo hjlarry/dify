@@ -34,8 +34,9 @@ from models import Account, Tenant, TenantAccountJoin, WorkflowAppLog, WorkflowR
 from models.enums import CreatorUserRole, WorkflowRunTriggeredFrom
 from models.model import AppMode, DifySetup
 from models.workflow import WorkflowAppLogCreatedFrom, WorkflowType
+from repositories.log_export_queries import LogExportNotificationRepository
 from repositories.workflow_app_log_query_repository import WorkflowAppLogQueryRepository
-from services.retention import log_export_adapters
+from services.retention.log_export_storage import open_log_export_csv, store_log_export_csv
 from services.retention.log_export_task import LogExportStatus
 from services.retention.log_export_task_cache import RedisLogExportTasks
 from services.retention.workflow_run.log_export_csv import WorkflowLogCsvWriter
@@ -45,7 +46,8 @@ from services.retention.workflow_run.log_export_service import (
 )
 from services.workflow_app_log_contracts import WorkflowLogExportFilters
 from services.workflow_app_log_query_service import WorkflowAppLogQueryService
-from tasks.log_export_tasks import prepare_log_export_task
+from tasks.log_export_tasks import dispatch_log_export_head, prepare_log_export_task
+from tests.helpers.unit.config_override import config_overrides_context
 from tests.helpers.unit.log_export_fixtures import LogExportRedisIo, LogExportStorageIo
 from tests.helpers.unit.model_factories import make_account, make_app
 
@@ -54,6 +56,7 @@ from tests.helpers.unit.model_factories import make_account, make_app
 class _Services:
     workflow_app_logs: WorkflowAppLogQueryService
     workflow_log_exports: WorkflowLogExportService
+    log_export_notification_queries: LogExportNotificationRepository
 
 
 @dataclass(frozen=True)
@@ -182,14 +185,15 @@ def export_client(
     logs = WorkflowAppLogQueryService(logs=WorkflowAppLogQueryRepository(session_factory=sqlite_session_factory))
     app.extensions["application_services"] = _Services(
         workflow_app_logs=logs,
+        log_export_notification_queries=LogExportNotificationRepository(session_factory=sqlite_session_factory),
         workflow_log_exports=WorkflowLogExportService(
             tasks=RedisLogExportTasks(
                 redis=redis.client, task_type=WorkflowLogExportTask, key_prefix="workflow_log_export"
             ),
-            dispatch=partial(log_export_adapters.dispatch_log_export_head, redis=redis.client),
-            store_csv=log_export_adapters.store_log_export_csv,
+            dispatch=partial(dispatch_log_export_head, redis=redis.client),
+            store_csv=store_log_export_csv,
             write_csv=WorkflowLogCsvWriter(logs=logs).write_csv,
-            open_csv=log_export_adapters.open_log_export_csv,
+            open_csv=open_log_export_csv,
         ),
     )
     api = ExternalApi(app)
@@ -369,7 +373,10 @@ def test_workflow_export_worker_uploads_once_and_marks_task_ready(export_client:
         {"task_id": task_id, "status": "pending", "estimated_rows": 3, "progress": None},
     )
     arguments = export_client.publish.call_args.kwargs["kwargs"]
-    with export_client.client.application.app_context():
+    with (
+        export_client.client.application.app_context(),
+        config_overrides_context(DEPLOYMENT_EDITION=DeploymentEdition.COMMUNITY),
+    ):
         prepare_log_export_task.run(**arguments)
         prepare_log_export_task.run(**arguments)
 
@@ -538,7 +545,10 @@ def ready_export(export_client: _ExportClient) -> WorkflowLogExportTask:
     """Create an export and run the worker so the file and task are available for download."""
     submitted = export_client.client.post(export_client.path, headers=export_client.headers, json={})
     assert submitted.status_code == 202
-    with export_client.client.application.app_context():
+    with (
+        export_client.client.application.app_context(),
+        config_overrides_context(DEPLOYMENT_EDITION=DeploymentEdition.COMMUNITY),
+    ):
         prepare_log_export_task.run(**export_client.publish.call_args.kwargs["kwargs"])
     task_key = export_client.task_key(submitted.get_json()["task_id"])
     task = WorkflowLogExportTask.model_validate_json(export_client.redis.get(task_key))

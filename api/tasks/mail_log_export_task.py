@@ -8,7 +8,7 @@ from configs import dify_config
 from extensions.ext_mail import mail
 from libs.datetime_utils import ensure_naive_utc
 from libs.email_i18n import EmailType, get_email_i18n_service
-from services.retention.log_export_adapters import log_export_download_path, read_log_export_app_name
+from services.retention.log_export_notification import log_export_download_path
 from services.retention.log_export_task import LogExportKind
 
 
@@ -36,7 +36,9 @@ def send_log_export_ready_email_task(
 
     path = log_export_download_path(app_id=app_id, task_id=task_id, export_kind=kind)
     url = f"{console_url.rstrip('/')}{path}"
-    app_name = read_log_export_app_name(tenant_id=tenant_id, app_id=app_id, export_kind=kind)
+    app_name = services.log_export_notification_queries.read_app_name(
+        tenant_id=tenant_id, app_id=app_id, export_kind=kind
+    )
     expiration = ensure_naive_utc(datetime.fromisoformat(expires_at))
     get_email_i18n_service().send_email(
         email_type=EmailType.LOG_EXPORT_READY,

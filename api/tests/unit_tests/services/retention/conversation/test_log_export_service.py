@@ -32,13 +32,14 @@ from models.workflow import WorkflowRun, WorkflowType
 from repositories import conversation_repository, log_export_queries
 from repositories.conversation_repository import ConversationRepository
 from services.entities.conversation_entities import ConsoleConversationLogFilters, ConsoleConversationScope
-from services.retention import log_export_adapters
 from services.retention.conversation.log_export_service import (
     ConversationLogExportService,
     ConversationLogExportTask,
 )
+from services.retention.log_export_storage import open_log_export_csv, store_log_export_csv
 from services.retention.log_export_task import LogExportLeaseBusyError
 from services.retention.log_export_task_cache import RedisLogExportTasks
+from tasks.log_export_tasks import dispatch_log_export_head
 from tests.helpers.unit.log_export_fixtures import LogExportRedisIo, LogExportStorageIo
 from tests.helpers.unit.model_factories import make_account, make_app, make_conversation, make_message
 
@@ -57,9 +58,9 @@ def export(
         tasks=RedisLogExportTasks(
             redis=log_export_redis.client, task_type=ConversationLogExportTask, key_prefix="conversation_log_export"
         ),
-        dispatch=partial(log_export_adapters.dispatch_log_export_head, redis=log_export_redis.client),
-        store_csv=log_export_adapters.store_log_export_csv,
-        open_csv=log_export_adapters.open_log_export_csv,
+        dispatch=partial(dispatch_log_export_head, redis=log_export_redis.client),
+        store_csv=store_log_export_csv,
+        open_csv=open_log_export_csv,
     )
 
 

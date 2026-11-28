@@ -89,6 +89,7 @@ from repositories.factory import DifyAPIRepositoryFactory
 from repositories.file_grant_repository import FileGrantRepository
 from repositories.human_input_file_upload_repository import SQLAlchemyHumanInputFileUploadRepository
 from repositories.installation_state_repository import InstallationStateRepository
+from repositories.log_export_queries import LogExportNotificationRepository
 from repositories.message_file_preview_repository import MessageFilePreviewQueryRepository
 from repositories.message_repository import MessageRepository
 from repositories.network_access_group_repository import SQLAlchemyNetworkAccessGroupAppRepository
@@ -226,9 +227,10 @@ from services.resource_access_token_service import ResourceAccessTokenService
 from services.retention.agent.log_export_csv import AgentLogCsvWriter
 from services.retention.agent.log_export_service import AgentLogExportService, AgentLogExportTask
 from services.retention.conversation.log_export_service import ConversationLogExportService, ConversationLogExportTask
-from services.retention.log_export_adapters import dispatch_log_export_head, open_log_export_csv, store_log_export_csv
 from services.retention.log_export_command import LogExportCommandService
 from services.retention.log_export_email import LogExportEmailNotifications
+from services.retention.log_export_notification import LogExportNotificationQueries
+from services.retention.log_export_storage import open_log_export_csv, store_log_export_csv
 from services.retention.log_export_task_cache import RedisLogExportTasks
 from services.retention.workflow_run.archive_download_adapters import (
     dispatch_workflow_run_archive_deletion_task,
@@ -276,6 +278,7 @@ from tasks.annotation.disable_annotation_reply_task import disable_annotation_re
 from tasks.annotation.enable_annotation_reply_task import enable_annotation_reply_task
 from tasks.annotation.update_annotation_to_index_task import update_annotation_to_index_task
 from tasks.collect_agent_resources_task import enqueue_agent_resource_collection
+from tasks.log_export_tasks import dispatch_log_export_head
 from tasks.mail_inner_task import enqueue_inner_mail
 from tasks.mail_log_export_task import dispatch_log_export_email
 
@@ -367,6 +370,7 @@ class ApplicationServices:
     conversation_log_exports: ConversationLogExportService
     log_export_command: LogExportCommandService
     log_export_email_notifications: LogExportEmailNotifications
+    log_export_notification_queries: LogExportNotificationQueries
     data_sources: DataSourceServices
     knowledge: KnowledgeServices
     app_scoped_end_users: AppScopedEndUserServices
@@ -740,6 +744,7 @@ def build_application_services(
             agents=agent_log_csv,
         ),
         log_export_email_notifications=LogExportEmailNotifications(redis=redis, dispatch=dispatch_log_export_email),
+        log_export_notification_queries=LogExportNotificationRepository(session_factory=database_client),
         accounts=account_services,
         apps=apps,
         credential_queries=credential_queries,
