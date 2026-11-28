@@ -1,12 +1,15 @@
-import type { ConversationLogExportStatusResponse } from '@dify/contracts/api/console/apps/types.gen'
-import type { DefaultError, UseMutationOptions, UseQueryOptions } from '@tanstack/react-query'
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
+import type {
+  ConversationLogExportStatusResponse,
+  LogExportEmailNotificationPayload,
+  LogExportEmailNotificationResponse,
+} from '@dify/contracts/api/console/apps/types.gen'
+import type {
+  DefaultError,
+  MutationMeta,
+  UseMutationOptions,
+  UseQueryOptions,
 } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from '@/app/notifications'
@@ -29,32 +32,44 @@ function isActive(status: ConversationLogExportStatusResponse['status'] | undefi
   return status === 'pending' || status === 'processing'
 }
 
+type ExportMutationOptions<Data, Input> = (
+  options: Pick<UseMutationOptions<Data, DefaultError, Input>, 'meta' | 'onSuccess'>,
+) => UseMutationOptions<Data, DefaultError, Input>
+
 export function useLogExport<
   Latest extends { task: ConversationLogExportStatusResponse | null },
   Preview,
   Created extends ConversationLogExportStatusResponse,
   Input,
+  TaskParams extends { task_id: string },
 >({
   enabled,
   latestOptions,
   previewOptions,
   createOptions,
   statusOptions,
-  cancelExport,
-  updateEmailNotification,
+  cancelOptions,
+  emailOptions,
+  taskParams,
 }: {
   enabled: boolean
   latestOptions: UseQueryOptions<Latest>
   previewOptions: UseQueryOptions<Preview>
-  createOptions: UseMutationOptions<Created, DefaultError, Input>
+  createOptions: (options: {
+    meta: MutationMeta
+    onSuccess: (task: ConversationLogExportStatusResponse) => void
+  }) => UseMutationOptions<Created, DefaultError, Input>
   statusOptions: (
     taskId: string | undefined,
   ) => UseQueryOptions<ConversationLogExportStatusResponse>
-  cancelExport: (taskId: string) => Promise<ConversationLogExportStatusResponse>
-  updateEmailNotification: (taskId: string, enabled: boolean) => Promise<unknown>
+  cancelOptions: ExportMutationOptions<ConversationLogExportStatusResponse, { params: TaskParams }>
+  emailOptions: ExportMutationOptions<
+    LogExportEmailNotificationResponse,
+    { params: TaskParams; body: LogExportEmailNotificationPayload }
+  >
+  taskParams: (taskId: string) => TaskParams
 }) {
   const { t } = useTranslation(['appLog'])
-  const queryClient = useQueryClient()
   const { data: isEmailSetup } = useSuspenseQuery({
     ...systemFeaturesQueryOptions(),
     select: ({ is_email_setup }) => is_email_setup,
@@ -81,38 +96,24 @@ export function useLogExport<
         ? 1500
         : false,
   })
-  const cancelMutation = useMutation({
-    mutationFn: cancelExport,
-    meta: { errorToast: false },
-    onSuccess: (_task, taskId) => {
-      if (progressTask?.task_id === taskId)
-        setDialog((current) => (current === 'progress' ? null : current))
-      toast.success(t(($) => $['export.canceled'], { ns: 'appLog' }))
-    },
-    onSettled: async (canceledTask, _error, taskId) => {
-      const taskQuery = { queryKey: statusOptions(taskId).queryKey, exact: true }
-      if (canceledTask) {
-        await queryClient.cancelQueries(taskQuery)
-        queryClient.setQueryData(taskQuery.queryKey, canceledTask)
-      }
-      await Promise.all([
-        canceledTask ? undefined : queryClient.invalidateQueries(taskQuery),
-        queryClient.invalidateQueries({ queryKey: latestOptions.queryKey, exact: true }),
-      ])
-    },
-  })
-  const emailMutation = useMutation({
-    mutationFn: ({ taskId, enabled }: { taskId: string; enabled: boolean }) =>
-      updateEmailNotification(taskId, enabled),
-    meta: { errorToast: false },
-    onSettled: async (_result, _error, { taskId }) => {
-      await queryClient.invalidateQueries({ queryKey: statusOptions(taskId).queryKey, exact: true })
-    },
-  })
+  const cancelMutation = useMutation(
+    cancelOptions({
+      meta: { errorToast: false },
+      onSuccess: (_task, { params }) => {
+        if (progressTask?.task_id === params.task_id)
+          setDialog((current) => (current === 'progress' ? null : current))
+        toast.success(t(($) => $['export.canceled'], { ns: 'appLog' }))
+      },
+    }),
+  )
+  const emailMutation = useMutation(emailOptions({ meta: { errorToast: false } }))
   const emailState = progress.data?.email_notification
   const emailStatusLoading = !progress.data || progress.isPlaceholderData
   const emailUpdate = emailMutation.variables
-  const emailUpdateForTask = emailUpdate?.taskId === progressTask?.task_id ? emailUpdate : undefined
+  const emailUpdateForTask =
+    emailUpdate && emailUpdate.params.task_id === progressTask?.task_id
+      ? emailUpdate.body
+      : undefined
   // A failed response can still leave the requested preference in place. A ready
   // export that is still waiting can be queued by retrying the request.
   const emailUpdateFailed =
@@ -131,20 +132,9 @@ export function useLogExport<
     refetchInterval: ({ state }) =>
       state.status !== 'error' && isActive(state.data?.task?.status) ? 1500 : false,
   })
-  const { error, isPending, mutate, reset } = useMutation({
-    ...createOptions,
-    meta: { ...createOptions.meta, errorToast: false },
-    onSettled: async (...args) => {
-      await createOptions.onSettled?.(...args)
-      const [created] = args
-      await queryClient.invalidateQueries({
-        queryKey: latestOptions.queryKey,
-        exact: true,
-        refetchType: created ? 'none' : 'active',
-      })
-      if (created) openProgress(created)
-    },
-  })
+  const { error, isPending, mutate, reset } = useMutation(
+    createOptions({ meta: { errorToast: false }, onSuccess: openProgress }),
+  )
   const latestData = latest.isError ? undefined : latest.data
   const task = latestData?.task
   const taskInProgress = isActive(task?.status)
@@ -171,7 +161,7 @@ export function useLogExport<
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
   })
-  const cancelForTask = cancelMutation.variables === progressTask?.task_id
+  const cancelForTask = cancelMutation.variables?.params.task_id === progressTask?.task_id
   return {
     latest: latestData,
     preview: preview.isError ? undefined : preview.data,
@@ -205,7 +195,7 @@ export function useLogExport<
           ? ({
               pending: cancelForTask && cancelMutation.isPending,
               failed: cancelForTask && cancelMutation.isError,
-              onCancel: () => cancelMutation.mutate(progressTask.task_id),
+              onCancel: () => cancelMutation.mutate({ params: taskParams(progressTask.task_id) }),
             } satisfies LogExportCancellation)
           : undefined,
       emailNotification:
@@ -215,7 +205,10 @@ export function useLogExport<
               pending: emailStatusLoading || (!!emailUpdateForTask && emailMutation.isPending),
               updateFailed: emailUpdateFailed,
               onChange: (enabled: boolean) =>
-                emailMutation.mutate({ taskId: progressTask.task_id, enabled }),
+                emailMutation.mutate({
+                  params: taskParams(progressTask.task_id),
+                  body: { enabled },
+                }),
             } satisfies LogExportEmailNotification)
           : undefined,
       onClose: () => setDialog(null),

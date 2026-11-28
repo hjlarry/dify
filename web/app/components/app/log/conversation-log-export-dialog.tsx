@@ -12,7 +12,7 @@ import { LogFilterSelect } from '@/features/logs/filters/log-filter-select'
 import { logIdentityLabels } from '@/features/logs/filters/log-identity'
 import { LogIdentityField } from '@/features/logs/filters/log-identity-picker'
 import { LogTimeRangePicker } from '@/features/logs/filters/log-time-range-picker'
-import { consoleClient, consoleQuery } from '@/service/console'
+import { consoleQuery } from '@/service/console'
 import { toLogFilters } from './log-filters'
 
 const exportsApi = consoleQuery.apps.byAppId.conversationLogExports
@@ -40,6 +40,7 @@ export function ConversationLogExportDialog({
   const [selection, setSelection] = useState(currentQueryParams)
   const { period, customRange, annotation_status, identities, sort_by } = selection
   const params = { app_id: appId }
+  const taskParams = (taskId: string) => ({ ...params, task_id: taskId })
   const query = toLogFilters(
     { period, customRange, annotation_status, identities, sort_by },
     planState,
@@ -49,19 +50,13 @@ export function ConversationLogExportDialog({
     enabled: planState === 'unrestricted',
     latestOptions: exportsApi.latest.get.queryOptions({ input: { params } }),
     previewOptions: exportsApi.preview.get.queryOptions({ input: { params, query } }),
-    createOptions: exportsApi.post.mutationOptions(),
+    createOptions: exportsApi.post.mutationOptions,
+    cancelOptions: exportsApi.byTaskId.cancel.post.mutationOptions,
+    emailOptions: exportsApi.byTaskId.put.mutationOptions,
+    taskParams,
     statusOptions: (taskId) =>
       exportsApi.byTaskId.get.queryOptions({
-        input: taskId ? { params: { ...params, task_id: taskId } } : skipToken,
-      }),
-    cancelExport: (taskId) =>
-      consoleClient.apps.byAppId.conversationLogExports.byTaskId.cancel.post({
-        params: { ...params, task_id: taskId },
-      }),
-    updateEmailNotification: (taskId, enabled) =>
-      consoleClient.apps.byAppId.conversationLogExports.byTaskId.put({
-        params: { ...params, task_id: taskId },
-        body: { enabled },
+        input: taskId ? { params: taskParams(taskId) } : skipToken,
       }),
   })
   const fileUrl = (taskId: string) =>

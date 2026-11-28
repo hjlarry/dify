@@ -15,7 +15,7 @@ import {
   syncAppWorkflowVersionCaches,
   syncWorkflowDeploymentCaches,
 } from '../workflow-version-cache'
-import { addCreatedKeyToLists, invalidateQueryKeys } from './shared'
+import { addCreatedKeyToLists, invalidateQueryKeys, logExportMutationPolicies } from './shared'
 
 // Readers of an app's published workflow outside the apps domain: evaluation metrics and
 // workflow pickers, roster agents that reference the workflow, and multi-environment deployments.
@@ -25,6 +25,17 @@ const publishedWorkflowReaders = [
   'agent',
   'enterprise.appDeploy',
 ]
+
+function appLogExportPolicies(
+  consoleQuery: ConsoleQuery,
+  resource: 'conversationLogExports' | 'workflowLogExports',
+) {
+  return logExportMutationPolicies<{ app_id: string }>(
+    ({ app_id }) =>
+      consoleQuery.apps.byAppId[resource].latest.get.queryKey({ input: { params: { app_id } } }),
+    (params) => consoleQuery.apps.byAppId[resource].byTaskId.get.queryKey({ input: { params } }),
+  )
+}
 
 export function appPolicies(consoleQuery: ConsoleQuery): ConsolePolicies['apps'] {
   return {
@@ -64,6 +75,8 @@ export function appPolicies(consoleQuery: ConsoleQuery): ConsolePolicies['apps']
       },
     },
     byAppId: {
+      conversationLogExports: appLogExportPolicies(consoleQuery, 'conversationLogExports'),
+      workflowLogExports: appLogExportPolicies(consoleQuery, 'workflowLogExports'),
       workflow: {
         comments: {
           // Collaborators change comments while the editor is closed, and their live

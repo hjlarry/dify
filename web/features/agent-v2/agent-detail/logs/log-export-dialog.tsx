@@ -11,7 +11,7 @@ import { useCloudSandboxPlanStatus } from '@/features/logs/filters/cloud-sandbox
 import { logIdentityLabels } from '@/features/logs/filters/log-identity'
 import { LogIdentityField } from '@/features/logs/filters/log-identity-picker'
 import { LogTimeRangePicker } from '@/features/logs/filters/log-time-range-picker'
-import { consoleClient, consoleQuery } from '@/service/console'
+import { consoleQuery } from '@/service/console'
 import { AgentLogSourcePicker } from './components/source-picker'
 import { agentLogPeriods, toAgentLogQuery } from './log-filters'
 
@@ -37,6 +37,7 @@ export function AgentLogExportDialog({
   const [selection, setSelection] = useState(currentFilters)
   const planState = useCloudSandboxPlanStatus()
   const params = { agent_id: agentId }
+  const taskParams = (taskId: string) => ({ ...params, task_id: taskId })
   const { data: name } = useQuery(
     consoleQuery.agent.byAgentId.get.queryOptions({
       input: { params },
@@ -48,19 +49,13 @@ export function AgentLogExportDialog({
     enabled: planState === 'unrestricted',
     latestOptions: exportsApi.latest.get.queryOptions({ input: { params } }),
     previewOptions: exportsApi.preview.get.queryOptions({ input: { params, query } }),
-    createOptions: exportsApi.post.mutationOptions(),
+    createOptions: exportsApi.post.mutationOptions,
+    cancelOptions: exportsApi.byTaskId.cancel.post.mutationOptions,
+    emailOptions: exportsApi.byTaskId.put.mutationOptions,
+    taskParams,
     statusOptions: (taskId) =>
       exportsApi.byTaskId.get.queryOptions({
-        input: taskId ? { params: { ...params, task_id: taskId } } : skipToken,
-      }),
-    cancelExport: (taskId) =>
-      consoleClient.agent.byAgentId.logExports.byTaskId.cancel.post({
-        params: { ...params, task_id: taskId },
-      }),
-    updateEmailNotification: (taskId, enabled) =>
-      consoleClient.agent.byAgentId.logExports.byTaskId.put({
-        params: { ...params, task_id: taskId },
-        body: { enabled },
+        input: taskId ? { params: taskParams(taskId) } : skipToken,
       }),
   })
   const fileUrl = (taskId: string) => `${API_PREFIX}/agent/${agentId}/log-exports/${taskId}/file`

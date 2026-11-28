@@ -5,7 +5,7 @@ import type {
 import type { InfiniteData } from '@tanstack/react-query'
 import type { ConsolePolicies, ConsoleQuery } from './types'
 import { getHttpErrorStatus, isNotFoundError } from '@/service/http-error'
-import { addCreatedKeyToLists, invalidateQueryKeys } from './shared'
+import { addCreatedKeyToLists, invalidateQueryKeys, logExportMutationPolicies } from './shared'
 
 export function agentPolicies(consoleQuery: ConsoleQuery): ConsolePolicies['agent'] {
   return {
@@ -17,6 +17,14 @@ export function agentPolicies(consoleQuery: ConsoleQuery): ConsolePolicies['agen
       },
     },
     byAgentId: {
+      logExports: logExportMutationPolicies<{ agent_id: string }>(
+        ({ agent_id }) =>
+          consoleQuery.agent.byAgentId.logExports.latest.get.queryKey({
+            input: { params: { agent_id } },
+          }),
+        (params) =>
+          consoleQuery.agent.byAgentId.logExports.byTaskId.get.queryKey({ input: { params } }),
+      ),
       // Tracing reloads run in the background: a saved status is written into the cache, and
       // the provider dialog closes without waiting for the configs to reload.
       trace: {

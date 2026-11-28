@@ -1,5 +1,6 @@
+import type { ConversationLogExportStatusResponse } from '@dify/contracts/api/console/apps/types.gen'
 import type { RouterUtils } from '@orpc/tanstack-query'
-import type { Query, QueryClient, QueryKey } from '@tanstack/react-query'
+import type { MutationFunctionContext, Query, QueryClient, QueryKey } from '@tanstack/react-query'
 import type { ConsoleClient } from '../index'
 
 // Fetches `invalidateQueries` would not restart: a first load (it joins that
@@ -30,6 +31,82 @@ export function invalidateQueryKeys(client: QueryClient, queryKeys: QueryKey[]) 
   return Promise.all(
     queryKeys.map((queryKey) => client.cancelQueries({ queryKey, predicate: isUnrestartedFetch })),
   ).then(() => invalidateEach(client, queryKeys))
+}
+
+export function logExportMutationPolicies<Scope>(
+  latestKey: (params: Scope) => QueryKey,
+  statusKey: (params: Scope & { task_id: string }) => QueryKey,
+) {
+  type ExportInput = { params: Scope }
+  type TaskInput = { params: Scope & { task_id: string } }
+  // Each write owns a small set of export keys; other queries in the domain stay fresh.
+  const meta = { invalidate: false } as const
+
+  return {
+    post: {
+      mutationOptions: {
+        meta,
+        onSuccess: async (
+          _created: unknown,
+          { params }: ExportInput,
+          _result: unknown,
+          { client }: MutationFunctionContext,
+        ) => {
+          const filters = { queryKey: latestKey(params), exact: true }
+          // Progress opens from the response, and the next open of Filters reads latest.
+          // Stop any earlier request so it cannot clear the stale flag.
+          await client.cancelQueries(filters)
+          return client.invalidateQueries({ ...filters, refetchType: 'none' })
+        },
+        onError: (
+          _error: unknown,
+          { params }: ExportInput,
+          _result: unknown,
+          { client }: MutationFunctionContext,
+        ) => {
+          // The task may have been saved even if its create response was lost.
+          return invalidateQueryKeys(client, [latestKey(params)])
+        },
+      },
+    },
+    byTaskId: {
+      cancel: {
+        post: {
+          mutationOptions: {
+            meta,
+            onSettled: async (
+              canceled: ConversationLogExportStatusResponse | undefined,
+              _error: unknown,
+              { params }: TaskInput,
+              _result: unknown,
+              { client }: MutationFunctionContext,
+            ) => {
+              const taskKey = statusKey(params)
+              const latest = latestKey(params)
+              if (!canceled) return invalidateQueryKeys(client, [taskKey, latest])
+
+              await client.cancelQueries({ queryKey: taskKey, exact: true })
+              client.setQueryData(taskKey, canceled)
+              return invalidateQueryKeys(client, [latest])
+            },
+          },
+        },
+      },
+      put: {
+        mutationOptions: {
+          meta,
+          // A lost response can also leave the desired preference in place.
+          onSettled: (
+            _data: unknown,
+            _error: unknown,
+            { params }: TaskInput,
+            _result: unknown,
+            { client }: MutationFunctionContext,
+          ) => invalidateQueryKeys(client, [statusKey(params)]),
+        },
+      },
+    },
+  }
 }
 
 export async function refreshAgentTagCatalogs(
