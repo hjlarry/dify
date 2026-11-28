@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
-from botocore.exceptions import ClientError
+from botocore.exceptions import NoCredentialsError
 from flask import Flask
 from flask.testing import FlaskClient
 from sqlalchemy import Engine, select
@@ -572,7 +572,6 @@ def test_workflow_export_download_signs_cloud_s3_file(
     ttl = export_client.redis.client.ttl(key)
     task = ready_export.model_copy(update={"expires_at": utc_now() + timedelta(minutes=2)})
     export_client.redis.client.setex(key, ttl, task.model_dump_json())
-    export_client.storage.exists.side_effect = export_client.files.__contains__
     url = "https://storage.example.test/workflow-logs.csv?signature=signed"
     export_client.storage.generate_presigned_url.return_value = url
 
@@ -637,7 +636,7 @@ def test_workflow_export_download_requires_login_and_ready_task(export_client: _
     export_client.redis.get.assert_not_called()
     response = export_client.get_file(task_id)
     assert (response.status_code, response.get_json()["code"]) == (409, "workflow_log_export_task_not_ready")
-    export_client.storage.exists.assert_not_called()
+    export_client.storage.generate_presigned_url.assert_not_called()
     export_client.storage.load.assert_not_called()
 
 
@@ -646,8 +645,8 @@ def test_workflow_export_download_reports_missing_file(
     ready_export: WorkflowLogExportTask,
     config_overrides: Callable[..., None],
 ) -> None:
-    config_overrides(STORAGE_TYPE=StorageType.S3)
-    export_client.storage.exists.return_value = False
+    config_overrides(DEPLOYMENT_EDITION=DeploymentEdition.COMMUNITY, STORAGE_TYPE=StorageType.S3)
+    export_client.storage.load.side_effect = FileNotFoundError
 
     response = export_client.get_file(ready_export.task_id)
 
@@ -655,15 +654,16 @@ def test_workflow_export_download_reports_missing_file(
     export_client.storage.generate_presigned_url.assert_not_called()
 
 
-def test_workflow_export_download_propagates_s3_failure(
+def test_workflow_export_download_propagates_signing_failure(
     export_client: _ExportClient,
     ready_export: WorkflowLogExportTask,
     config_overrides: Callable[..., None],
 ) -> None:
     config_overrides(STORAGE_TYPE=StorageType.S3)
-    export_client.storage.exists.side_effect = ClientError({"Error": {"Code": "AccessDenied"}}, "HeadObject")
+    export_client.storage.generate_presigned_url.side_effect = NoCredentialsError
 
     response = export_client.get_file(ready_export.task_id)
 
     assert response.status_code == 500
-    export_client.storage.generate_presigned_url.assert_not_called()
+    export_client.storage.generate_presigned_url.assert_called_once()
+    export_client.storage.load.assert_not_called()

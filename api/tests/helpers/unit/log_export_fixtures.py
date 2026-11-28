@@ -151,7 +151,6 @@ def log_export_redis(monkeypatch: pytest.MonkeyPatch) -> Iterator[LogExportRedis
 
 @dataclass(frozen=True)
 class LogExportStorageIo:
-    exists: MagicMock
     load: MagicMock
     save_from_path: MagicMock
     generate_presigned_url: MagicMock
@@ -161,12 +160,11 @@ class LogExportStorageIo:
 def log_export_storage() -> Iterator[LogExportStorageIo]:
     """Intercept object I/O while the production adapter writes and opens the CSV."""
     with (
-        patch.object(storage, "exists") as exists,
         patch.object(storage, "load") as load,
         patch.object(storage, "save_from_path") as save_from_path,
         patch.object(storage, "generate_presigned_url") as sign,
     ):
-        yield LogExportStorageIo(exists, load, save_from_path, sign)
+        yield LogExportStorageIo(load, save_from_path, sign)
 
 
 @pytest.fixture

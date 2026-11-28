@@ -147,7 +147,7 @@ class LogExportTask[FiltersT](BaseModel):
 def open_ready_log_export_csv[FiltersT](
     task: LogExportTask[FiltersT], *, open_csv: OpenLogExportFile, filename: str
 ) -> LogExportDownload:
-    """Open an admitted, unexpired export after verifying its completed file and bounding the URL lifetime."""
+    """Open an admitted, ready export and bound the URL lifetime by the file's expiry."""
     if task.status is not LogExportStatus.READY or not task.storage_key or task.expires_at is None:
         raise LogExportTaskNotReadyError()
     remaining_seconds = int((task.expires_at - utc_now()).total_seconds())

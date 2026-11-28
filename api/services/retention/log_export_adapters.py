@@ -361,8 +361,6 @@ def store_log_export_csv(storage_key: str, write_csv: Callable[[TextIO], int]) -
 def open_log_export_csv(storage_key: str, expires_in: int, filename: str) -> LogExportDownload:
     """Sign the Cloud S3 download or open the CSV through the configured storage."""
     if SystemFeatureService.use_presigned_log_export_downloads():
-        if not storage.exists(storage_key):
-            raise LogExportFileNotFoundError()
         return storage.generate_presigned_url(
             storage_key, expires_in=expires_in, content_type="text/csv; charset=utf-8", download_filename=filename
         )

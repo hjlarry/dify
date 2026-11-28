@@ -878,7 +878,6 @@ def test_download_conversation_log_export_redirects_to_storage(
         }
     ).model_dump_json()
     log_export_storage.generate_presigned_url.return_value = url
-    log_export_storage.exists.return_value = True
 
     response = harness.get_export_file(task.task_id)
 
@@ -892,7 +891,6 @@ def test_download_conversation_log_export_redirects_to_storage(
         content_type="text/csv; charset=utf-8",
         download_filename=f"conversation-logs-{task.task_id}.csv",
     )
-    log_export_storage.exists.assert_called_once_with(storage_key)
     log_export_storage.load.assert_not_called()
 
 
@@ -975,15 +973,16 @@ def test_download_conversation_log_export_requires_a_ready_task(
     log_export_storage.generate_presigned_url.assert_not_called()
 
 
-@pytest.mark.parametrize("signed", [True, False], ids=["storage-url", "stream"])
 def test_download_conversation_log_export_reports_missing_csv(
     harness: _Harness,
     created_export: tuple[str, ConversationLogExportTask],
     log_export_storage: LogExportStorageIo,
-    signed: bool,
     config_overrides: Callable[..., None],
 ) -> None:
     """Return a scoped file-not-found error before committing any download headers."""
+    config_overrides(DEPLOYMENT_EDITION=DeploymentEdition.COMMUNITY, STORAGE_TYPE=StorageType.S3)
+    with harness.factory.begin() as session:
+        session.add(DifySetup(version="test"))
     _, task = created_export
     harness.redis.get.return_value = task.model_copy(
         update={
@@ -992,11 +991,7 @@ def test_download_conversation_log_export_reports_missing_csv(
             "expires_at": task.created_at + timedelta(days=7),
         }
     ).model_dump_json()
-    if signed:
-        config_overrides(STORAGE_TYPE=StorageType.S3)
-        log_export_storage.exists.return_value = False
-    else:
-        log_export_storage.load.side_effect = FileNotFoundError
+    log_export_storage.load.side_effect = FileNotFoundError
     response = harness.get_export_file(task.task_id)
 
     assert response.status_code == 404

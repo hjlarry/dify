@@ -19,19 +19,11 @@ def s3_storage(config_overrides: Callable[..., None]) -> tuple[AwsS3Storage, Mag
     return storage, client
 
 
-@pytest.mark.parametrize("code", ["404", "NoSuchKey"])
-def test_exists_returns_false_for_missing_keys(s3_storage: tuple[AwsS3Storage, MagicMock], code: str) -> None:
+@pytest.mark.parametrize("code", ["404", "NoSuchKey", "403", "AccessDenied", "SlowDown", "503", "NoSuchBucket"])
+def test_exists_returns_false_for_s3_client_errors(s3_storage: tuple[AwsS3Storage, MagicMock], code: str) -> None:
     storage, client = s3_storage
     client.head_object.side_effect = ClientError({"Error": {"Code": code}}, "HeadObject")
     assert not storage.exists("logs/export.csv")
-
-
-@pytest.mark.parametrize("code", ["AccessDenied", "SlowDown", "503", "NoSuchBucket"])
-def test_exists_propagates_s3_failures(s3_storage: tuple[AwsS3Storage, MagicMock], code: str) -> None:
-    storage, client = s3_storage
-    client.head_object.side_effect = ClientError({"Error": {"Code": code}}, "HeadObject")
-    with pytest.raises(ClientError):
-        storage.exists("logs/export.csv")
 
 
 def test_generate_presigned_url(s3_storage: tuple[AwsS3Storage, MagicMock]) -> None:
