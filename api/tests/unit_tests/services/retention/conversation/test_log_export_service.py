@@ -34,7 +34,12 @@ from repositories.conversation_repository import ConversationRepository
 from services.entities.conversation_entities import ConsoleConversationLogFilters, ConsoleConversationScope
 from services.retention.conversation.log_export_csv import ConversationLogCsvWriter
 from services.retention.log_export_storage import open_log_export_csv, store_log_export_csv
-from services.retention.log_export_task import ConversationLogExportTask, LogExportLeaseBusyError, LogExportTaskService
+from services.retention.log_export_task import (
+    ConversationLogExportTask,
+    LogExportKind,
+    LogExportLeaseBusyError,
+    LogExportTaskService,
+)
 from services.retention.log_export_task_cache import RedisLogExportTasks
 from tasks.log_export_tasks import dispatch_log_export_head
 from tests.helpers.unit.log_export_fixtures import LogExportRedisIo, LogExportStorageIo
@@ -60,7 +65,7 @@ def task_service(
         storage_prefix="conversation-log-exports",
         write_csv=export.write_csv,
         tasks=RedisLogExportTasks(
-            redis=log_export_redis.client, task_type=ConversationLogExportTask, key_prefix="conversation_log_export"
+            redis=log_export_redis.client, task_type=ConversationLogExportTask, export_kind=LogExportKind.CONVERSATION
         ),
         dispatch=partial(dispatch_log_export_head, redis=log_export_redis.client),
         store_csv=store_log_export_csv,
@@ -178,7 +183,7 @@ def test_prepare_export_records_only_claimed_work(
         ),
     )
     store = RedisLogExportTasks(
-        redis=log_export_redis.client, task_type=ConversationLogExportTask, key_prefix="conversation_log_export"
+        redis=log_export_redis.client, task_type=ConversationLogExportTask, export_kind=LogExportKind.CONVERSATION
     )
     store.save(task)
     if outcome == "busy":

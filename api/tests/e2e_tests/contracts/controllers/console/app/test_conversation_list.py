@@ -61,6 +61,7 @@ from services.retention.log_export_storage import open_log_export_csv, store_log
 from services.retention.log_export_task import (
     ConversationLogExportStatus,
     ConversationLogExportTask,
+    LogExportKind,
     LogExportProgress,
     LogExportStage,
     LogExportTaskService,
@@ -230,7 +231,7 @@ def harness(
         conversation_log_exports=LogExportTaskService(
             task_type=ConversationLogExportTask,
             tasks=RedisLogExportTasks(
-                redis=state.redis.client, task_type=ConversationLogExportTask, key_prefix="conversation_log_export"
+                redis=state.redis.client, task_type=ConversationLogExportTask, export_kind=LogExportKind.CONVERSATION
             ),
             dispatch=state.dispatch,
             storage_prefix="conversation-log-exports",

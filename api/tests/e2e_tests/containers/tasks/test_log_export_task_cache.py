@@ -47,7 +47,7 @@ def test_replayed_save_preserves_the_admitted_task(application_redis: RedisClien
 def test_replayed_claim_recognizes_only_its_own_token(application_redis: RedisClientWrapper) -> None:
     """Only the command that acquired the lease can replay its claim."""
     store = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=application_redis, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     task = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="admin", filters="all")
     store.save(task)
@@ -87,10 +87,10 @@ def test_replayed_claim_recognizes_only_its_own_token(application_redis: RedisCl
 def test_export_admission_deduplicates_without_capping_the_workspace(application_redis: RedisClientWrapper) -> None:
     """Admit one submission per app and requester, with no quota on distinct submissions."""
     conversation = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=application_redis, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     workflow = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[str], key_prefix="workflow_log_export"
+        redis=application_redis, task_type=LogExportTask[str], export_kind=LogExportKind.WORKFLOW
     )
 
     def submit(_: int) -> LogExportTask[str] | None:
@@ -117,10 +117,10 @@ def test_export_admission_deduplicates_without_capping_the_workspace(application
 def test_exports_run_in_workspace_order_across_app_types(application_redis: RedisClientWrapper) -> None:
     """Run the head task only, while allowing another workspace to run in parallel."""
     conversation = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=application_redis, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     workflow = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[str], key_prefix="workflow_log_export"
+        redis=application_redis, task_type=LogExportTask[str], export_kind=LogExportKind.WORKFLOW
     )
     first = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="admin", filters="all")
     second = LogExportTask[str].pending(tenant_id="tenant", app_id="workflow", requested_by="owner", filters="all")
@@ -164,7 +164,7 @@ def test_unpublished_head_can_be_dispatched_after_its_reservation_expires(
 ) -> None:
     """Recover a task whose publish was lost, then leave it alone while a worker owns its lease."""
     store = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=application_redis, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     task = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="admin", filters="all")
     store.save(task)
@@ -183,7 +183,7 @@ def test_unpublished_head_can_be_dispatched_after_its_reservation_expires(
 def test_existing_exports_drain_before_new_queue_dispatch(application_redis: RedisClientWrapper) -> None:
     """Finish a pre-queue submission before dispatching the first new workspace job."""
     store = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=application_redis, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     legacy = LogExportTask[str].pending(tenant_id="tenant", app_id="legacy", requested_by="admin", filters="all")
     expires_at = utc_now() + timedelta(days=1)
@@ -216,7 +216,7 @@ def test_existing_exports_drain_before_new_queue_dispatch(application_redis: Red
 def test_cancel_removes_only_waiting_exports_and_releases_their_position(application_redis: RedisClientWrapper) -> None:
     """Remove a queued task atomically and reject a cancellation after a worker has claimed it."""
     store = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=application_redis, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     head = LogExportTask[str].pending(tenant_id="tenant", app_id="head", requested_by="admin", filters="all")
     waiting = LogExportTask[str].pending(tenant_id="tenant", app_id="waiting", requested_by="admin", filters="all")
@@ -251,7 +251,7 @@ def test_cancel_removes_only_waiting_exports_and_releases_their_position(applica
 def test_expired_lease_is_reclaimed_and_old_attempt_cannot_publish(application_redis: RedisClientWrapper) -> None:
     """Allow recovery after lease expiry and fence old attempts from the cache and capacity slot."""
     store = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=application_redis, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     task = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="admin", filters="all")
     store.save(task)
@@ -278,7 +278,7 @@ def test_expired_lease_is_reclaimed_and_old_attempt_cannot_publish(application_r
 def test_finish_requires_the_lease_token_for_the_same_attempt(application_redis: RedisClientWrapper) -> None:
     """Reject publication with a foreign token even when the state and attempt match."""
     store = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=application_redis, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     task = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="admin", filters="all")
     store.save(task)
@@ -296,7 +296,7 @@ def test_finish_requires_the_lease_token_for_the_same_attempt(application_redis:
 def test_ready_export_extends_task_and_latest_expiration(application_redis: RedisClientWrapper) -> None:
     """Publish the seven-day download window at completion and keep the latest pointer for that window."""
     store = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=application_redis, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     task = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="admin", filters="all")
     store.save(task)
@@ -337,7 +337,7 @@ def test_ready_export_preserves_other_latest_state(
 ) -> None:
     """Finish an owned export without replacing or extending the latest pointer for another task."""
     store = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=application_redis, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     task = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="admin", filters="all")
     store.save(task)
@@ -360,7 +360,7 @@ def test_ready_export_preserves_other_latest_state(
 def test_failed_export_sets_task_and_latest_expiration(application_redis: RedisClientWrapper) -> None:
     """Start one day of terminal retention on failure and release the worker lease."""
     store = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=application_redis, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     task = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="admin", filters="all")
     store.save(task)
@@ -387,7 +387,7 @@ def test_failed_export_sets_task_and_latest_expiration(application_redis: RedisC
 def test_progress_advances_only_for_the_owned_attempt(application_redis: RedisClientWrapper) -> None:
     """Fence progress writes, preserve the active task, and reset progress on reclaim."""
     store = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[tuple[str, ...]], key_prefix="conversation_log_export"
+        redis=application_redis, task_type=LogExportTask[tuple[str, ...]], export_kind=LogExportKind.CONVERSATION
     )
     task = LogExportTask[tuple[str, ...]].pending(tenant_id="tenant", app_id="app", requested_by="admin", filters=())
     task_key = f"conversation_log_export:{{tenant}}:app:{task.task_id}"
@@ -428,7 +428,7 @@ def test_progress_advances_only_for_the_owned_attempt(application_redis: RedisCl
 def test_repeated_worker_loss_stops_after_three_attempts(application_redis: RedisClientWrapper) -> None:
     """Terminalize repeatedly interrupted exports and free their workspace capacity."""
     store = RedisLogExportTasks(
-        redis=application_redis, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=application_redis, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     task = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="admin", filters="all")
     store.save(task)

@@ -34,10 +34,15 @@ from models import Account, Tenant, TenantAccountJoin, WorkflowAppLog, WorkflowR
 from models.enums import CreatorUserRole, WorkflowRunTriggeredFrom
 from models.model import AppMode, DifySetup
 from models.workflow import WorkflowAppLogCreatedFrom, WorkflowType
-from repositories.log_export_queries import LogExportNotificationRepository
+from repositories.log_export_notification_repository import LogExportNotificationRepository
 from repositories.workflow_app_log_query_repository import WorkflowAppLogQueryRepository
 from services.retention.log_export_storage import open_log_export_csv, store_log_export_csv
-from services.retention.log_export_task import LogExportStatus, LogExportTaskService, WorkflowLogExportTask
+from services.retention.log_export_task import (
+    LogExportKind,
+    LogExportStatus,
+    LogExportTaskService,
+    WorkflowLogExportTask,
+)
 from services.retention.log_export_task_cache import RedisLogExportTasks
 from services.retention.workflow_run.log_export_csv import WorkflowLogCsvWriter
 from services.workflow_app_log_contracts import WorkflowLogExportFilters
@@ -185,7 +190,7 @@ def export_client(
         workflow_log_exports=LogExportTaskService(
             task_type=WorkflowLogExportTask,
             tasks=RedisLogExportTasks(
-                redis=redis.client, task_type=WorkflowLogExportTask, key_prefix="workflow_log_export"
+                redis=redis.client, task_type=WorkflowLogExportTask, export_kind=LogExportKind.WORKFLOW
             ),
             dispatch=partial(dispatch_log_export_head, redis=redis.client),
             storage_prefix="workflow-log-exports",

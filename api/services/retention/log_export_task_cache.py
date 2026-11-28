@@ -172,6 +172,23 @@ return 1
 """
 
 
+def _task_key_prefix(export_kind: LogExportKind) -> str:
+    return f"{export_kind.value}_log_export"
+
+
+_EXPORT_KINDS_BY_PREFIX = {_task_key_prefix(kind): kind for kind in LogExportKind}
+
+
+def log_export_task_key(*, tenant_id: str, app_id: str, task_id: str, export_kind: LogExportKind) -> str:
+    """Build the persisted task key, hash-tagged to the workspace's Redis Cluster slot."""
+    return f"{_task_key_prefix(export_kind)}:{{{tenant_id}}}:{app_id}:{task_id}"
+
+
+def log_export_email_key(task_key: str) -> str:
+    """Derive the email preference key in the same cluster slot as its task."""
+    return f"{task_key}:email"
+
+
 def _queue_key(tenant_id: str) -> str:
     """Use the same cluster hash tag as the task, lease, and active requester index."""
     return f"{_LOG_EXPORT_QUEUE_KEY_PREFIX}{{{tenant_id}}}"
@@ -199,7 +216,7 @@ def reserve_log_export_dispatch(redis: "RedisClientWrapper", tenant_id: str) -> 
         entry = raw.decode() if isinstance(raw, bytes) else raw
         task_key, requester = entry.rsplit(":", 1)
         prefix, _, app_id, task_id = task_key.split(":", 3)
-        kind = LogExportKind(prefix.removesuffix("_log_export"))
+        kind = _EXPORT_KINDS_BY_PREFIX[prefix]
         result = reserve(
             keys=[queue, task_key, f"{task_key}:lease", f"{task_key}:dispatch", _active_key(tenant_id)],
             args=[entry, f"{app_id}:{requester}", _DISPATCH_LEASE_SECONDS],
@@ -233,20 +250,20 @@ class RedisLogExportTasks[FiltersT]:
     """Scope temporary export tasks to their application family, workspace and app."""
 
     def __init__(
-        self, *, redis: "RedisClientWrapper", task_type: type[LogExportTask[FiltersT]], key_prefix: str
+        self, *, redis: "RedisClientWrapper", task_type: type[LogExportTask[FiltersT]], export_kind: LogExportKind
     ) -> None:
-        """Bind the Redis client and the model and key prefix for one application family."""
+        """Bind the Redis client and task model for one export kind."""
         self._redis = redis
         self._task_type = task_type
-        self._key_prefix = key_prefix
+        self._export_kind = export_kind
 
     def _key(self, *, tenant_id: str, app_id: str, task_id: str) -> str:
         """Keep task and capacity keys for one workspace in the same Redis Cluster slot."""
-        return f"{self._key_prefix}:{{{tenant_id}}}:{app_id}:{task_id}"
+        return log_export_task_key(tenant_id=tenant_id, app_id=app_id, task_id=task_id, export_kind=self._export_kind)
 
     def _latest_key(self, *, tenant_id: str, app_id: str, requested_by: str) -> str:
         """Locate the latest task ID for one requester in the app."""
-        return f"{self._key_prefix}_latest:{{{tenant_id}}}:{app_id}:{requested_by}"
+        return f"{_task_key_prefix(self._export_kind)}_latest:{{{tenant_id}}}:{app_id}:{requested_by}"
 
     def _execution_keys(self, task: LogExportTask[FiltersT]) -> tuple[str, str, str, str]:
         """Locate task state and concurrency keys in the same cluster slot."""
@@ -338,7 +355,7 @@ class RedisLogExportTasks[FiltersT]:
         ]
         with _translate_transient_redis_errors():
             claim = self._redis.register_script(_CLAIM_LOG_EXPORT_TASK)
-            result = claim(keys=(key, lease, active, queue, latest, f"{key}:email"), args=args)
+            result = claim(keys=(key, lease, active, queue, latest, log_export_email_key(key)), args=args)
         if result == -1:
             raise LogExportLeaseBusyError("The log export claim is busy or has changed.")
         return updated if result else None
@@ -384,7 +401,9 @@ class RedisLogExportTasks[FiltersT]:
         latest_key = self._latest_key(tenant_id=task.tenant_id, app_id=task.app_id, requested_by=task.requested_by)
         with _translate_transient_redis_errors():
             finish = self._redis.register_script(_FINISH_LOG_EXPORT_TASK)
-            result = finish(keys=(task_key, lease_key, active_key, latest_key, f"{task_key}:email", queue), args=args)
+            result = finish(
+                keys=(task_key, lease_key, active_key, latest_key, log_export_email_key(task_key), queue), args=args
+            )
         if result == 2:
             return self.get(tenant_id=task.tenant_id, app_id=task.app_id, task_id=task.task_id)
         return updated if result else None

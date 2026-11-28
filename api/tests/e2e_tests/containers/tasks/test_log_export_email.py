@@ -54,9 +54,7 @@ class _Export:
         self.task = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="owner", filters="all")
         self.scope = _Scope(tenant_id="tenant", app_id="app", task_id=self.task.task_id, export_kind=kind)
         self.keys = LogExportEmailNotifications._keys("tenant", "app", self.task.task_id, kind)
-        self.tasks = RedisLogExportTasks(
-            redis=redis, task_type=LogExportTask[str], key_prefix=f"{kind.value}_log_export"
-        )
+        self.tasks = RedisLogExportTasks(redis=redis, task_type=LogExportTask[str], export_kind=kind)
         self.tasks.save(self.task)
         self.dispatch = _RecordingDispatch()
         self.emails = LogExportEmailNotifications(redis=redis, dispatch=self.dispatch)

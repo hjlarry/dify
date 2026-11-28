@@ -58,10 +58,6 @@ from services.entities.conversation_entities import (
 )
 from services.errors.base import NoPermissionError
 from services.feature_service import FeatureService
-from services.retention.conversation.log_export_csv import (
-    UnsupportedConversationLogExportModeError,
-    require_conversation_log_export_mode,
-)
 from services.retention.log_export_email import LogExportEmailState
 from services.retention.log_export_task import (
     ConversationLogExportStatus,
@@ -227,7 +223,6 @@ class ConversationLogExportApi(Resource):
             ) from None
         filters = _log_export_filters(payload, scope.timezone)
         try:
-            require_conversation_log_export_mode(scope.app_mode)
             task = application_services().conversation_log_exports.create_task(
                 tenant_id=scope.tenant_id,
                 app_id=scope.app_id,
@@ -236,8 +231,6 @@ class ConversationLogExportApi(Resource):
                 identity_labels=payload.identity_labels,
                 estimated_rows=payload.estimated_rows,
             )
-        except UnsupportedConversationLogExportModeError as exc:
-            raise AppNotFoundError(str(exc)) from exc
         except LogExportLimitReachedError as exc:
             raise LogExportLimitReachedHTTPError() from exc
         return dump_response(ConversationLogExportTaskResponse, task), HTTPStatus.ACCEPTED

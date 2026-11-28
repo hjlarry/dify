@@ -34,6 +34,7 @@ from services.retention.log_export_notification import (
 from services.retention.log_export_storage import store_log_export_csv
 from services.retention.log_export_task import (
     LogExportIdentityLabel,
+    LogExportKind,
     LogExportLeaseBusyError,
     LogExportProgress,
     LogExportStage,
@@ -78,7 +79,7 @@ def test_worker_records_total_rows_before_upload(
 ) -> None:
     """Expose the exact row count during upload and keep it on the completed task."""
     tasks = RedisLogExportTasks(
-        redis=log_export_redis.client, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=log_export_redis.client, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     task = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="owner", filters="all")
     tasks.save(task)
@@ -179,7 +180,7 @@ def test_final_renewal_error_respects_retry_policy(
 ) -> None:
     """Keep temporary failures reclaimable and preserve permanent Redis errors."""
     tasks = RedisLogExportTasks(
-        redis=log_export_redis.client, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=log_export_redis.client, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     task = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="owner", filters="all")
     tasks.save(task)
@@ -207,7 +208,7 @@ def test_failure_recording_error_preserves_permanent_renewal_error(
 ) -> None:
     """Keep the renewal error when Redis also refuses to record the failure."""
     tasks = RedisLogExportTasks(
-        redis=log_export_redis.client, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=log_export_redis.client, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     task = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="owner", filters="all")
     tasks.save(task)
@@ -229,7 +230,7 @@ def test_storage_failure_retries_when_recording_failed_hits_transient_redis_erro
 ) -> None:
     """Surface the retryable state write error after an upload failure."""
     tasks = RedisLogExportTasks(
-        redis=log_export_redis.client, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=log_export_redis.client, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     task = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="owner", filters="all")
     tasks.save(task)
@@ -253,7 +254,7 @@ def test_storage_failure_retries_when_recording_failed_hits_transient_redis_erro
 def test_dispatch_failure_leaves_pending_export_available_for_recovery(log_export_redis: LogExportRedisIo) -> None:
     """Persist the task before attempting delivery so recovery can republish after a broker error."""
     tasks = RedisLogExportTasks(
-        redis=log_export_redis.client, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=log_export_redis.client, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     task = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="owner", filters="all")
     dispatch_error = RuntimeError("Broker unavailable")
@@ -273,7 +274,7 @@ def test_dispatch_failure_leaves_pending_export_available_for_recovery(log_expor
 def test_create_dispatches_only_the_head_export_in_a_workspace(log_export_redis: LogExportRedisIo) -> None:
     """Put later submissions in the workspace queue without publishing them to the broker."""
     tasks = RedisLogExportTasks(
-        redis=log_export_redis.client, task_type=LogExportTask[str], key_prefix="conversation_log_export"
+        redis=log_export_redis.client, task_type=LogExportTask[str], export_kind=LogExportKind.CONVERSATION
     )
     first = LogExportTask[str].pending(tenant_id="tenant", app_id="app", requested_by="owner", filters="all")
     waiting = LogExportTask[str].pending(tenant_id="tenant", app_id="other", requested_by="owner", filters="all")

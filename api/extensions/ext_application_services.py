@@ -89,7 +89,7 @@ from repositories.factory import DifyAPIRepositoryFactory
 from repositories.file_grant_repository import FileGrantRepository
 from repositories.human_input_file_upload_repository import SQLAlchemyHumanInputFileUploadRepository
 from repositories.installation_state_repository import InstallationStateRepository
-from repositories.log_export_queries import LogExportNotificationRepository
+from repositories.log_export_notification_repository import LogExportNotificationRepository
 from repositories.message_file_preview_repository import MessageFilePreviewQueryRepository
 from repositories.message_repository import MessageRepository
 from repositories.network_access_group_repository import SQLAlchemyNetworkAccessGroupAppRepository
@@ -234,6 +234,7 @@ from services.retention.log_export_storage import open_log_export_csv, store_log
 from services.retention.log_export_task import (
     AgentLogExportTask,
     ConversationLogExportTask,
+    LogExportKind,
     LogExportTaskService,
     WorkflowLogExportTask,
 )
@@ -704,7 +705,7 @@ def build_application_services(
     conversation_log_exports = LogExportTaskService(
         task_type=ConversationLogExportTask,
         tasks=RedisLogExportTasks(
-            redis=redis, task_type=ConversationLogExportTask, key_prefix="conversation_log_export"
+            redis=redis, task_type=ConversationLogExportTask, export_kind=LogExportKind.CONVERSATION
         ),
         dispatch=partial(dispatch_log_export_head, redis=redis),
         storage_prefix="conversation-log-exports",
@@ -768,7 +769,7 @@ def build_application_services(
         agent_observability=agent_observability,
         agent_log_exports=LogExportTaskService(
             task_type=AgentLogExportTask,
-            tasks=RedisLogExportTasks(redis=redis, task_type=AgentLogExportTask, key_prefix="agent_log_export"),
+            tasks=RedisLogExportTasks(redis=redis, task_type=AgentLogExportTask, export_kind=LogExportKind.AGENT),
             dispatch=partial(dispatch_log_export_head, redis=redis),
             storage_prefix="agent-log-exports",
             store_csv=store_log_export_csv,
@@ -980,7 +981,7 @@ def build_application_services(
         workflow_app_logs=workflow_app_logs,
         workflow_log_exports=LogExportTaskService(
             task_type=WorkflowLogExportTask,
-            tasks=RedisLogExportTasks(redis=redis, task_type=WorkflowLogExportTask, key_prefix="workflow_log_export"),
+            tasks=RedisLogExportTasks(redis=redis, task_type=WorkflowLogExportTask, export_kind=LogExportKind.WORKFLOW),
             dispatch=partial(dispatch_log_export_head, redis=redis),
             storage_prefix="workflow-log-exports",
             store_csv=store_log_export_csv,

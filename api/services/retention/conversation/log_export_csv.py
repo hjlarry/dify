@@ -33,13 +33,7 @@ _LOG_CSV_LAYOUTS = {
 
 
 class UnsupportedConversationLogExportModeError(ValueError):
-    """The admitted app has no conversation log CSV export."""
-
-
-def require_conversation_log_export_mode(app_mode: str) -> None:
-    """Raise before creating a task or writing a CSV for an app mode without a layout."""
-    if app_mode not in _LOG_CSV_LAYOUTS:
-        raise UnsupportedConversationLogExportModeError("App mode does not support conversation log CSV exports.")
+    """The requested app mode has no conversation log CSV layout."""
 
 
 class ConversationLogCsvSource(Protocol):
@@ -91,8 +85,10 @@ class ConversationLogCsvWriter:
         Reject unsupported modes before writing. The caller owns the UTF-8 stream and
         publishes it after success.
         """
-        require_conversation_log_export_mode(scope.app_mode)
-        app_type, columns = _LOG_CSV_LAYOUTS[scope.app_mode]
+        layout = _LOG_CSV_LAYOUTS.get(scope.app_mode)
+        if layout is None:
+            raise UnsupportedConversationLogExportModeError("App mode does not support conversation log CSV exports.")
+        app_type, columns = layout
 
         rows = self._logs.iter_console_log_export_rows(scope=scope, filters=filters)
         return write_log_export_csv(

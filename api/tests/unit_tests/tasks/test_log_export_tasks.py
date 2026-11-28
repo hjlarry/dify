@@ -10,7 +10,12 @@ from redis.exceptions import AuthenticationError, NoPermissionError, ResponseErr
 from extensions import ext_application_services
 from extensions.ext_application_services import application_services, init_app
 from services.entities.conversation_entities import ConsoleConversationLogFilters
-from services.retention.log_export_task import ConversationLogExportTask, LogExportLeaseBusyError, LogExportStatus
+from services.retention.log_export_task import (
+    ConversationLogExportTask,
+    LogExportKind,
+    LogExportLeaseBusyError,
+    LogExportStatus,
+)
 from services.retention.log_export_task_cache import RedisLogExportTasks
 from tasks import log_export_tasks
 from tests.helpers.unit.log_export_fixtures import LogExportRedisIo
@@ -42,7 +47,7 @@ def test_conversation_log_export_uses_shared_task(
     init_app(app)
     monkeypatch.setattr(log_export_tasks, "redis_client", log_export_redis.client)
     store = RedisLogExportTasks(
-        redis=log_export_redis.client, task_type=ConversationLogExportTask, key_prefix="conversation_log_export"
+        redis=log_export_redis.client, task_type=ConversationLogExportTask, export_kind=LogExportKind.CONVERSATION
     )
     store.save(task)
 
@@ -86,7 +91,7 @@ def test_worker_retries_only_transient_redis_failures(
     """Exercise Celery retry through the real task and state adapter before export begins."""
     task = conversation_export_task
     store = RedisLogExportTasks(
-        redis=log_export_redis.client, task_type=ConversationLogExportTask, key_prefix="conversation_log_export"
+        redis=log_export_redis.client, task_type=ConversationLogExportTask, export_kind=LogExportKind.CONVERSATION
     )
     store.save(task)
     error = redis_error_type("Redis operation failed")
@@ -128,7 +133,7 @@ def test_worker_dispatches_next_workspace_export_after_failure(
     second = first.model_copy(update={"task_id": "next", "app_id": "other-app"})
     monkeypatch.setattr(log_export_tasks, "redis_client", log_export_redis.client)
     store = RedisLogExportTasks(
-        redis=log_export_redis.client, task_type=ConversationLogExportTask, key_prefix="conversation_log_export"
+        redis=log_export_redis.client, task_type=ConversationLogExportTask, export_kind=LogExportKind.CONVERSATION
     )
     assert store.save(first)
     assert not store.save(second)

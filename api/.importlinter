@@ -1151,6 +1151,7 @@ name = Console conversation controllers reach persistence through the compositio
 type = forbidden
 source_modules =
     controllers.console.app.conversation
+    controllers.console.app.conversation_log_export
 forbidden_modules =
     extensions.ext_database
     models

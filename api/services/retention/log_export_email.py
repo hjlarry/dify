@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Protocol
 from uuid import uuid4
 
 from services.retention.log_export_task import LogExportKind, LogExportTaskNotFoundError
+from services.retention.log_export_task_cache import log_export_email_key, log_export_task_key
 
 if TYPE_CHECKING:
     from extensions.ext_redis import RedisClientWrapper
@@ -124,8 +125,8 @@ class LogExportEmailNotifications:
 
     @staticmethod
     def _keys(tenant_id: str, app_id: str, task_id: str, export_kind: LogExportKind) -> tuple[str, str]:
-        task_key = f"{export_kind.value}_log_export:{{{tenant_id}}}:{app_id}:{task_id}"
-        return task_key, f"{task_key}:email"
+        task_key = log_export_task_key(tenant_id=tenant_id, app_id=app_id, task_id=task_id, export_kind=export_kind)
+        return task_key, log_export_email_key(task_key)
 
     def get_state(
         self, *, tenant_id: str, app_id: str, task_id: str, export_kind: LogExportKind
