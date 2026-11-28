@@ -25,8 +25,6 @@ export type LogExportEmailNotification = {
   onChange: (enabled: boolean) => void
 }
 
-export const logExportRequest = { context: { silent: true } } as const
-
 function isActive(status: ConversationLogExportStatusResponse['status'] | undefined) {
   return status === 'pending' || status === 'processing'
 }
@@ -68,8 +66,10 @@ export function useLogExport<
     setProgressTask(task)
     setDialog('progress')
   }
+  const progressOptions = statusOptions(progressTask?.task_id)
   const progress = useQuery({
-    ...statusOptions(progressTask?.task_id),
+    ...progressOptions,
+    meta: { ...progressOptions.meta, errorToast: false },
     enabled: enabled && dialog === 'progress',
     placeholderData: progressTask,
     staleTime: 0,
@@ -83,6 +83,7 @@ export function useLogExport<
   })
   const cancelMutation = useMutation({
     mutationFn: cancelExport,
+    meta: { errorToast: false },
     onSuccess: (_task, taskId) => {
       if (progressTask?.task_id === taskId)
         setDialog((current) => (current === 'progress' ? null : current))
@@ -103,6 +104,7 @@ export function useLogExport<
   const emailMutation = useMutation({
     mutationFn: ({ taskId, enabled }: { taskId: string; enabled: boolean }) =>
       updateEmailNotification(taskId, enabled),
+    meta: { errorToast: false },
     onSettled: async (_result, _error, { taskId }) => {
       await queryClient.invalidateQueries({ queryKey: statusOptions(taskId).queryKey, exact: true })
     },
@@ -122,6 +124,7 @@ export function useLogExport<
       : emailState === 'waiting')
   const latest = useQuery({
     ...latestOptions,
+    meta: { ...latestOptions.meta, errorToast: false },
     enabled: enabled && dialog === 'filters',
     staleTime: 0,
     retry: 1,
@@ -130,6 +133,7 @@ export function useLogExport<
   })
   const { error, isPending, mutate, reset } = useMutation({
     ...createOptions,
+    meta: { ...createOptions.meta, errorToast: false },
     onSettled: async (...args) => {
       await createOptions.onSettled?.(...args)
       const [created] = args
@@ -160,6 +164,7 @@ export function useLogExport<
           : 'selecting'
   const preview = useQuery({
     ...previewOptions,
+    meta: { ...previewOptions.meta, errorToast: false },
     enabled: enabled && dialog === 'filters' && phase === 'selecting',
     staleTime: 0,
     retry: false,

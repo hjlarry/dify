@@ -10,7 +10,7 @@ import { LogExportDialog, LogExportSelect } from '@/features/log-export/dialog'
 import { logIdentityLabels } from '@/features/log-export/log-identity'
 import { LogIdentityField } from '@/features/log-export/log-identity-picker'
 import { LogTimeRangePicker } from '@/features/log-export/log-time-range-picker'
-import { logExportRequest, useLogExport } from '@/features/log-export/use-log-export'
+import { useLogExport } from '@/features/log-export/use-log-export'
 import { consoleClient, consoleQuery } from '@/service/console'
 import { toLogFilters } from './log-filters'
 
@@ -46,27 +46,22 @@ export function ConversationLogExportDialog({
   )
   const { create, latest, preview, dialogState, progressState, onViewProgress } = useLogExport({
     enabled: planState === 'unrestricted',
-    latestOptions: exportsApi.latest.get.queryOptions({ ...logExportRequest, input: { params } }),
-    previewOptions: exportsApi.preview.get.queryOptions({
-      ...logExportRequest,
-      input: { params, query },
-    }),
-    createOptions: exportsApi.post.mutationOptions(logExportRequest),
+    latestOptions: exportsApi.latest.get.queryOptions({ input: { params } }),
+    previewOptions: exportsApi.preview.get.queryOptions({ input: { params, query } }),
+    createOptions: exportsApi.post.mutationOptions(),
     statusOptions: (taskId) =>
       exportsApi.byTaskId.get.queryOptions({
-        ...logExportRequest,
         input: taskId ? { params: { ...params, task_id: taskId } } : skipToken,
       }),
     cancelExport: (taskId) =>
-      consoleClient.apps.byAppId.conversationLogExports.byTaskId.cancel.post(
-        { params: { ...params, task_id: taskId } },
-        logExportRequest,
-      ),
+      consoleClient.apps.byAppId.conversationLogExports.byTaskId.cancel.post({
+        params: { ...params, task_id: taskId },
+      }),
     updateEmailNotification: (taskId, enabled) =>
-      consoleClient.apps.byAppId.conversationLogExports.byTaskId.put(
-        { params: { ...params, task_id: taskId }, body: { enabled } },
-        logExportRequest,
-      ),
+      consoleClient.apps.byAppId.conversationLogExports.byTaskId.put({
+        params: { ...params, task_id: taskId },
+        body: { enabled },
+      }),
   })
   const fileUrl = (taskId: string) =>
     `${API_PREFIX}/apps/${appId}/conversation-log-exports/${taskId}/file`
