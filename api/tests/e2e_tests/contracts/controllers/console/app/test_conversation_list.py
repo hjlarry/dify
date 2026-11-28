@@ -21,11 +21,13 @@ from werkzeug.test import TestResponse
 from constants import COOKIE_NAME_CSRF_TOKEN, HEADER_NAME_CSRF_TOKEN
 from controllers.common.rbac import RBAC_CHECKS_ATTR, PlainApp, RBACCheck, RBACPermission
 from controllers.console import wraps as console_wraps
-from controllers.console.app import conversation as conversation_module
+from controllers.console.app import conversation_log_export as conversation_log_export_controller
 from controllers.console.app.conversation import (
     ChatConversationApi,
     ChatConversationIdentityOptionsApi,
     CompletionConversationApi,
+)
+from controllers.console.app.conversation_log_export import (
     ConversationLogExportApi,
     ConversationLogExportCancelApi,
     ConversationLogExportFileApi,
@@ -254,7 +256,7 @@ def harness(
 @pytest.fixture
 def created_export(harness: _Harness, monkeypatch: pytest.MonkeyPatch) -> tuple[str, ConversationLogExportTask]:
     """Create an admitted export and expose its persisted Redis key and task."""
-    monkeypatch.setattr(conversation_module, "is_cloud_edition_billing_paid_plan", lambda _: True)
+    monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _: True)
     response = harness.post_export({"keyword": "internal filter"})
     assert response.status_code == 202
     key = harness.task_key(response.get_json()["task_id"])
@@ -332,7 +334,7 @@ def test_conversation_export_preview_counts_all_messages_in_matched_conversation
     expected_messages: int,
 ) -> None:
     harness.mode(mode)
-    monkeypatch.setattr(conversation_module, "is_cloud_edition_billing_paid_plan", lambda _: True)
+    monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _: True)
     matched = _conversation(harness, query="Needle", created_at=_CREATED_AT - timedelta(days=1))
     second = _conversation(harness, query="Needle", updated_at=_CREATED_AT.replace(second=59))
     debug = _conversation(harness, query="Needle", invoke_from="debugger")
@@ -389,7 +391,7 @@ def test_list_and_export_preview_filter_by_selected_identities(
     harness: _Harness, monkeypatch: pytest.MonkeyPatch, kind: _Kind, mode: AppMode
 ) -> None:
     harness.mode(mode)
-    monkeypatch.setattr(conversation_module, "is_cloud_edition_billing_paid_plan", lambda _: True)
+    monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _: True)
     selected_user_ids = [str(uuid4()), str(uuid4())]
     first, second = _conversation(harness), _conversation(harness)
     account = _conversation(harness, invoke_from="explore")
@@ -506,7 +508,7 @@ def test_app_logs_support_identity_search_preview_and_export(
 ) -> None:
     """Use the same scoped endpoints for each exportable app mode."""
     harness.mode(mode)
-    monkeypatch.setattr(conversation_module, "is_cloud_edition_billing_paid_plan", lambda _: True)
+    monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _: True)
     log = _conversation(harness)
     _conversation(harness)
     end_user_id = str(uuid4())
@@ -536,7 +538,7 @@ def test_app_logs_support_identity_search_preview_and_export(
 
 @pytest.mark.parametrize("kind", ["chat", "completion", "export-preview"])
 def test_log_identity_filters_require_uuids(harness: _Harness, monkeypatch: pytest.MonkeyPatch, kind: _Kind) -> None:
-    monkeypatch.setattr(conversation_module, "is_cloud_edition_billing_paid_plan", lambda _: True)
+    monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _: True)
     if kind == "completion":
         harness.mode(AppMode.COMPLETION)
     response = harness.get(kind, query={"end_user_ids": ["invalid-user-id"]})
@@ -582,7 +584,7 @@ def test_conversation_export_checks_role_and_mode_before_billing(
         pytest.fail("Role and app mode must be checked before billing.")
 
     monkeypatch.setattr("controllers.console.flask_admission.enforce_rbac_checks", allow_logs)
-    monkeypatch.setattr(conversation_module, "is_cloud_edition_billing_paid_plan", unexpected_billing)
+    monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", unexpected_billing)
 
     response = harness.post_export({}) if create else harness.get("export-preview")
     assert response.status_code == status
@@ -608,7 +610,7 @@ def test_conversation_export_checks_paid_plan_only_in_cloud(
         assert tenant_id == harness.tenant.id
         return False
 
-    monkeypatch.setattr(conversation_module, "is_cloud_edition_billing_paid_plan", unpaid)
+    monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", unpaid)
     response = harness.post_export({}) if create else harness.get("export-preview")
     if edition == DeploymentEdition.CLOUD:
         assert response.status_code == 403
@@ -627,7 +629,7 @@ def test_create_conversation_log_export_persists_normalized_filters(
 ) -> None:
     """Store the caller, owned app and UTC filter bounds before acknowledging an export."""
     harness.mode(AppMode.ADVANCED_CHAT)
-    monkeypatch.setattr(conversation_module, "is_cloud_edition_billing_paid_plan", lambda _: True)
+    monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _: True)
 
     def assert_saved_before_publish(tenant_id: str) -> None:
         latest = f"conversation_log_export_latest:{{{tenant_id}}}:{harness.target.id}:{harness.account.id}"
@@ -680,7 +682,7 @@ def test_create_conversation_log_export_keeps_queued_task_after_publish_failure(
     harness: _Harness, monkeypatch: pytest.MonkeyPatch, log_export_publish: Mock
 ) -> None:
     """Preserve the admitted export for a delivery retry after a broker error."""
-    monkeypatch.setattr(conversation_module, "is_cloud_edition_billing_paid_plan", lambda _: True)
+    monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _: True)
     harness.dispatch.side_effect = partial(log_export_adapters.dispatch_log_export_head, redis=harness.redis.client)
     log_export_publish.side_effect = OSError("broker unavailable")
 
@@ -733,7 +735,7 @@ def test_get_latest_export_is_scoped_to_the_authenticated_account_and_app(
     harness: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Recover the caller's newest live task with its filters and scoped identity labels."""
-    monkeypatch.setattr(conversation_module, "is_cloud_edition_billing_paid_plan", lambda _: True)
+    monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _: True)
     assert harness.get("export-latest").get_json() == {"task": None}
     first = harness.post_export({})
     assert first.status_code == 202
@@ -850,7 +852,7 @@ def test_get_conversation_log_export_status_checks_access_before_redis(
             select(TenantAccountJoin).where(TenantAccountJoin.tenant_id == harness.tenant.id)
         ).one()
         membership.role = role
-    monkeypatch.setattr(conversation_module, "is_cloud_edition_billing_paid_plan", lambda _: paid)
+    monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _: paid)
 
     response = harness.get_export_file(task.task_id) if file_download else harness.get_export_status(task.task_id)
 
@@ -1012,7 +1014,7 @@ def test_create_conversation_log_export_rejects_unsupported_requests(
 ) -> None:
     """Reject malformed filters and app modes without an exporter before writing Redis."""
     harness.mode(mode)
-    monkeypatch.setattr(conversation_module, "is_cloud_edition_billing_paid_plan", lambda _: True)
+    monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _: True)
     response = harness.post_export(payload)
     assert response.status_code == status
     assert response.get_json()["code"] == code
@@ -1024,7 +1026,7 @@ def test_conversation_export_preview_reports_count_query_timeout(
     harness: _Harness, sqlite_engine: Engine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     harness.mode(AppMode.ADVANCED_CHAT)
-    monkeypatch.setattr(conversation_module, "is_cloud_edition_billing_paid_plan", lambda _: True)
+    monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _: True)
 
     @event.listens_for(sqlite_engine, "before_cursor_execute")
     def cancel_count(_conn: Connection, _cursor: object, statement: str, *_: object) -> None:
@@ -1130,7 +1132,7 @@ def test_invalid_date_range_is_precise_400(
     harness: _Harness, monkeypatch: pytest.MonkeyPatch, kind: _Kind, query: dict[str, str | int]
 ) -> None:
     harness.mode(AppMode.COMPLETION if kind == "completion" else AppMode.CHAT)
-    monkeypatch.setattr(conversation_module, "is_cloud_edition_billing_paid_plan", lambda _: True)
+    monkeypatch.setattr(conversation_log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _: True)
     response = harness.get(kind, query=query)
     assert response.status_code == 400
     assert response.get_json()["code"] == "invalid_param"
