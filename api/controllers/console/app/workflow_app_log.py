@@ -33,7 +33,7 @@ from machinery.context import RequestContext
 from models import App
 from models.model import AppMode
 from services.app.console_service import ConsoleAppNotFoundError
-from services.entities.conversation_entities import ConsoleLogIdentitySource
+from services.entities.log_identity import ConsoleLogIdentitySource
 from services.workflow_app_log_contracts import WorkflowLogScope
 
 

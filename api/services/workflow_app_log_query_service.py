@@ -8,7 +8,7 @@ from core.plugin.plugin_service import PluginService
 from graphon.enums import WorkflowExecutionStatus
 from machinery.context import RequestContext
 from models.enums import AppTriggerType
-from services.entities.conversation_entities import ConsoleLogIdentity
+from services.entities.log_identity import ConsoleLogIdentity
 from services.workflow.entities import TriggerMetadata
 from services.workflow_app_log_contracts import WorkflowLogExportFilters, WorkflowLogScope
 

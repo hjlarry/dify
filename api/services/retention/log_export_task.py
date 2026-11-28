@@ -14,7 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from libs.datetime_utils import utc_now
 from machinery.context import RequestContext
 from services.agent.observability_contracts import AgentLogExportFilters
-from services.entities.conversation_entities import ConsoleConversationLogFilters, ConsoleLogIdentitySource
+from services.entities.conversation_entities import ConsoleConversationLogFilters
+from services.entities.log_identity import ConsoleLogIdentitySource
 from services.retention.log_export_csv import CsvRowProgress
 from services.workflow_app_log_contracts import WorkflowLogExportFilters
 

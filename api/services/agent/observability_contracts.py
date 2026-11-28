@@ -8,7 +8,7 @@ from typing import Protocol
 from uuid import UUID
 
 from machinery.context import RequestContext
-from services.entities.conversation_entities import ConsoleLogIdentity
+from services.entities.log_identity import ConsoleLogIdentity
 
 
 class AgentObservabilityNotFoundError(Exception):

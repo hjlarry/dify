@@ -15,7 +15,6 @@ from services.entities.conversation_entities import (
     ConsoleConversationLogFilters,
     ConsoleConversationPage,
     ConsoleConversationScope,
-    ConsoleLogIdentity,
     ConversationInputValue,
     ConversationListSource,
     ConversationLogExportCounts,
@@ -23,6 +22,7 @@ from services.entities.conversation_entities import (
     ConversationScope,
     ConversationSort,
 )
+from services.entities.log_identity import ConsoleLogIdentity
 from services.message_query_service import MessageFiles
 
 

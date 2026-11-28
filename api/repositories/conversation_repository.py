@@ -6,7 +6,6 @@ from dataclasses import replace
 from datetime import datetime
 from functools import partial
 from typing import cast
-from uuid import UUID
 
 from pydantic import JsonValue
 from sqlalchemy import DateTime, Select, and_, case, exists, func, literal, null, or_, select, tuple_, update
@@ -25,6 +24,7 @@ from models.workflow import WorkflowRun
 from repositories.app.console_repository import find_console_app
 from repositories.conversation_lifecycle import retire_conversation, retire_debug_conversation_workspaces
 from repositories.log_export_queries import execute_log_export_count, read_log_export_with_retry
+from repositories.log_identity_queries import search_log_identities
 from repositories.message_projection import snapshot_console_message
 from services.app.console_service import ConsoleAppNotFoundError
 from services.entities.conversation_entities import (
@@ -43,8 +43,6 @@ from services.entities.conversation_entities import (
     ConsoleConversationPage,
     ConsoleConversationRecord,
     ConsoleConversationScope,
-    ConsoleLogIdentity,
-    ConsoleLogIdentitySource,
     ConversationAgentWorkspaceRetirement,
     ConversationDeletion,
     ConversationInputValue,
@@ -60,12 +58,12 @@ from services.entities.conversation_entities import (
     InstalledAppConversationRef,
     InstalledAppConversationScope,
 )
+from services.entities.log_identity import ConsoleLogIdentity
 from services.errors.base import NoPermissionError
 from services.errors.conversation import ConversationNotExistsError, LastConversationNotExistsError
 from services.errors.message import MessageNotExistsError
 from services.installed_app_access_service import InstalledAppNotFoundError, InstalledAppRef
 
-_LOG_IDENTITY_SEARCH_LIMIT = 20
 _LOG_EXPORT_BATCH_SIZE = 500
 _CONSOLE_APP_MODES_BY_KIND: dict[ConsoleConversationKind, frozenset[AppMode]] = {
     "completion": frozenset({AppMode.COMPLETION}),
@@ -236,11 +234,6 @@ class ConversationRepository:
         self, context: RequestContext, app_id: str, *, keyword: str
     ) -> tuple[ConsoleLogIdentity, ...]:
         """Find visible log actors by label or ID, including former workspace members."""
-        try:
-            identity_id = str(UUID(keyword))
-        except ValueError:
-            identity_id = None
-
         with self._session_factory() as session:
             app = self._get_console_app(
                 session=session, context=context, app_id=app_id, allowed_modes=_CONSOLE_LOG_APP_MODES
@@ -253,47 +246,18 @@ class ConversationRepository:
                     keyword=None, start=None, end=None, annotation_status="all", sort_by="-created_at"
                 ),
             )
-            pattern = f"%{escape_like_pattern(keyword)}%"
-            exact_end_user_match = EndUser.session_id == keyword
-            account_match = Account.name.ilike(pattern, escape="\\")
-            if identity_id is not None:
-                exact_end_user_match = or_(exact_end_user_match, EndUser.id == identity_id)
-                account_match = or_(account_match, Account.id == identity_id)
-
-            end_users = session.execute(
-                select(EndUser.id, EndUser.session_id)
-                .where(
-                    EndUser.tenant_id == app.tenant_id,
-                    or_(exact_end_user_match, EndUser.session_id.ilike(pattern, escape="\\")),
-                    visible_logs.where(
-                        Conversation.from_source == ConversationFromSource.API,
-                        Conversation.from_end_user_id == EndUser.id,
-                    ).exists(),
-                )
-                .order_by(exact_end_user_match.desc(), EndUser.id)
-                .limit(_LOG_IDENTITY_SEARCH_LIMIT)
-            ).all()
-            accounts = session.execute(
-                select(Account.id, Account.name)
-                .where(
-                    account_match,
-                    visible_logs.where(
-                        Conversation.from_source == ConversationFromSource.CONSOLE,
-                        Conversation.from_account_id == Account.id,
-                    ).exists(),
-                )
-                .order_by(Account.name, Account.id)
-                .limit(_LOG_IDENTITY_SEARCH_LIMIT)
-            ).all()
-            return (
-                *(
-                    ConsoleLogIdentity(identity, label, ConsoleLogIdentitySource.END_USER)
-                    for identity, label in end_users
-                ),
-                *(
-                    ConsoleLogIdentity(identity, label, ConsoleLogIdentitySource.ACCOUNT)
-                    for identity, label in accounts
-                ),
+            return search_log_identities(
+                session,
+                tenant_id=app.tenant_id,
+                keyword=keyword,
+                end_user_visible=visible_logs.where(
+                    Conversation.from_source == ConversationFromSource.API,
+                    Conversation.from_end_user_id == EndUser.id,
+                ).exists(),
+                account_visible=visible_logs.where(
+                    Conversation.from_source == ConversationFromSource.CONSOLE,
+                    Conversation.from_account_id == Account.id,
+                ).exists(),
             )
 
     @staticmethod

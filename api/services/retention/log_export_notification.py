@@ -11,7 +11,8 @@ from configs import dify_config
 from libs.datetime_utils import ensure_naive_utc, utc_now
 from services.agent.observability_contracts import AgentLogExportFilters
 from services.billing_client import saas
-from services.entities.conversation_entities import ConsoleConversationLogFilters, ConsoleLogIdentitySource
+from services.entities.conversation_entities import ConsoleConversationLogFilters
+from services.entities.log_identity import ConsoleLogIdentitySource
 from services.retention.log_export_task import (
     AgentLogExportTask,
     ConversationLogExportTask,

@@ -13,7 +13,6 @@ from functools import partial
 from itertools import batched
 from tempfile import TemporaryFile
 from typing import Any, TextIO
-from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy import Select, and_, func, or_, select
@@ -43,6 +42,7 @@ from repositories.agent.agent_runtime_app import (
     resolve_agent_runtime_app,
 )
 from repositories.log_export_queries import execute_log_export_count, read_log_export_with_retry
+from repositories.log_identity_queries import search_log_identities
 from repositories.message_projection import snapshot_agent_thought
 from services.agent.observability_contracts import (
     AgentLogExportCounts,
@@ -55,10 +55,9 @@ from services.agent.observability_contracts import (
     AgentStatisticsQuery,
     normalize_agent_log_export_source,
 )
-from services.entities.conversation_entities import ConsoleLogIdentity, ConsoleLogIdentitySource
+from services.entities.log_identity import ConsoleLogIdentity
 from services.entities.message_entities import MessageAgentThoughtRecord
 
-_LOG_IDENTITY_SEARCH_LIMIT = 20
 _LOG_EXPORT_BATCH_SIZE = 100
 _WORKFLOW_END_USER_ROLES = (CreatorUserRole.END_USER, "end-user")
 
@@ -421,17 +420,6 @@ class AgentObservabilityQueries:
 
     def search_log_identities(self, *, app: App, agent_id: str, keyword: str) -> tuple[ConsoleLogIdentity, ...]:
         """Find matching end users and workspace accounts with logs in the admitted Agent's sources."""
-        pattern = f"%{escape_like_pattern(keyword)}%"
-        exact_end_user_match = EndUser.session_id == keyword
-        account_match = Account.name.ilike(pattern, escape="\\")
-        try:
-            internal_id = str(UUID(keyword))
-        except ValueError:
-            internal_id = None
-        if internal_id is not None:
-            exact_end_user_match = or_(exact_end_user_match, EndUser.id == internal_id)
-            account_match = or_(account_match, Account.id == internal_id)
-
         params = AgentLogQueryParams()
         source_filter = AgentSourceFilter(kind="all")
         webapp_logs = self._select_webapp_log_rows(
@@ -440,44 +428,28 @@ class AgentObservabilityQueries:
         workflow_logs = self._select_workflow_log_rows(
             app=app, agent_id=agent_id, workflow_app=aliased(App), params=params, source_filter=source_filter
         ).with_only_columns(WorkflowNodeExecutionModel.id)
-        end_users = self._session.execute(
-            select(EndUser.id, EndUser.session_id)
-            .where(
-                EndUser.tenant_id == app.tenant_id,
-                or_(exact_end_user_match, EndUser.session_id.ilike(pattern, escape="\\")),
-                or_(
-                    webapp_logs.where(Conversation.from_end_user_id == EndUser.id).correlate(EndUser).exists(),
-                    workflow_logs.where(
-                        WorkflowNodeExecutionModel.created_by_role.in_(_WORKFLOW_END_USER_ROLES),
-                        WorkflowNodeExecutionModel.created_by == EndUser.id,
-                    )
-                    .correlate(EndUser)
-                    .exists(),
-                ),
-            )
-            .order_by(exact_end_user_match.desc(), EndUser.id)
-            .limit(_LOG_IDENTITY_SEARCH_LIMIT)
-        ).all()
-        accounts = self._session.execute(
-            select(Account.id, Account.name)
-            .where(
-                account_match,
-                or_(
-                    webapp_logs.where(Conversation.from_account_id == Account.id).correlate(Account).exists(),
-                    workflow_logs.where(
-                        WorkflowNodeExecutionModel.created_by_role == CreatorUserRole.ACCOUNT,
-                        WorkflowNodeExecutionModel.created_by == Account.id,
-                    )
-                    .correlate(Account)
-                    .exists(),
-                ),
-            )
-            .order_by(Account.name, Account.id)
-            .limit(_LOG_IDENTITY_SEARCH_LIMIT)
-        ).all()
-        return (
-            *(ConsoleLogIdentity(identity, label, ConsoleLogIdentitySource.END_USER) for identity, label in end_users),
-            *(ConsoleLogIdentity(identity, label, ConsoleLogIdentitySource.ACCOUNT) for identity, label in accounts),
+        return search_log_identities(
+            self._session,
+            tenant_id=app.tenant_id,
+            keyword=keyword,
+            end_user_visible=or_(
+                webapp_logs.where(Conversation.from_end_user_id == EndUser.id).correlate(EndUser).exists(),
+                workflow_logs.where(
+                    WorkflowNodeExecutionModel.created_by_role.in_(_WORKFLOW_END_USER_ROLES),
+                    WorkflowNodeExecutionModel.created_by == EndUser.id,
+                )
+                .correlate(EndUser)
+                .exists(),
+            ),
+            account_visible=or_(
+                webapp_logs.where(Conversation.from_account_id == Account.id).correlate(Account).exists(),
+                workflow_logs.where(
+                    WorkflowNodeExecutionModel.created_by_role == CreatorUserRole.ACCOUNT,
+                    WorkflowNodeExecutionModel.created_by == Account.id,
+                )
+                .correlate(Account)
+                .exists(),
+            ),
         )
 
     def list_log_messages(

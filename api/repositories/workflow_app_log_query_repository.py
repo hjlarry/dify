@@ -22,8 +22,9 @@ from models.model import AppMode
 from models.trigger import WorkflowTriggerLog
 from repositories.app.console_repository import find_console_app
 from repositories.log_export_queries import execute_log_export_count, read_log_export_with_retry
+from repositories.log_identity_queries import search_log_identities
 from services.app.console_service import ConsoleAppNotFoundError
-from services.entities.conversation_entities import ConsoleLogIdentity, ConsoleLogIdentitySource
+from services.entities.log_identity import ConsoleLogIdentity
 from services.workflow_app_log_contracts import WorkflowLogExportFilters, WorkflowLogScope
 from services.workflow_app_log_query_service import (
     WorkflowAppLogAccount,
@@ -35,7 +36,6 @@ from services.workflow_app_log_query_service import (
     WorkflowLogExportRow,
 )
 
-_LOG_IDENTITY_SEARCH_LIMIT = 20
 _LOG_EXPORT_BATCH_SIZE = 100
 
 
@@ -203,13 +203,6 @@ class WorkflowAppLogQueryRepository(WorkflowAppLogQuery):
     @override
     def search_log_identities(self, *, scope: WorkflowLogScope, keyword: str) -> tuple[ConsoleLogIdentity, ...]:
         """Find actors with a live run in the app by label or ID, including former workspace members."""
-        pattern = f"%{escape_like_pattern(keyword)}%"
-        identity_id = self._safe_parse_uuid(keyword)
-        exact_end_user = EndUser.session_id == keyword
-        account_match = Account.name.ilike(pattern, escape="\\")
-        if identity_id is not None:
-            exact_end_user = or_(exact_end_user, EndUser.id == str(identity_id))
-            account_match = or_(account_match, Account.id == str(identity_id))
         visible_logs = (
             select(1)
             .select_from(WorkflowAppLog)
@@ -224,40 +217,19 @@ class WorkflowAppLogQueryRepository(WorkflowAppLogQuery):
             .where(WorkflowAppLog.tenant_id == scope.tenant_id, WorkflowAppLog.app_id == scope.app_id)
         )
         with self._session_factory() as session:
-            end_users = session.execute(
-                select(EndUser.id, EndUser.session_id)
-                .where(
-                    EndUser.tenant_id == scope.tenant_id,
-                    or_(exact_end_user, EndUser.session_id.ilike(pattern, escape="\\")),
-                    visible_logs.where(
-                        WorkflowAppLog.created_by_role == CreatorUserRole.END_USER,
-                        WorkflowAppLog.created_by == EndUser.id,
-                    ).exists(),
-                )
-                .order_by(exact_end_user.desc(), EndUser.id)
-                .limit(_LOG_IDENTITY_SEARCH_LIMIT)
-            ).all()
-            accounts = session.execute(
-                select(Account.id, Account.name)
-                .where(
-                    account_match,
-                    visible_logs.where(
-                        WorkflowAppLog.created_by_role == CreatorUserRole.ACCOUNT,
-                        WorkflowAppLog.created_by == Account.id,
-                    ).exists(),
-                )
-                .order_by(Account.name, Account.id)
-                .limit(_LOG_IDENTITY_SEARCH_LIMIT)
-            ).all()
-            return (
-                *(
-                    ConsoleLogIdentity(identity, label or identity, ConsoleLogIdentitySource.END_USER)
-                    for identity, label in end_users
-                ),
-                *(
-                    ConsoleLogIdentity(identity, label, ConsoleLogIdentitySource.ACCOUNT)
-                    for identity, label in accounts
-                ),
+            return search_log_identities(
+                session,
+                tenant_id=scope.tenant_id,
+                keyword=keyword,
+                end_user_visible=visible_logs.where(
+                    WorkflowAppLog.created_by_role == CreatorUserRole.END_USER,
+                    WorkflowAppLog.created_by == EndUser.id,
+                ).exists(),
+                account_visible=visible_logs.where(
+                    WorkflowAppLog.created_by_role == CreatorUserRole.ACCOUNT,
+                    WorkflowAppLog.created_by == Account.id,
+                ).exists(),
+                fallback_to_end_user_id=True,
             )
 
     def _matching_export_logs(

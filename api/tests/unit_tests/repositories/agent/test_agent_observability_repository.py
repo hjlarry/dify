@@ -55,7 +55,7 @@ from repositories.agent.agent_observability_repository import (
     SQLAlchemyAgentObservabilityRepository,
 )
 from services.agent.observability_contracts import AgentLogExportCounts, AgentLogExportQuery
-from services.entities.conversation_entities import ConsoleLogIdentity, ConsoleLogIdentitySource
+from services.entities.log_identity import ConsoleLogIdentity, ConsoleLogIdentitySource
 from services.retention.agent.log_export_csv import AgentLogCsvWriter
 from tests.helpers.unit.config_override import apply_config_overrides
 from tests.helpers.unit.model_factories import make_account, make_app, make_conversation, make_end_user, make_message

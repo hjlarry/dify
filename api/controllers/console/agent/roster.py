@@ -107,7 +107,7 @@ from services.agent.version_store import (
 from services.app_service import CreateAppParams
 from services.entities.agent_entities import RosterListQuery
 from services.entities.app_entities import AppListParams, UpdateAppParams
-from services.entities.conversation_entities import ConsoleLogIdentitySource
+from services.entities.log_identity import ConsoleLogIdentitySource
 
 _EDIT_ROLES = frozenset({TenantAccountRole.OWNER, TenantAccountRole.ADMIN, TenantAccountRole.EDITOR})
 
