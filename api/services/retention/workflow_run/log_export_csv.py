@@ -7,8 +7,11 @@ from typing import TextIO
 from libs.datetime_utils import ensure_naive_utc
 from machinery.context import RequestContext
 from services.retention.log_export_csv import CsvRowProgress, write_log_export_csv
-from services.retention.workflow_run.log_export_service import WorkflowLogExportFilters, WorkflowLogExportScope
-from services.workflow_app_log_query_service import WorkflowAppLogQueryService
+from services.workflow_app_log_query_service import (
+    WorkflowAppLogQueryService,
+    WorkflowLogExportFilters,
+    WorkflowLogScope,
+)
 
 _LOG_CSV_COLUMNS = (
     "app_id",
@@ -53,13 +56,13 @@ class WorkflowLogCsvWriter:
         report_rows: CsvRowProgress | None = None,
     ) -> int:
         """Write Workflow-run columns for an admitted Workflow app and return the data row count."""
-        scope = self._logs.get_log_export_scope(context, app_id)
+        scope = self._logs.get_log_scope(context, app_id)
         return self.write_scoped_csv(scope=scope, filters=filters, output=output, report_rows=report_rows)
 
     def write_scoped_csv(
         self,
         *,
-        scope: WorkflowLogExportScope,
+        scope: WorkflowLogScope,
         filters: WorkflowLogExportFilters,
         output: TextIO,
         report_rows: CsvRowProgress | None = None,

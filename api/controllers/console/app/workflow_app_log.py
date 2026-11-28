@@ -69,11 +69,8 @@ from services.retention.log_export_task import (
     LogExportTaskNotFoundError,
     LogExportTaskNotReadyError,
 )
-from services.retention.workflow_run.log_export_service import (
-    WorkflowLogExportFilters,
-    WorkflowLogExportScope,
-    WorkflowLogExportTask,
-)
+from services.retention.workflow_run.log_export_service import WorkflowLogExportTask
+from services.workflow_app_log_query_service import WorkflowLogExportFilters, WorkflowLogScope
 
 
 class WorkflowAppLogQuery(BaseModel):
@@ -270,7 +267,7 @@ class WorkflowLogExportPreviewQuery(BaseModel):
         )
 
 
-class WorkflowLogExportIdentityQuery(BaseModel):
+class WorkflowAppLogIdentityQuery(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     keyword: str = Field(
@@ -337,15 +334,15 @@ class WorkflowLogExportIdentitySearchResponse(ResponseModel):
     data: list[WorkflowLogExportIdentityResponse]
 
 
-def _get_workflow_log_scope(request_context: RequestContext, app_id: UUID) -> WorkflowLogExportScope:
+def _get_workflow_log_scope(request_context: RequestContext, app_id: UUID) -> WorkflowLogScope:
     """Resolve the Workflow app in the admitted caller's current workspace."""
     try:
-        return application_services().workflow_app_logs.get_log_export_scope(request_context, str(app_id))
+        return application_services().workflow_app_logs.get_log_scope(request_context, str(app_id))
     except ConsoleAppNotFoundError as exc:
         raise AppNotFoundError(str(exc)) from exc
 
 
-def _resolve_log_export_scope(request_context: RequestContext, app_id: UUID) -> WorkflowLogExportScope:
+def _resolve_log_export_scope(request_context: RequestContext, app_id: UUID) -> WorkflowLogScope:
     """Require an admitted workspace Owner or Admin, a Workflow app, and any Cloud export entitlement."""
     if not TenantAccountRole.is_privileged_role(current_account_with_tenant().account.role):
         raise ForbiddenError()
@@ -396,47 +393,27 @@ class WorkflowLogExportPreviewApi(Resource):
         return dump_response(WorkflowLogExportPreviewResponse, {"row_count": row_count})
 
 
-@console_ns.route("/apps/<uuid:app_id>/workflow-log-exports/identity-options")
-class WorkflowLogExportIdentityOptionsApi(Resource):
-    @error_responses(AppNotFoundError, ForbiddenError, PaidPlanRequiredError, _WorkflowLogValidationError)
-    @console_ns.doc("search_workflow_log_export_identities")
-    @console_ns.doc(description="Search end users and accounts with visible runs in the Workflow app")
-    @console_ns.doc(params={"app_id": "Application ID", **query_params_from_model(WorkflowLogExportIdentityQuery)})
-    @console_ns.response(
-        HTTPStatus.OK, "Matching identities", console_ns.models[WorkflowLogExportIdentitySearchResponse.__name__]
-    )
-    @console_account_admission(rbac_checks=(RBACCheck(RBACPermission.APP_LOG_AND_ANNOTATION, PlainApp()),))
-    def get(self, request_context: RequestContext, app_id: UUID) -> dict[str, object]:
-        """Return up to 20 matches per identity type for the admitted Workflow app."""
-        scope = _resolve_log_export_scope(request_context, app_id)
-        return _search_log_identities(scope)
-
-
-def _search_log_identities(scope: WorkflowLogExportScope) -> dict[str, object]:
-    """Return matching visible identities for the resolved Workflow app."""
-    try:
-        query = query_params_from_request(WorkflowLogExportIdentityQuery)
-    except ValidationError as exc:
-        raise _WorkflowLogValidationError(
-            exc.json(include_url=False, include_input=False, include_context=False)
-        ) from None
-    matches = application_services().workflow_app_logs.search_log_export_identities(scope=scope, keyword=query.keyword)
-    return dump_response(WorkflowLogExportIdentitySearchResponse, {"data": matches})
-
-
 @console_ns.route("/apps/<uuid:app_id>/workflow-app-logs/identity-options")
 class WorkflowAppLogIdentityOptionsApi(Resource):
     @error_responses(AppNotFoundError, _WorkflowLogValidationError)
     @console_ns.doc("search_workflow_app_log_identities")
     @console_ns.doc(description="Search identities in the visible logs of a Workflow app")
-    @console_ns.doc(params={"app_id": "Application ID", **query_params_from_model(WorkflowLogExportIdentityQuery)})
+    @console_ns.doc(params={"app_id": "Application ID", **query_params_from_model(WorkflowAppLogIdentityQuery)})
     @console_ns.response(
         HTTPStatus.OK, "Matching identities", console_ns.models[WorkflowLogExportIdentitySearchResponse.__name__]
     )
     @console_account_admission(rbac_checks=(RBACCheck(RBACPermission.APP_LOG_AND_ANNOTATION, PlainApp()),))
     def get(self, request_context: RequestContext, app_id: UUID) -> dict[str, object]:
         """Search app identities under the Logs permission granted by the route."""
-        return _search_log_identities(_get_workflow_log_scope(request_context, app_id))
+        scope = _get_workflow_log_scope(request_context, app_id)
+        try:
+            query = query_params_from_request(WorkflowAppLogIdentityQuery)
+        except ValidationError as exc:
+            raise _WorkflowLogValidationError(
+                exc.json(include_url=False, include_input=False, include_context=False)
+            ) from None
+        matches = application_services().workflow_app_logs.search_log_identities(scope=scope, keyword=query.keyword)
+        return dump_response(WorkflowLogExportIdentitySearchResponse, {"data": matches})
 
 
 @console_ns.route("/apps/<uuid:app_id>/workflow-log-exports")

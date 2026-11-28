@@ -28,7 +28,7 @@ from libs.datetime_utils import parse_time_range
 from libs.helper import convert_datetime_to_date, escape_like_pattern, to_timestamp
 from machinery.context import RequestContext
 from models.account import Account
-from models.agent import Agent, AgentScope, WorkflowAgentNodeBinding
+from models.agent import Agent, WorkflowAgentNodeBinding
 from models.enums import CreatorUserRole, FeedbackFromSource, FeedbackRating, MessageStatus
 from models.model import App, Conversation, EndUser, Message, MessageAgentThought, MessageFeedback
 from models.workflow import (
@@ -39,8 +39,7 @@ from models.workflow import (
     WorkflowType,
 )
 from repositories.agent.agent_runtime_app import (
-    find_runtime_app,
-    find_runtime_resolvable_agent,
+    find_existing_agent_runtime_app,
     resolve_agent_runtime_app,
 )
 from repositories.log_export_queries import execute_log_export_count, read_log_export_with_retry
@@ -1695,13 +1694,7 @@ class SQLAlchemyAgentObservabilityRepository:
     @staticmethod
     def _require_existing_runtime_app(session: Session, *, tenant_id: str, agent_id: str) -> App:
         """Find the Agent's runtime App in the workspace or raise if either is unavailable."""
-        agent = find_runtime_resolvable_agent(session, tenant_id=tenant_id, agent_id=agent_id)
-        if agent is None:
-            raise AgentObservabilityNotFoundError
-        app_id = agent.backing_app_id
-        if app_id is None and agent.scope != AgentScope.WORKFLOW_ONLY:
-            app_id = agent.app_id
-        app = find_runtime_app(session, tenant_id=tenant_id, app_id=app_id) if app_id else None
+        app = find_existing_agent_runtime_app(session, tenant_id=tenant_id, agent_id=agent_id)
         if app is None:
             raise AgentObservabilityNotFoundError
         return app

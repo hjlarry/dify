@@ -13,7 +13,7 @@ from services.entities.conversation_entities import (
     ConversationAnnotationStatus,
 )
 from services.retention.log_export_csv import CsvRowProgress
-from services.retention.workflow_run.log_export_service import WorkflowLogExportFilters, WorkflowLogExportScope
+from services.workflow_app_log_query_service import WorkflowLogExportFilters, WorkflowLogScope
 
 if TYPE_CHECKING:
     from services.retention.agent.log_export_csv import AgentLogCsvWriter
@@ -40,7 +40,7 @@ class WriteWorkflowLogCsv(Protocol):
     def __call__(
         self,
         *,
-        scope: WorkflowLogExportScope,
+        scope: WorkflowLogScope,
         filters: WorkflowLogExportFilters,
         output: TextIO,
         report_rows: CsvRowProgress,
@@ -104,7 +104,7 @@ class LogExportCommandService:
             if filters.annotation_status != "all":
                 raise UnsupportedLogExportFilterError("--annotation-status applies only to conversation logs.")
             return self._write_workflow_csv(
-                scope=WorkflowLogExportScope(tenant_id=target.tenant_id, app_id=target.app_id),
+                scope=WorkflowLogScope(tenant_id=target.tenant_id, app_id=target.app_id),
                 filters=WorkflowLogExportFilters(
                     created_at_after=filters.start,
                     created_at_before=end,

@@ -4760,28 +4760,6 @@ Create a pending CSV export task for published runs in a Workflow app
 | 429 | Too Many Requests | **application/json**: [LogExportLimitReachedError](#logexportlimitreachederror)<br>[ErrorResponse](#errorresponse)<br> |
 | default | Error | **application/json**: [ErrorResponse](#errorresponse)<br> |
 
-### [GET] /apps/{app_id}/workflow-log-exports/identity-options
-**Return up to 20 matches per identity type for the admitted Workflow app**
-
-Search end users and accounts with visible runs in the Workflow app
-
-#### Parameters
-
-| Name | Located in | Description | Required | Schema |
-| ---- | ---------- | ----------- | -------- | ------ |
-| app_id | path | Application ID | Yes | string (uuid) |
-| keyword | query | Part of an end-user ID or account name, or an exact internal ID | Yes | string |
-
-#### Responses
-
-| Code | Description | Schema |
-| ---- | ----------- | ------ |
-| 200 | Matching identities | **application/json**: [WorkflowLogExportIdentitySearchResponse](#workflowlogexportidentitysearchresponse)<br> |
-| 403 | Forbidden | **application/json**: [ForbiddenError](#forbiddenerror)<br>[PaidPlanRequiredError](#paidplanrequirederror)<br>[ErrorResponse](#errorresponse)<br> |
-| 404 | Not Found | **application/json**: [AppNotFoundError](#appnotfounderror)<br>[ErrorResponse](#errorresponse)<br> |
-| 422 | Unprocessable Entity | **application/json**: [UnprocessableEntityError](#unprocessableentityerror)<br>[ErrorResponse](#errorresponse)<br> |
-| default | Error | **application/json**: [ErrorResponse](#errorresponse)<br> |
-
 ### [GET] /apps/{app_id}/workflow-log-exports/latest
 **Return the caller's latest live export for this app, or null if it is unavailable**
 

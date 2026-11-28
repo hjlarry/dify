@@ -9,7 +9,6 @@ from graphon.enums import WorkflowExecutionStatus
 from machinery.context import RequestContext
 from models.enums import AppTriggerType
 from services.entities.conversation_entities import ConsoleLogIdentity
-from services.retention.workflow_run.log_export_service import WorkflowLogExportFilters, WorkflowLogExportScope
 from services.workflow.entities import TriggerMetadata
 
 
@@ -66,6 +65,26 @@ class WorkflowAppLogPage:
 
 
 @dataclass(frozen=True, slots=True)
+class WorkflowLogScope:
+    """A resolved Workflow app and its owning workspace."""
+
+    tenant_id: str
+    app_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class WorkflowLogExportFilters:
+    """Filter published runs by their Logs entries, with time bounds in naive UTC."""
+
+    keyword: str | None = None
+    status: WorkflowExecutionStatus | None = None
+    created_at_before: datetime | None = None
+    created_at_after: datetime | None = None
+    end_user_ids: tuple[str, ...] = ()
+    account_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class WorkflowLogExportRow:
     """Detached data for one run, timestamped by its matching log entry."""
 
@@ -81,23 +100,21 @@ class WorkflowLogExportRow:
 
 
 class WorkflowAppLogQuery(Protocol):
-    def get_log_export_scope(self, context: RequestContext, app_id: str) -> WorkflowLogExportScope:
+    def get_log_scope(self, context: RequestContext, app_id: str) -> WorkflowLogScope:
         """Resolve a normal Workflow app in the admitted caller's workspace or raise if unavailable."""
         ...
 
-    def count_log_export_rows(self, *, scope: WorkflowLogExportScope, filters: WorkflowLogExportFilters) -> int | None:
+    def count_log_export_rows(self, *, scope: WorkflowLogScope, filters: WorkflowLogExportFilters) -> int | None:
         """Count distinct live runs matching the filters, returning None if the count times out."""
         ...
 
     def iter_log_export_rows(
-        self, *, scope: WorkflowLogExportScope, filters: WorkflowLogExportFilters
+        self, *, scope: WorkflowLogScope, filters: WorkflowLogExportFilters
     ) -> Iterable[WorkflowLogExportRow]:
         """Yield the app's matching runs, one per row, releasing the session between batches."""
         ...
 
-    def search_log_export_identities(
-        self, *, scope: WorkflowLogExportScope, keyword: str
-    ) -> tuple[ConsoleLogIdentity, ...]:
+    def search_log_identities(self, *, scope: WorkflowLogScope, keyword: str) -> tuple[ConsoleLogIdentity, ...]:
         """Find a bounded set of identities with matching labels or IDs and live logs in the app."""
         ...
 
@@ -128,25 +145,23 @@ class WorkflowAppLogQueryService:
     ) -> None:
         self._logs = logs
 
-    def get_log_export_scope(self, context: RequestContext, app_id: str) -> WorkflowLogExportScope:
-        """Resolve an admitted caller's Workflow app for export."""
-        return self._logs.get_log_export_scope(context, app_id)
+    def get_log_scope(self, context: RequestContext, app_id: str) -> WorkflowLogScope:
+        """Resolve an admitted caller's Workflow app for log queries."""
+        return self._logs.get_log_scope(context, app_id)
 
-    def count_log_export_rows(self, *, scope: WorkflowLogExportScope, filters: WorkflowLogExportFilters) -> int | None:
+    def count_log_export_rows(self, *, scope: WorkflowLogScope, filters: WorkflowLogExportFilters) -> int | None:
         """Preview one row per live run in the admitted app, or return None on timeout."""
         return self._logs.count_log_export_rows(scope=scope, filters=filters)
 
     def iter_log_export_rows(
-        self, *, scope: WorkflowLogExportScope, filters: WorkflowLogExportFilters
+        self, *, scope: WorkflowLogScope, filters: WorkflowLogExportFilters
     ) -> Iterable[WorkflowLogExportRow]:
         """Read CSV rows from the admitted app's runs using the preview filters."""
         return self._logs.iter_log_export_rows(scope=scope, filters=filters)
 
-    def search_log_export_identities(
-        self, *, scope: WorkflowLogExportScope, keyword: str
-    ) -> tuple[ConsoleLogIdentity, ...]:
+    def search_log_identities(self, *, scope: WorkflowLogScope, keyword: str) -> tuple[ConsoleLogIdentity, ...]:
         """Search the admitted app's live Logs identities using a validated nonblank keyword."""
-        return self._logs.search_log_export_identities(scope=scope, keyword=keyword)
+        return self._logs.search_log_identities(scope=scope, keyword=keyword)
 
     def list_logs(
         self,

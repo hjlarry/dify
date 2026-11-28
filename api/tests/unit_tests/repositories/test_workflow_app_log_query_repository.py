@@ -28,11 +28,12 @@ from models.workflow import WorkflowAppLog, WorkflowAppLogCreatedFrom, WorkflowR
 from repositories import log_export_queries, workflow_app_log_query_repository
 from repositories.workflow_app_log_query_repository import WorkflowAppLogQueryRepository
 from services.retention.workflow_run.log_export_csv import WorkflowLogCsvWriter
-from services.retention.workflow_run.log_export_service import WorkflowLogExportFilters, WorkflowLogExportScope
 from services.workflow_app_log_query_service import (
     WorkflowAppLogAccount,
     WorkflowAppLogEndUser,
     WorkflowAppLogQueryService,
+    WorkflowLogExportFilters,
+    WorkflowLogScope,
 )
 
 
@@ -142,7 +143,7 @@ def test_export_counts_and_reads_live_runs_once_across_batches(
                 _run("unlogged-debug-run"),
             ]
         )
-    scope = WorkflowLogExportScope(tenant_id="tenant-1", app_id="app-1")
+    scope = WorkflowLogScope(tenant_id="tenant-1", app_id="app-1")
     repository = WorkflowAppLogQueryRepository(session_factory=sqlite_session_factory)
     filters = WorkflowLogExportFilters(
         created_at_after=timestamp, end_user_ids=("user-id",), account_ids=("account-id",)
@@ -217,7 +218,7 @@ def test_workflow_csv_preserves_json_meaning_and_writes_unicode_as_utf8(
 
     repository = WorkflowAppLogQueryRepository(session_factory=sqlite_session_factory)
     writer = WorkflowLogCsvWriter(logs=WorkflowAppLogQueryService(logs=repository))
-    scope = WorkflowLogExportScope(tenant_id="tenant-1", app_id="app-1")
+    scope = WorkflowLogScope(tenant_id="tenant-1", app_id="app-1")
     path = tmp_path / "logs.csv"
     with path.open("w", encoding="utf-8", newline="") as output:
         assert writer.write_scoped_csv(scope=scope, filters=WorkflowLogExportFilters(), output=output) == len(data)
@@ -253,7 +254,7 @@ def test_workflow_csv_retries_the_same_page_without_rewriting_rows(
 
     repository = WorkflowAppLogQueryRepository(session_factory=sqlite_session_factory)
     writer = WorkflowLogCsvWriter(logs=WorkflowAppLogQueryService(logs=repository))
-    scope = WorkflowLogExportScope(tenant_id="tenant-1", app_id="app-1")
+    scope = WorkflowLogScope(tenant_id="tenant-1", app_id="app-1")
     filters = WorkflowLogExportFilters()
     baseline = StringIO(newline="")
     assert writer.write_scoped_csv(scope=scope, filters=filters, output=baseline) == 3

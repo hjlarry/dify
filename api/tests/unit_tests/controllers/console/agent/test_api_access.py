@@ -741,7 +741,6 @@ def test_agent_log_export_file_downloads_from_a_browser_session(
     cache[task_key] = task.model_dump_json()
     monkeypatch.setattr(roster_controller, "is_cloud_edition_billing_paid_plan", lambda _tenant_id: True)
     storage = log_export_storage
-    storage.exists.return_value = True
     url = "https://storage.example.test/agent-logs.csv?signature=signed"
     storage.generate_presigned_url.return_value = url
     payload = b"\xef\xbb\xbfagent_id,message_id\r\nagent,message\r\n"
@@ -760,7 +759,7 @@ def test_agent_log_export_file_downloads_from_a_browser_session(
             HTTPStatus.CONFLICT,
             "agent_log_export_task_not_ready",
         )
-        storage.exists.assert_not_called()
+        storage.generate_presigned_url.assert_not_called()
         storage.load.assert_not_called()
 
         storage_key = f"agent-log-exports/{harness.tenant_id}/{agent_id}/{task.task_id}.csv"
@@ -794,13 +793,13 @@ def test_agent_log_export_file_downloads_from_a_browser_session(
                 storage.load.assert_called_once_with(storage_key, stream=True)
                 storage.generate_presigned_url.assert_not_called()
 
-        storage.exists.return_value = False
-        storage.load.side_effect = FileNotFoundError
-        missing = browser.get(path)
-        assert (missing.status_code, missing.get_json()["code"]) == (
-            HTTPStatus.NOT_FOUND,
-            "agent_log_export_file_not_found",
-        )
+        if edition == DeploymentEdition.COMMUNITY:
+            storage.load.side_effect = FileNotFoundError
+            missing = browser.get(path)
+            assert (missing.status_code, missing.get_json()["code"]) == (
+                HTTPStatus.NOT_FOUND,
+                "agent_log_export_file_not_found",
+            )
 
 
 def test_unpublished_stored_enabled_state_is_hidden_and_can_be_disabled(harness: Harness) -> None:

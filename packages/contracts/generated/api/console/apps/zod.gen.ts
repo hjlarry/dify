@@ -8668,20 +8668,6 @@ export const zPostAppsByAppIdWorkflowLogExportsPath = z.object({
  */
 export const zPostAppsByAppIdWorkflowLogExportsResponse = zWorkflowLogExportTaskResponse
 
-export const zGetAppsByAppIdWorkflowLogExportsIdentityOptionsPath = z.object({
-  app_id: z.uuid(),
-})
-
-export const zGetAppsByAppIdWorkflowLogExportsIdentityOptionsQuery = z.object({
-  keyword: z.string().min(1).max(255),
-})
-
-/**
- * Matching identities
- */
-export const zGetAppsByAppIdWorkflowLogExportsIdentityOptionsResponse =
-  zWorkflowLogExportIdentitySearchResponse
-
 export const zGetAppsByAppIdWorkflowLogExportsLatestPath = z.object({
   app_id: z.uuid(),
 })

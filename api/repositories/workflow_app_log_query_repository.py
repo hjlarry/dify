@@ -24,7 +24,6 @@ from repositories.app.console_repository import find_console_app
 from repositories.log_export_queries import execute_log_export_count, read_log_export_with_retry
 from services.app.console_service import ConsoleAppNotFoundError
 from services.entities.conversation_entities import ConsoleLogIdentity, ConsoleLogIdentitySource
-from services.retention.workflow_run.log_export_service import WorkflowLogExportFilters, WorkflowLogExportScope
 from services.workflow_app_log_query_service import (
     WorkflowAppLogAccount,
     WorkflowAppLogEndUser,
@@ -32,7 +31,9 @@ from services.workflow_app_log_query_service import (
     WorkflowAppLogPage,
     WorkflowAppLogQuery,
     WorkflowAppLogRunSummary,
+    WorkflowLogExportFilters,
     WorkflowLogExportRow,
+    WorkflowLogScope,
 )
 
 _LOG_IDENTITY_SEARCH_LIMIT = 20
@@ -46,16 +47,16 @@ class WorkflowAppLogQueryRepository(WorkflowAppLogQuery):
         self._include_evaluation = include_evaluation
 
     @override
-    def get_log_export_scope(self, context: RequestContext, app_id: str) -> WorkflowLogExportScope:
+    def get_log_scope(self, context: RequestContext, app_id: str) -> WorkflowLogScope:
         """Resolve an accessible Workflow app using the authenticated workspace."""
         with self._session_factory() as session:
             app = find_console_app(session, workspace_id=context.active_workspace_id, app_id=app_id)
             if app is None or app.mode != AppMode.WORKFLOW:
                 raise ConsoleAppNotFoundError("Workflow app not found.")
-            return WorkflowLogExportScope(tenant_id=app.tenant_id, app_id=app.id)
+            return WorkflowLogScope(tenant_id=app.tenant_id, app_id=app.id)
 
     @override
-    def count_log_export_rows(self, *, scope: WorkflowLogExportScope, filters: WorkflowLogExportFilters) -> int | None:
+    def count_log_export_rows(self, *, scope: WorkflowLogScope, filters: WorkflowLogExportFilters) -> int | None:
         """Count one CSV row per run with a matching live Logs entry."""
         with self._session_factory() as session:
             statement = (
@@ -73,7 +74,7 @@ class WorkflowAppLogQueryRepository(WorkflowAppLogQuery):
 
     @override
     def iter_log_export_rows(
-        self, *, scope: WorkflowLogExportScope, filters: WorkflowLogExportFilters
+        self, *, scope: WorkflowLogScope, filters: WorkflowLogExportFilters
     ) -> Iterator[WorkflowLogExportRow]:
         """Yield one row per matching run in log order.
 
@@ -201,9 +202,7 @@ class WorkflowAppLogQueryRepository(WorkflowAppLogQuery):
         )
 
     @override
-    def search_log_export_identities(
-        self, *, scope: WorkflowLogExportScope, keyword: str
-    ) -> tuple[ConsoleLogIdentity, ...]:
+    def search_log_identities(self, *, scope: WorkflowLogScope, keyword: str) -> tuple[ConsoleLogIdentity, ...]:
         """Find actors with a live run in the app by label or ID, including former workspace members."""
         pattern = f"%{escape_like_pattern(keyword)}%"
         identity_id = self._safe_parse_uuid(keyword)
@@ -263,7 +262,7 @@ class WorkflowAppLogQueryRepository(WorkflowAppLogQuery):
             )
 
     def _matching_export_logs(
-        self, *, scope: WorkflowLogExportScope, filters: WorkflowLogExportFilters
+        self, *, scope: WorkflowLogScope, filters: WorkflowLogExportFilters
     ) -> Select[tuple[str]]:
         """Select the current run's published log IDs within the app and requested time and identity filters."""
         return (
@@ -273,7 +272,7 @@ class WorkflowAppLogQueryRepository(WorkflowAppLogQuery):
         )
 
     def _filter_export_logs[RowT: tuple[object, ...]](
-        self, statement: Select[RowT], *, scope: WorkflowLogExportScope, filters: WorkflowLogExportFilters
+        self, statement: Select[RowT], *, scope: WorkflowLogScope, filters: WorkflowLogExportFilters
     ) -> Select[RowT]:
         """Use the same application, date and identity predicates for preview and CSV reads."""
         statement = statement.where(

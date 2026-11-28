@@ -8389,34 +8389,6 @@ export type PostAppsByAppIdWorkflowLogExportsResponses = {
 export type PostAppsByAppIdWorkflowLogExportsResponse =
   PostAppsByAppIdWorkflowLogExportsResponses[keyof PostAppsByAppIdWorkflowLogExportsResponses]
 
-export type GetAppsByAppIdWorkflowLogExportsIdentityOptionsData = {
-  body?: never
-  path: {
-    app_id: string
-  }
-  query: {
-    keyword: string
-  }
-  url: '/apps/{app_id}/workflow-log-exports/identity-options'
-}
-
-export type GetAppsByAppIdWorkflowLogExportsIdentityOptionsErrors = {
-  403: ForbiddenError | PaidPlanRequiredError | ErrorResponse
-  404: AppNotFoundError | ErrorResponse
-  422: UnprocessableEntityError | ErrorResponse
-  default: ErrorResponse
-}
-
-export type GetAppsByAppIdWorkflowLogExportsIdentityOptionsError =
-  GetAppsByAppIdWorkflowLogExportsIdentityOptionsErrors[keyof GetAppsByAppIdWorkflowLogExportsIdentityOptionsErrors]
-
-export type GetAppsByAppIdWorkflowLogExportsIdentityOptionsResponses = {
-  200: WorkflowLogExportIdentitySearchResponse
-}
-
-export type GetAppsByAppIdWorkflowLogExportsIdentityOptionsResponse =
-  GetAppsByAppIdWorkflowLogExportsIdentityOptionsResponses[keyof GetAppsByAppIdWorkflowLogExportsIdentityOptionsResponses]
-
 export type GetAppsByAppIdWorkflowLogExportsLatestData = {
   body?: never
   path: {

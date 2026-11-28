@@ -33,8 +33,9 @@ from services.retention.log_export_task import (
     LogExportKind,
 )
 from services.retention.log_export_task_cache import reserve_log_export_dispatch
-from services.retention.workflow_run.log_export_service import WorkflowLogExportFilters, WorkflowLogExportTask
+from services.retention.workflow_run.log_export_service import WorkflowLogExportTask
 from services.system_feature_service import SystemFeatureService
+from services.workflow_app_log_query_service import WorkflowLogExportFilters
 
 if TYPE_CHECKING:
     from extensions.ext_redis import RedisClientWrapper

@@ -40,11 +40,10 @@ from services.retention.log_export_task import LogExportStatus
 from services.retention.log_export_task_cache import RedisLogExportTasks
 from services.retention.workflow_run.log_export_csv import WorkflowLogCsvWriter
 from services.retention.workflow_run.log_export_service import (
-    WorkflowLogExportFilters,
     WorkflowLogExportService,
     WorkflowLogExportTask,
 )
-from services.workflow_app_log_query_service import WorkflowAppLogQueryService
+from services.workflow_app_log_query_service import WorkflowAppLogQueryService, WorkflowLogExportFilters
 from tasks.log_export_tasks import prepare_log_export_task
 from tests.helpers.unit.log_export_fixtures import LogExportRedisIo, LogExportStorageIo
 from tests.helpers.unit.model_factories import make_account, make_app
@@ -198,7 +197,6 @@ def export_client(
     api.add_resource(workflow_app_log.WorkflowAppLogApi, logs_path)
     api.add_resource(workflow_app_log.WorkflowAppLogIdentityOptionsApi, f"{logs_path}/identity-options")
     api.add_resource(workflow_app_log.WorkflowLogExportApi, path)
-    api.add_resource(workflow_app_log.WorkflowLogExportIdentityOptionsApi, f"{path}/identity-options")
     api.add_resource(workflow_app_log.WorkflowLogExportLatestApi, f"{path}/latest")
     api.add_resource(workflow_app_log.WorkflowLogExportTaskApi, f"{path}/<uuid:task_id>")
     api.add_resource(workflow_app_log.WorkflowLogExportCancelApi, f"{path}/<uuid:task_id>/cancel")
@@ -337,13 +335,6 @@ def test_workflow_list_accepts_multiple_identities_without_requiring_export_enti
     assert [(item["id"], item["source"]) for item in identities.get_json()["data"]] == [
         (former.id, "account"),
     ]
-    assert (
-        export_client.client.get(
-            f"{export_client.path}/identity-options", query_string=query, headers=export_client.headers
-        ).status_code
-        == 403
-    )
-
     logs = export_client.client.get(
         logs_path,
         query_string=[
