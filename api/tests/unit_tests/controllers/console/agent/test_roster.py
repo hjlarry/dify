@@ -43,18 +43,18 @@ def _version_response(version_id: str = "version-1") -> dict[str, object]:
     }
 
 
-def test_query_values_accepts_repeated_and_indexed_arrays() -> None:
+def test_agent_log_query_values_accepts_repeated_and_indexed_arrays() -> None:
     app = Flask(__name__)
 
     with app.test_request_context("/?sources=webapp:app-1&sources%5B1%5D=workflow:app-2&sources%5B0%5D=workflow:app-1"):
-        assert roster_controller._query_values("sources", "source") == [
+        assert roster_controller.agent_log_query_values("sources", "source") == [
             "webapp:app-1",
             "workflow:app-1",
             "workflow:app-2",
         ]
 
     with app.test_request_context("/?source%5B0%5D=workflow:app-3"):
-        assert roster_controller._query_values("sources", "source") == ["workflow:app-3"]
+        assert roster_controller.agent_log_query_values("sources", "source") == ["workflow:app-3"]
 
 
 def _app_detail_obj(**overrides: object) -> App:

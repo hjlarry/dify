@@ -24,7 +24,7 @@ from werkzeug.test import TestResponse
 from yarl import URL
 
 from constants import COOKIE_NAME_ACCESS_TOKEN, HEADER_NAME_CSRF_TOKEN
-from controllers.console.agent import roster as roster_controller
+from controllers.console.agent import log_export as log_export_controller
 from controllers.console.agent.api_access import AgentApiAccessApi, AgentApiStatusApi
 from controllers.console.agent.build_session import (
     AgentBuildDraftApi,
@@ -49,17 +49,19 @@ from controllers.console.agent.composer import (
     WorkflowAgentComposerSaveToRosterApi,
     WorkflowAgentComposerValidateApi,
 )
-from controllers.console.agent.roster import (
-    AgentAppApi,
-    AgentAppCopyApi,
-    AgentAppListApi,
-    AgentInviteOptionsApi,
+from controllers.console.agent.log_export import (
     AgentLogExportApi,
     AgentLogExportCancelApi,
     AgentLogExportFileApi,
     AgentLogExportLatestApi,
     AgentLogExportPreviewApi,
     AgentLogExportTaskApi,
+)
+from controllers.console.agent.roster import (
+    AgentAppApi,
+    AgentAppCopyApi,
+    AgentAppListApi,
+    AgentInviteOptionsApi,
     AgentLogIdentityOptionsApi,
     AgentLogMessagesApi,
     AgentLogsApi,
@@ -448,7 +450,7 @@ def test_log_export_preview_is_scoped_and_requires_export_entitlement(
     response = harness.client.get(f"/console/api/agent/{foreign_id}/log-exports/preview", headers=harness.headers)
     assert response.status_code == HTTPStatus.NOT_FOUND
 
-    monkeypatch.setattr(roster_controller, "is_cloud_edition_billing_paid_plan", lambda _tenant_id: False)
+    monkeypatch.setattr(log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _tenant_id: False)
     with config_overrides_context(DEPLOYMENT_EDITION=DeploymentEdition.CLOUD):
         response = harness.client.get(path, headers=harness.headers)
         create = harness.client.post(path.removesuffix("/preview"), headers=harness.headers, json={})
@@ -739,7 +741,7 @@ def test_agent_log_export_file_downloads_from_a_browser_session(
     task_key = f"agent_log_export:{{{harness.tenant_id}}}:{agent_id}:{task.task_id}"
     cache = harness.redis.cache
     cache[task_key] = task.model_dump_json()
-    monkeypatch.setattr(roster_controller, "is_cloud_edition_billing_paid_plan", lambda _tenant_id: True)
+    monkeypatch.setattr(log_export_controller, "is_cloud_edition_billing_paid_plan", lambda _tenant_id: True)
     storage = log_export_storage
     url = "https://storage.example.test/agent-logs.csv?signature=signed"
     storage.generate_presigned_url.return_value = url
